@@ -171,7 +171,7 @@ function organize(list){
 
 /* ================= Carga ================= */
 function fetchList(url){
-  return fetch(url).then(function(r){
+  return App.net.fetch(url).then(function(r){
     if(!r.ok) throw new Error("HTTP " + r.status);
     return r.text();
   }).then(function(text){
