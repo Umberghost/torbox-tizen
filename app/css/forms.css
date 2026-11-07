@@ -102,3 +102,4 @@
 .dl-sub{display:flex;gap:26px;color:var(--muted);font-size:20px;flex-wrap:wrap}
 .dl-src{color:var(--text)}
 .dl-legend{margin:26px 4px 0}
+.srch-dl{background:#f5c451;color:#2a1f00}

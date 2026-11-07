@@ -106,13 +106,17 @@ function normStream(st, idx){
     seeders: seedM ? Number(seedM[1]) : null,
     provider: provM ? provM[1].trim() : "",
     cached: isCachedMark(name, title),
+    // Torrentio/Comet con debrid y SIN caché: "[TB download]", "[TB⏳]"… → el enlace solo
+    // manda a descargar y sirve un vídeo de aviso ("Torrent is being downloaded to debrid…")
+    uncachedDebrid: !isCachedMark(name, title) && /\[[A-Z]{2,4}(\s*download|\s*⏳|\s*⏳)?\]/i.test(name) && !!st.url,
     filename: filename
   };
 }
 
 function sortStreams(list){
   return list.sort(function(a, b){
-    var pa = (a.cached || a.url) ? 1 : 0, pb = (b.cached || b.url) ? 1 : 0;
+    var pa = a.cached ? 2 : (a.url && !a.uncachedDebrid ? 1 : 0);
+    var pb = b.cached ? 2 : (b.url && !b.uncachedDebrid ? 1 : 0);
     if(pa !== pb) return pb - pa;
     var qa = Q_RANK[a.quality] || 0, qb = Q_RANK[b.quality] || 0;
     if(qa !== qb) return qb - qa;
@@ -438,6 +442,7 @@ function openStreams(){
 function streamRow(x, i){
   var badges = "";
   if(x.cached) badges += '<span class="srch-cached">EN CACHÉ</span>';
+  else if(x.uncachedDebrid) badges += '<span class="srch-cached srch-dl">⬇ DESCARGAR</span>';
   else if(x.url) badges += '<span class="srch-cached srch-play">▶ DIRECTO</span>';
   if(x.quality) badges += '<span class="badge srch-q">' + App.esc(x.quality) + '</span>';
   x.tags.forEach(function(t){ badges += '<span class="badge srch-q">' + App.esc(t) + '</span>'; });
@@ -468,7 +473,7 @@ function renderStreams(){
   else if(s.streamsErr) h += stateBlock("err", "Error del add-on", App.esc(s.streamsErr));
   else if(s.streams && !s.streams.length) h += stateBlock("", "Sin fuentes", "Sin fuentes para este título en tu add-on.");
   else if(s.streams){
-    var nCached = s.streams.filter(function(x){ return x.cached || x.url; }).length;
+    var nCached = s.streams.filter(function(x){ return x.cached || (x.url && !x.uncachedDebrid); }).length;
     h += '<div class="section-title">Fuentes <span class="muted">' + s.streams.length +
          (nCached ? " · " + nCached + " al instante" : "") + '</span></div><div class="srch-list">';
     s.streams.forEach(function(x, i){ h += streamRow(x, i); });
@@ -506,10 +511,40 @@ function playStream(x){
   });
 }
 
+/* Fuente sin caché vía debrid: pedir al add-on que la mande a TorBox (o añadir el magnet) */
+function sendToDebrid(x){
+  var p;
+  if(x.hash) p = App.torbox.addMagnet(magnetOf(x), x.filename || undefined);
+  else p = App.net.fetch(x.url, { method: "GET" }).then(function(r){
+    // Solo interesa que el add-on reciba la petición; no descargamos el vídeo de aviso
+    try{ if(r.body && r.body.cancel) r.body.cancel(); }catch(e){}
+    return r;
+  });
+  return p.then(function(){
+    App.torbox.invalidate();
+    console.info("[buscar] enviado a descargar en TorBox:", x.release);
+    App.ui.toast("Descargando en TorBox. Míralo en Descargas; cuando termine saldrá en tu Biblioteca", 5000);
+  }).catch(function(e){
+    console.warn("[buscar] error al mandar a descargar:", e.message);
+    App.ui.toast("No se pudo mandar a descargar: " + e.message, 4500);
+  });
+}
+
 function onStreamSelect(i, el){
   var x = s.streams && s.streams[Number(el.getAttribute("data-i"))];
   if(!x) return;
   remember();
+  if(x.uncachedDebrid){
+    App.ui.menu("No está en caché en TorBox", [
+      { label: "Mandar a descargar a TorBox", value: "dl" },
+      { label: "Reproducir igualmente (verás un aviso)", value: "play" },
+      { label: "Cancelar", value: null }
+    ]).then(function(v){
+      if(v === "dl") sendToDebrid(x);
+      else if(v === "play") playStream(x);
+    });
+    return;
+  }
   if(x.url){
     if(!App.player){ App.hint("Reproductor no disponible"); return; }
     playStream(x);

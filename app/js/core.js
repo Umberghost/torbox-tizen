@@ -3,7 +3,7 @@
 "use strict";
 
 var App = window.App = window.App || {};
-App.version = "2.2.0";
+App.version = "2.2.1";
 
 /* ---------------- Registro (log) ----------------
  * Guarda los últimos mensajes de consola y errores para verlos desde la web del
