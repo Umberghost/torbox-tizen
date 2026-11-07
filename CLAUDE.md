@@ -70,11 +70,15 @@ sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 5. **Buscar y añadir** desde la tele con la Search API de TorBox.
 6. **Subtítulos** — `.srt` externos o incrustados.
 
-## Cómo probar
-```
-npx http-server . --cors -c-1 -p 8080
-```
-En TizenBrew → Module Manager → añadir fuente `http://IP-DE-TU-PC:8080/` → instalar "TorBox".
+## Cómo probar / desplegar
+- **TizenBrew solo carga módulos desde jsDelivr** (`gh/usuario/repo` o `npm/paquete`); NO desde
+  un servidor local. Módulo publicado: `gh/Umberghost/torbox-tizen` (repo público).
+- jsDelivr cachea la rama ~12 h: tras un push, purgar con
+  `curl https://purge.jsdelivr.net/gh/Umberghost/torbox-tizen@main/<ruta>` (package.json, app/…).
+- App servida en la TV desde `http://127.0.0.1:8081/module/gh%2FUmberghost%2Ftorbox-tizen/app/index.html`.
+- Prueba en PC: `npx http-server . -p 8080` → `http://localhost:8080/app/` (+ `node service.js` para el proxy).
+- TV: IP 192.168.1.147. API local `http://192.168.1.147:8001/api/v2/applications/<appId>` (GET estado,
+  POST lanza). TizenBrew appId `xvvl3S1bvH.TizenBrewStandalone`. Host PC IP debe ser 127.0.0.1.
 
 ## Preguntas abiertas
 - ¿Año/modelo exacto de la Samsung? (decide Tizen 8 / certificado / compatibilidad de apps).
