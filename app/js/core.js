@@ -3,7 +3,44 @@
 "use strict";
 
 var App = window.App = window.App || {};
-App.version = "2.1.0";
+App.version = "2.2.0";
+
+/* ---------------- Registro (log) ----------------
+ * Guarda los últimos mensajes de consola y errores para verlos desde la web del
+ * móvil (remote.js los publica en service.js). App.log(nivel, ...args) también vale.
+ */
+var LOG_MAX = 400;
+var logBuf = [];
+var logSeq = 0;
+function fmtArg(a){
+  if(a instanceof Error) return a.message + (a.stack ? "\n" + String(a.stack).split("\n").slice(1, 4).join("\n") : "");
+  if(typeof a === "object"){ try{ return JSON.stringify(a); }catch(e){ return String(a); } }
+  return String(a);
+}
+function pushLog(level, args){
+  var msg = Array.prototype.map.call(args, fmtArg).join(" ");
+  if(msg.length > 2000) msg = msg.slice(0, 2000) + "…";
+  logBuf.push({ n: ++logSeq, t: Date.now(), l: level, m: msg });
+  if(logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
+}
+App.log = function(level){ pushLog(level || "info", Array.prototype.slice.call(arguments, 1)); };
+App.logs = function(since){ since = since || 0; return logBuf.filter(function(e){ return e.n > since; }); };
+App.logSeq = function(){ return logSeq; };
+["log", "info", "warn", "error"].forEach(function(level){
+  var orig = console[level];
+  console[level] = function(){
+    pushLog(level === "log" ? "info" : level, arguments);
+    if(orig) try{ orig.apply(console, arguments); }catch(e){}
+  };
+});
+window.addEventListener("error", function(ev){
+  pushLog("error", ["[JS] " + (ev.message || "error") + (ev.filename ? " @ " + String(ev.filename).split("/").pop() + ":" + ev.lineno : "")]);
+});
+window.addEventListener("unhandledrejection", function(ev){
+  var r = ev.reason;
+  pushLog("error", ["[Promise] " + (r && r.message ? r.message : fmtArg(r))]);
+});
+pushLog("info", ["TorBox " + App.version + " · " + navigator.userAgent]);
 
 /* ---------------- Teclas ---------------- */
 App.K = {
@@ -97,7 +134,8 @@ var DEFAULTS = {
   subSize: "m",                  // s | m | l
   uiLang: "es-ES",               // idioma para TMDB
   liveListUrl: "https://www.tdtchannels.com/lists/tv.json",
-  appIds: {}                     // { tivify: "...", atresplayer: "...", mitele: "..." }
+  appIds: {},                    // { tivify: "...", atresplayer: "...", mitele: "..." }
+  stremioAddon: ""               // URL del manifest.json de un add-on de Stremio (Torrentio, Comet, AIOStreams…)
 };
 var settings = App.store.get("settings", {});
 /* Migración del token de la v1 */

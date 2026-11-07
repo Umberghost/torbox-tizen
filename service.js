@@ -18,7 +18,7 @@ var os = require("os");
 
 var PORT = 8095;
 var MAX_REDIRECTS = 5;
-var VERSION = "2.1.0";
+var VERSION = "2.2.0";
 
 /* ---------------- Estado de ajustes remotos ---------------- */
 var pin = String(Math.floor(1000 + Math.random() * 9000));
@@ -26,12 +26,30 @@ var pending = null;          // { settings:{...}, at }
 var snapshot = {};           // ajustes no secretos que la TV publica para mostrarlos en la web
 var lastPoll = 0;            // última vez que la app de la TV preguntó
 var fails = 0, lockUntil = 0;
+var actions = [];            // acciones pendientes para la TV: [{id, type:'add', link, name}]
+var actionResults = [];      // resultados que devuelve la TV: [{id, ok, message, at}]
+var actionSeq = 0;
+var logs = [];               // registro que publica la app de la TV
+var LOG_MAX = 600;
 
 /* Claves que se pueden cambiar desde la web */
 var ALLOWED = {
   torboxToken: "string", tmdbKey: "string", defaultSource: "string", autoplayNext: "boolean",
-  subLang: "string", audioLang: "string", subSize: "string", uiLang: "string", liveListUrl: "string"
+  subLang: "string", audioLang: "string", subSize: "string", uiLang: "string", liveListUrl: "string",
+  stremioAddon: "string"
 };
+
+function checkPin(req, given, res){
+  if(Date.now() < lockUntil){ sendJson(res, 429, { ok: false, detail: "Demasiados intentos. Espera 5 minutos." }); return false; }
+  if(String(given || "") !== pin){
+    fails++;
+    if(fails >= 5){ fails = 0; lockUntil = Date.now() + 5 * 60000; }
+    sendJson(res, 401, { ok: false, detail: "PIN incorrecto. Míralo en la TV." });
+    return false;
+  }
+  fails = 0;
+  return true;
+}
 
 function lanIps(){
   var out = [], ifs = os.networkInterfaces();
@@ -108,69 +126,7 @@ function forward(target, req, res, body, depth){
 }
 
 /* ---------------- Página de ajustes (móvil/PC) ---------------- */
-var PAGE = [
-'<!doctype html><html lang="es"><head><meta charset="utf-8">',
-'<meta name="viewport" content="width=device-width,initial-scale=1">',
-'<title>TorBox TV · Ajustes</title><style>',
-':root{--bg:#0b0f14;--s:#141b22;--s2:#1b242d;--t:#e8eef3;--m:#8b9aa8;--a:#17c964;--d:#ff6b6b}',
-'*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}',
-'main{max-width:560px;margin:0 auto}h1{font-size:24px;margin:8px 0 4px}h1 b{color:var(--a)}p{color:var(--m);margin:0 0 16px}',
-'.card{background:var(--s);border-radius:14px;padding:18px;margin:14px 0}label{display:block;font-weight:600;margin:14px 0 6px}',
-'small{display:block;color:var(--m);font-weight:400;margin-top:4px}',
-'input,select{width:100%;padding:12px 14px;font-size:16px;background:var(--bg);color:var(--t);border:1px solid var(--s2);border-radius:10px}',
-'input:focus,select:focus{outline:none;border-color:var(--a)}',
-'button{width:100%;margin-top:18px;padding:14px;font-size:17px;font-weight:700;border:0;border-radius:10px;background:var(--a);color:#06130c}',
-'button:disabled{opacity:.5}.msg{margin-top:14px;padding:12px;border-radius:10px;display:none}.ok{display:block;background:rgba(23,201,100,.15);color:var(--a)}',
-'.err{display:block;background:rgba(255,107,107,.15);color:var(--d)}.row{display:flex;gap:10px;align-items:center}.row input[type=checkbox]{width:22px;height:22px}',
-'.pin{font-size:28px;letter-spacing:10px;text-align:center}',
-'</style></head><body><main>',
-'<h1>Tor<b>Box</b> TV · Ajustes</h1><p>Los cambios se aplican en la TV al instante. Deja vacío lo que no quieras cambiar.</p>',
-'<div class="card"><label for="pin">PIN de la TV<small>Aparece en la TV: pantalla de inicio de TorBox o Ajustes.</small></label>',
-'<input id="pin" class="pin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="····"></div>',
-'<form id="f" class="card">',
-'<label for="torboxToken">API key de TorBox<small>torbox.app → Settings → API. <span id="h_torboxToken"></span></small></label>',
-'<input id="torboxToken" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu API key">',
-'<label for="tmdbKey">Clave TMDB (carátulas)<small>themoviedb.org → Ajustes → API: "API Key" v3 o "token de lectura" v4. <span id="h_tmdbKey"></span></small></label>',
-'<input id="tmdbKey" autocomplete="off" spellcheck="false" placeholder="Opcional">',
-'<label for="defaultSource">Fuente por defecto</label><select id="defaultSource"><option value="">— sin cambios —</option>',
-'<option value="all">Todo</option><option value="torrents">Torrents</option><option value="usenet">Usenet</option><option value="webdl">Web</option></select>',
-'<label for="audioLang">Idioma de audio preferido</label><select id="audioLang"><option value="__">— sin cambios —</option>',
-'<option value="spa">Español</option><option value="eng">Inglés</option><option value="">Original</option></select>',
-'<label for="subLang">Idioma de subtítulos preferido</label><select id="subLang"><option value="__">— sin cambios —</option>',
-'<option value="spa">Español</option><option value="eng">Inglés</option><option value="">Ninguno</option></select>',
-'<label for="subSize">Tamaño de subtítulos</label><select id="subSize"><option value="">— sin cambios —</option>',
-'<option value="s">Pequeño</option><option value="m">Mediano</option><option value="l">Grande</option></select>',
-'<label for="autoplayNext">Siguiente episodio automático</label><select id="autoplayNext"><option value="">— sin cambios —</option>',
-'<option value="1">Sí</option><option value="0">No</option></select>',
-'<label for="liveListUrl">Lista de TV en directo (URL)<small id="h_liveListUrl"></small></label>',
-'<input id="liveListUrl" autocomplete="off" spellcheck="false" placeholder="Por defecto: TDTChannels">',
-'<button id="b" type="submit">Enviar a la TV</button><div id="m" class="msg"></div></form>',
-'</main><script>',
-'var $=function(i){return document.getElementById(i)};',
-'try{$("pin").value=localStorage.getItem("tbpin")||""}catch(e){}',
-'function msg(t,ok){var m=$("m");m.textContent=t;m.className="msg "+(ok?"ok":"err")}',
-'function load(){fetch("/api/state").then(function(r){return r.json()}).then(function(j){var s=j.snapshot||{};',
-' $("h_torboxToken").textContent=s.torboxToken?"Actual: "+s.torboxToken:"Sin configurar";',
-' $("h_tmdbKey").textContent=s.tmdbKey?"Actual: "+s.tmdbKey:"Sin configurar";',
-' if(s.liveListUrl)$("h_liveListUrl").textContent="Actual: "+s.liveListUrl;',
-' if(!j.tvOnline)msg("La TV no tiene TorBox abierto: los cambios se aplicarán al abrirlo.",false);}).catch(function(){})}',
-'load();',
-'$("f").addEventListener("submit",function(e){e.preventDefault();var pin=$("pin").value.trim();',
-' if(!/^\\d{4}$/.test(pin)){msg("Introduce el PIN de 4 cifras que muestra la TV.",false);return}',
-' var s={};["torboxToken","tmdbKey","liveListUrl"].forEach(function(k){var v=$(k).value.trim();if(v)s[k]=v});',
-' if($("defaultSource").value)s.defaultSource=$("defaultSource").value;',
-' ["audioLang","subLang"].forEach(function(k){if($(k).value!=="__")s[k]=$(k).value});',
-' if($("subSize").value)s.subSize=$("subSize").value;',
-' if($("autoplayNext").value)s.autoplayNext=$("autoplayNext").value==="1";',
-' if(!Object.keys(s).length){msg("No has cambiado nada.",false);return}',
-' $("b").disabled=true;',
-' fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:pin,settings:s})})',
-' .then(function(r){return r.json()}).then(function(j){$("b").disabled=false;',
-'  if(j.ok){try{localStorage.setItem("tbpin",pin)}catch(e){}["torboxToken","tmdbKey"].forEach(function(k){$(k).value=""});',
-'   msg(j.tvOnline?"Enviado. La TV aplicará los cambios en unos segundos.":"Guardado. Se aplicará cuando abras TorBox en la TV.",true);setTimeout(load,3000)}',
-'  else msg(j.detail||"Error",false)}).catch(function(){$("b").disabled=false;msg("No se pudo conectar con la TV.",false)})});',
-'</script></body></html>'
-].join("\n");
+var PAGE = "<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>TorBox TV</title><style>\n:root{--bg:#0b0f14;--s:#141b22;--s2:#1b242d;--t:#e8eef3;--m:#8b9aa8;--a:#17c964;--d:#ff6b6b;--w:#f5c451}\n*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}\nmain{max-width:640px;margin:0 auto}h1{font-size:24px;margin:8px 0 4px}h1 b{color:var(--a)}h2{font-size:19px;margin:0 0 4px}p{color:var(--m);margin:0 0 12px}\n.card{background:var(--s);border-radius:14px;padding:18px;margin:14px 0}label{display:block;font-weight:600;margin:14px 0 6px}\nsmall{display:block;color:var(--m);font-weight:400;margin-top:4px;word-break:break-all}\ninput,select,textarea{width:100%;padding:12px 14px;font-size:16px;background:var(--bg);color:var(--t);border:1px solid var(--s2);border-radius:10px;font-family:inherit}\ntextarea{min-height:84px;resize:vertical}input:focus,select:focus,textarea:focus{outline:none;border-color:var(--a)}\nbutton{width:100%;margin-top:16px;padding:14px;font-size:17px;font-weight:700;border:0;border-radius:10px;background:var(--a);color:#06130c}\nbutton.sec{background:var(--s2);color:var(--t)}button:disabled{opacity:.5}\n.msg{margin-top:12px;padding:12px;border-radius:10px;display:none}.ok{display:block;background:rgba(23,201,100,.15);color:var(--a)}\n.err{display:block;background:rgba(255,107,107,.15);color:var(--d)}.pin{font-size:28px;letter-spacing:10px;text-align:center}\n.tabs{display:flex;gap:8px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}.tabs a{flex:1;text-align:center;padding:10px;border-radius:10px;background:var(--s);color:var(--m);text-decoration:none;font-weight:600}\n.tabs a.on{background:var(--a);color:#06130c}section{display:none}section.on{display:block}\n#log{background:#05080b;border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Consolas,monospace;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word}\n#log .e{color:var(--d)}#log .w{color:var(--w)}#log .i{color:#b8c4ce}#log time{color:#56636e;margin-right:6px}\n.row{display:flex;gap:8px}.row button{margin-top:10px}\n</style></head><body><main>\n<h1>Tor<b>Box</b> TV</h1><p>Control remoto de la app de la TV.</p>\n<div class=\"card\"><label for=\"pin\" style=\"margin-top:0\">PIN de la TV<small>Aparece en la TV: pantalla de inicio de TorBox o Ajustes.</small></label>\n<input id=\"pin\" class=\"pin\" inputmode=\"numeric\" maxlength=\"4\" autocomplete=\"off\" placeholder=\"····\"></div>\n<nav class=\"tabs\"><a href=\"#\" data-t=\"cfg\" class=\"on\">Ajustes</a><a href=\"#\" data-t=\"add\">Añadir</a><a href=\"#\" data-t=\"log\">Registro</a></nav>\n\n<section id=\"t-cfg\" class=\"on\"><form id=\"f\" class=\"card\">\n<p>Los cambios se aplican en la TV al instante. Deja vacío lo que no quieras cambiar.</p>\n<label for=\"torboxToken\">API key de TorBox<small>torbox.app → Settings → API. <span id=\"h_torboxToken\"></span></small></label>\n<input id=\"torboxToken\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"Pega aquí tu API key\">\n<label for=\"stremioAddon\">Add-on de Stremio (para Buscar)<small>URL del manifest de tu add-on configurado con TorBox (Torrentio, Comet, AIOStreams…), la misma que usas en Stremio. <span id=\"h_stremioAddon\"></span></small></label>\n<input id=\"stremioAddon\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"https://…/manifest.json\">\n<label for=\"tmdbKey\">Clave TMDB (carátulas)<small>themoviedb.org → Ajustes → API: \"API Key\" v3 o \"token de lectura\" v4. <span id=\"h_tmdbKey\"></span></small></label>\n<input id=\"tmdbKey\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"Opcional\">\n<label for=\"defaultSource\">Fuente por defecto</label><select id=\"defaultSource\"><option value=\"\">— sin cambios —</option>\n<option value=\"all\">Todo</option><option value=\"torrents\">Torrents</option><option value=\"usenet\">Usenet</option><option value=\"webdl\">Web</option></select>\n<label for=\"audioLang\">Idioma de audio preferido</label><select id=\"audioLang\"><option value=\"__\">— sin cambios —</option>\n<option value=\"spa\">Español</option><option value=\"eng\">Inglés</option><option value=\"\">Original</option></select>\n<label for=\"subLang\">Idioma de subtítulos preferido</label><select id=\"subLang\"><option value=\"__\">— sin cambios —</option>\n<option value=\"spa\">Español</option><option value=\"eng\">Inglés</option><option value=\"\">Ninguno</option></select>\n<label for=\"subSize\">Tamaño de subtítulos</label><select id=\"subSize\"><option value=\"\">— sin cambios —</option>\n<option value=\"s\">Pequeño</option><option value=\"m\">Mediano</option><option value=\"l\">Grande</option></select>\n<label for=\"autoplayNext\">Siguiente episodio automático</label><select id=\"autoplayNext\"><option value=\"\">— sin cambios —</option>\n<option value=\"1\">Sí</option><option value=\"0\">No</option></select>\n<label for=\"liveListUrl\">Lista de TV en directo (URL)<small id=\"h_liveListUrl\"></small></label>\n<input id=\"liveListUrl\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"Por defecto: TDTChannels\">\n<button id=\"b\" type=\"submit\">Enviar a la TV</button><div id=\"m\" class=\"msg\"></div></form></section>\n\n<section id=\"t-add\"><form id=\"fa\" class=\"card\"><h2>Añadir a TorBox</h2>\n<p>Pega un magnet, un hash, un enlace NZB o una URL (descarga web). La TV lo añade a tu cuenta.</p>\n<textarea id=\"link\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"magnet:?xt=urn:btih:…  ·  https://…/archivo.nzb  ·  https://…\"></textarea>\n<label for=\"lname\">Nombre (opcional)</label><input id=\"lname\" autocomplete=\"off\">\n<button id=\"ba\" type=\"submit\">Añadir</button><div id=\"ma\" class=\"msg\"></div></form></section>\n\n<section id=\"t-log\"><div class=\"card\"><h2>Registro de la app</h2><p>Mensajes y errores de la app en la TV (últimos 600). Se actualiza solo.</p>\n<div class=\"row\"><button id=\"bl\" class=\"sec\" type=\"button\">Actualizar</button><button id=\"bc\" class=\"sec\" type=\"button\">Copiar</button></div>\n<div id=\"ml\" class=\"msg\"></div><div id=\"log\" style=\"margin-top:12px\">Introduce el PIN para ver el registro.</div></div></section>\n</main><script>\nvar $=function(i){return document.getElementById(i)};\ntry{$(\"pin\").value=localStorage.getItem(\"tbpin\")||\"\"}catch(e){}\nfunction msg(id,t,ok){var m=$(id);m.textContent=t;m.className=\"msg \"+(ok?\"ok\":\"err\")}\nfunction pinOk(){var p=$(\"pin\").value.trim();if(!/^\\d{4}$/.test(p)){return null}try{localStorage.setItem(\"tbpin\",p)}catch(e){}return p}\nfunction post(u,o){return fetch(u,{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify(o)}).then(function(r){return r.json()})}\nvar tabs=document.querySelectorAll(\".tabs a\");\nfor(var i=0;i<tabs.length;i++)tabs[i].addEventListener(\"click\",function(e){e.preventDefault();var t=this.getAttribute(\"data-t\");\n for(var j=0;j<tabs.length;j++){tabs[j].classList.toggle(\"on\",tabs[j]===this);$(\"t-\"+tabs[j].getAttribute(\"data-t\")).classList.toggle(\"on\",tabs[j]===this)}\n if(t===\"log\")loadLogs(true)});\nfunction load(){fetch(\"/api/state\").then(function(r){return r.json()}).then(function(j){var s=j.snapshot||{};\n $(\"h_torboxToken\").textContent=s.torboxToken?\"Actual: \"+s.torboxToken:\"Sin configurar\";\n $(\"h_tmdbKey\").textContent=s.tmdbKey?\"Actual: \"+s.tmdbKey:\"Sin configurar\";\n $(\"h_stremioAddon\").textContent=s.stremioAddon?\"Actual: \"+s.stremioAddon:\"Sin configurar\";\n if(s.liveListUrl)$(\"h_liveListUrl\").textContent=\"Actual: \"+s.liveListUrl;\n if(!j.tvOnline)msg(\"m\",\"La TV no tiene TorBox abierto: los cambios se aplicarán al abrirlo.\",false)}).catch(function(){})}\nload();\n$(\"f\").addEventListener(\"submit\",function(e){e.preventDefault();var pin=pinOk();\n if(!pin){msg(\"m\",\"Introduce el PIN de 4 cifras que muestra la TV.\",false);return}\n var s={};[\"torboxToken\",\"tmdbKey\",\"liveListUrl\",\"stremioAddon\"].forEach(function(k){var v=$(k).value.trim();if(v)s[k]=v});\n if($(\"defaultSource\").value)s.defaultSource=$(\"defaultSource\").value;\n [\"audioLang\",\"subLang\"].forEach(function(k){if($(k).value!==\"__\")s[k]=$(k).value});\n if($(\"subSize\").value)s.subSize=$(\"subSize\").value;\n if($(\"autoplayNext\").value)s.autoplayNext=$(\"autoplayNext\").value===\"1\";\n if(!Object.keys(s).length){msg(\"m\",\"No has cambiado nada.\",false);return}\n $(\"b\").disabled=true;post(\"/api/settings\",{pin:pin,settings:s}).then(function(j){$(\"b\").disabled=false;\n  if(j.ok){[\"torboxToken\",\"tmdbKey\",\"stremioAddon\"].forEach(function(k){$(k).value=\"\"});\n   msg(\"m\",j.tvOnline?\"Enviado. La TV aplicará los cambios en unos segundos.\":\"Guardado. Se aplicará cuando abras TorBox en la TV.\",true);setTimeout(load,3500)}\n  else msg(\"m\",j.detail||\"Error\",false)}).catch(function(){$(\"b\").disabled=false;msg(\"m\",\"No se pudo conectar con la TV.\",false)})});\n$(\"fa\").addEventListener(\"submit\",function(e){e.preventDefault();var pin=pinOk();\n if(!pin){msg(\"ma\",\"Introduce el PIN de 4 cifras que muestra la TV.\",false);return}\n var link=$(\"link\").value.trim();if(!link){msg(\"ma\",\"Pega un enlace.\",false);return}\n $(\"ba\").disabled=true;post(\"/api/add\",{pin:pin,link:link,name:$(\"lname\").value.trim()}).then(function(j){$(\"ba\").disabled=false;\n  if(!j.ok){msg(\"ma\",j.detail||\"Error\",false);return}\n  msg(\"ma\",j.tvOnline?\"Enviado a la TV, añadiendo…\":\"Guardado. Se añadirá cuando abras TorBox en la TV.\",true);$(\"link\").value=\"\";$(\"lname\").value=\"\";\n  var tries=0,id=j.id;(function poll(){fetch(\"/api/actionresult?id=\"+id).then(function(r){return r.json()}).then(function(r){\n   if(r.result){msg(\"ma\",r.result.message,r.result.ok);return}if(++tries<20)setTimeout(poll,1500)}).catch(function(){})})()\n }).catch(function(){$(\"ba\").disabled=false;msg(\"ma\",\"No se pudo conectar con la TV.\",false)})});\nvar lastN=0,logTimer=null,lines=[];\nfunction esc(s){return String(s).replace(/[&<>]/g,function(c){return{\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\"}[c]})}\nfunction loadLogs(reset){var pin=pinOk();if(!pin){msg(\"ml\",\"Introduce el PIN para ver el registro.\",false);return}\n if(reset){lastN=0;lines=[]}\n fetch(\"/api/logs?pin=\"+pin+\"&since=\"+lastN).then(function(r){return r.json()}).then(function(j){\n  if(!j.ok){msg(\"ml\",j.detail||\"Error\",false);return}$(\"ml\").className=\"msg\";\n  (j.logs||[]).forEach(function(e){lastN=Math.max(lastN,e.n);lines.push(e)});if(lines.length>600)lines=lines.slice(-600);\n  var box=$(\"log\"),atEnd=box.scrollTop+box.clientHeight>=box.scrollHeight-20;\n  box.innerHTML=lines.length?lines.map(function(e){var d=new Date(e.t);return '<div class=\"'+(e.l===\"error\"?\"e\":e.l===\"warn\"?\"w\":\"i\")+'\"><time>'+d.toLocaleTimeString()+'</time>'+esc(e.m)+'</div>'}).join(\"\"):(j.tvOnline?\"Sin mensajes todavía.\":\"La TV no tiene TorBox abierto.\");\n  if(atEnd||reset)box.scrollTop=box.scrollHeight}).catch(function(){msg(\"ml\",\"No se pudo conectar con la TV.\",false)});\n clearTimeout(logTimer);if($(\"t-log\").classList.contains(\"on\"))logTimer=setTimeout(function(){loadLogs(false)},3000)}\n$(\"bl\").addEventListener(\"click\",function(){loadLogs(true)});\n$(\"bc\").addEventListener(\"click\",function(){var t=lines.map(function(e){return new Date(e.t).toLocaleTimeString()+\" [\"+e.l+\"] \"+e.m}).join(\"\\n\");\n if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){msg(\"ml\",\"Copiado.\",true)},function(){msg(\"ml\",\"No se pudo copiar.\",false)});\n else{var ta=document.createElement(\"textarea\");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand(\"copy\");msg(\"ml\",\"Copiado.\",true)}catch(e){}document.body.removeChild(ta)}});\n</script></body></html>\n";
 
 function tvOnline(){ return Date.now() - lastPoll < 15000; }
 
@@ -198,7 +154,29 @@ var server = http.createServer(function(req, res){
     if(!local) return sendJson(res, 403, { detail: "Solo desde la TV" });
     lastPoll = Date.now();
     var out = pending; pending = null;
-    return sendJson(res, 200, { pending: out });
+    var acts = actions; actions = [];
+    return sendJson(res, 200, { pending: out, actions: acts });
+  }
+  if(p === "/tv/logs" && req.method === "POST"){
+    if(!local) return sendJson(res, 403, { detail: "Solo desde la TV" });
+    return readBody(req, function(b){
+      try{
+        var arr = JSON.parse(b.toString("utf8")) || [];
+        var last = logs.length ? logs[logs.length - 1].n : 0;
+        if(arr.length && arr[0].n <= 1 && last > arr[arr.length - 1].n) logs = []; // la app se reinició
+        arr.forEach(function(e){ if(e && e.n > last) logs.push(e); });
+        if(logs.length > LOG_MAX) logs.splice(0, logs.length - LOG_MAX);
+      }catch(e){}
+      sendJson(res, 200, { ok: true, last: logs.length ? logs[logs.length - 1].n : 0 });
+    });
+  }
+  if(p === "/tv/actionresult" && req.method === "POST"){
+    if(!local) return sendJson(res, 403, { detail: "Solo desde la TV" });
+    return readBody(req, function(b){
+      try{ var r = JSON.parse(b.toString("utf8")); r.at = Date.now(); actionResults.push(r); }catch(e){}
+      if(actionResults.length > 20) actionResults.splice(0, actionResults.length - 20);
+      sendJson(res, 200, { ok: true });
+    });
   }
   if(p === "/tv/snapshot" && req.method === "POST"){
     if(!local) return sendJson(res, 403, { detail: "Solo desde la TV" });
@@ -216,14 +194,8 @@ var server = http.createServer(function(req, res){
   if(p === "/api/state") return sendJson(res, 200, { snapshot: snapshot, tvOnline: tvOnline() });
   if(p === "/api/settings" && req.method === "POST"){
     return readBody(req, function(b){
-      if(Date.now() < lockUntil) return sendJson(res, 429, { ok: false, detail: "Demasiados intentos. Espera 5 minutos." });
       var j; try{ j = JSON.parse(b.toString("utf8")); }catch(e){ return sendJson(res, 400, { ok: false, detail: "JSON no válido" }); }
-      if(!j || String(j.pin) !== pin){
-        fails++;
-        if(fails >= 5){ fails = 0; lockUntil = Date.now() + 5 * 60000; }
-        return sendJson(res, 401, { ok: false, detail: "PIN incorrecto. Míralo en la TV." });
-      }
-      fails = 0;
+      if(!checkPin(req, j && j.pin, res)) return;
       var clean = {}, n = 0, s = j.settings || {};
       Object.keys(s).forEach(function(k){
         if(ALLOWED[k] && typeof s[k] === ALLOWED[k] && String(s[k]).length < 2000){ clean[k] = s[k]; n++; }
@@ -234,6 +206,28 @@ var server = http.createServer(function(req, res){
       pending = { settings: merged, at: Date.now() };
       sendJson(res, 200, { ok: true, tvOnline: tvOnline() });
     });
+  }
+  if(p === "/api/add" && req.method === "POST"){
+    return readBody(req, function(b){
+      var j; try{ j = JSON.parse(b.toString("utf8")); }catch(e){ return sendJson(res, 400, { ok: false, detail: "JSON no válido" }); }
+      if(!checkPin(req, j && j.pin, res)) return;
+      var link = String((j && j.link) || "").trim();
+      if(!link || link.length > 8000) return sendJson(res, 400, { ok: false, detail: "Pega un magnet, hash, NZB o URL" });
+      var id = ++actionSeq;
+      actions.push({ id: id, type: "add", link: link, name: j.name ? String(j.name).slice(0, 300) : "" });
+      sendJson(res, 200, { ok: true, id: id, tvOnline: tvOnline() });
+    });
+  }
+  if(p === "/api/actionresult"){
+    var want = Number(parsed.query.id);
+    var found = null;
+    actionResults.forEach(function(r){ if(r.id === want) found = r; });
+    return sendJson(res, 200, { result: found });
+  }
+  if(p === "/api/logs"){
+    if(!checkPin(req, parsed.query.pin, res)) return;
+    var since = Number(parsed.query.since) || 0;
+    return sendJson(res, 200, { ok: true, logs: logs.filter(function(e){ return e.n > since; }), tvOnline: tvOnline() });
   }
   sendJson(res, 404, { success: false, detail: "Ruta no encontrada" });
 });

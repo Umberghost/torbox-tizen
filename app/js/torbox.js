@@ -26,6 +26,11 @@ tb.api = function(path, opts){
     Object.keys(opts.form).forEach(function(k){
       if(opts.form[k] !== undefined && opts.form[k] !== null) body.append(k, opts.form[k]);
     });
+  } else if(opts.urlencoded){
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    body = Object.keys(opts.urlencoded).filter(function(k){
+      return opts.urlencoded[k] !== undefined && opts.urlencoded[k] !== null;
+    }).map(function(k){ return encodeURIComponent(k) + "=" + encodeURIComponent(opts.urlencoded[k]); }).join("&");
   } else if(opts.body){
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.body);
@@ -37,6 +42,7 @@ tb.api = function(path, opts){
         if(!r.ok || j.success === false){
           var err = new Error((j && (j.detail || j.error)) || ("HTTP " + r.status));
           err.status = r.status; err.body = j;
+          console.warn("[TorBox API] " + (opts.method || "GET") + " " + path.split("?")[0] + " → " + r.status + " " + err.message);
           throw err;
         }
         return j;
@@ -96,6 +102,67 @@ tb.link = function(source, itemId, fileId){
     if(j.success === false || !j.data) throw new Error(j.detail || "Sin enlace de descarga");
     return j.data;
   });
+};
+
+/* ---------------- Añadir / controlar (campos según api.torbox.app/openapi.json) ---------------- */
+
+/* checkCached(hashes) → Promise<{hash: true}> */
+tb.checkCached = function(hashes){
+  hashes = (hashes || []).filter(Boolean).slice(0, 100);
+  if(!hashes.length) return Promise.resolve({});
+  return tb.api("/torrents/checkcached?hash=" + encodeURIComponent(hashes.join(",")) +
+                "&format=object&list_files=false").then(function(j){
+    var out = {}, d = j.data;
+    if(Array.isArray(d)) d.forEach(function(x){ if(x && x.hash) out[String(x.hash).toLowerCase()] = true; });
+    else if(d && typeof d === "object") Object.keys(d).forEach(function(h){ if(d[h]) out[h.toLowerCase()] = true; });
+    return out;
+  });
+};
+
+tb.addMagnet = function(magnet, name){
+  return tb.api("/torrents/createtorrent", { method: "POST", form: { magnet: magnet, name: name || undefined } })
+    .then(function(j){ tb.invalidate(); return j.data || {}; });
+};
+tb.addUsenet = function(link, name){
+  return tb.api("/usenet/createusenetdownload", { method: "POST", form: { link: link, name: name || undefined } })
+    .then(function(j){ tb.invalidate(); return j.data || {}; });
+};
+tb.addWeb = function(link, name){
+  return tb.api("/webdl/createwebdownload", { method: "POST", urlencoded: { link: link, name: name || undefined } })
+    .then(function(j){ tb.invalidate(); return j.data || {}; });
+};
+/* Detecta el tipo de enlace: magnet / hash → torrent, .nzb → usenet, resto → descarga web */
+tb.linkKind = function(link){
+  link = String(link || "").trim();
+  if(/^magnet:\?/i.test(link) || /^[a-f0-9]{40}$/i.test(link)) return "torrents";
+  if(/\.nzb(\?|$)/i.test(link) || /nzb/i.test(link.split("?")[0].split("/").pop() || "")) return "usenet";
+  if(/^https?:\/\//i.test(link)) return "webdl";
+  return null;
+};
+tb.addLink = function(link, name){
+  link = String(link || "").trim();
+  var kind = tb.linkKind(link);
+  if(kind === "torrents"){
+    if(/^[a-f0-9]{40}$/i.test(link)) link = "magnet:?xt=urn:btih:" + link;
+    return tb.addMagnet(link, name).then(function(d){ return { kind: kind, data: d }; });
+  }
+  if(kind === "usenet") return tb.addUsenet(link, name).then(function(d){ return { kind: kind, data: d }; });
+  if(kind === "webdl") return tb.addWeb(link, name).then(function(d){ return { kind: kind, data: d }; });
+  return Promise.reject(new Error("Enlace no reconocido (usa magnet, hash, NZB o URL)"));
+};
+
+/* control(source, id, operation): operation ∈ delete | pause | resume | reannounce */
+var CONTROL = {
+  torrents: { path: "/torrents/controltorrent", field: "torrent_id" },
+  usenet:   { path: "/usenet/controlusenetdownload", field: "usenet_id" },
+  webdl:    { path: "/webdl/controlwebdownload", field: "webdl_id" }
+};
+tb.control = function(source, id, operation){
+  var c = CONTROL[source];
+  if(!c) return Promise.reject(new Error("Fuente desconocida"));
+  var body = { operation: operation };
+  body[c.field] = id;
+  return tb.api(c.path, { method: "POST", body: body }).then(function(j){ tb.invalidate(); return j; });
 };
 
 /* Clave estable para historial */

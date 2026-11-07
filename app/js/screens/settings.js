@@ -47,6 +47,9 @@ function rows(){
       desc: "themoviedb.org → Ajustes → API. Vale la “API Key” (v3) o el “Token de lectura” (v4).",
       value: function(){ return mask(S.get("tmdbKey")); },
       after: function(){ App.bus.emit("meta:keychange"); } },
+    { id: "stremioAddon", type: "text", label: "Add-on de Stremio (Buscar)",
+      desc: "URL del manifest de tu add-on con TorBox (Torrentio, Comet, AIOStreams…). Más cómodo desde la web del móvil.",
+      value: function(){ var v = S.get("stremioAddon") || ""; return v ? v.replace(/^https?:\/\//, "").slice(0, 28) + "…" : "Sin configurar"; } },
 
     { group: "Biblioteca" },
     { id: "defaultSource", type: "menu", label: "Fuente por defecto",

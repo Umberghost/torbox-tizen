@@ -26,7 +26,8 @@ function pushSnapshot(){
   var snap = {
     torboxToken: mask(s.torboxToken), tmdbKey: mask(s.tmdbKey),
     defaultSource: s.defaultSource, audioLang: s.audioLang, subLang: s.subLang,
-    subSize: s.subSize, autoplayNext: s.autoplayNext, liveListUrl: s.liveListUrl
+    subSize: s.subSize, autoplayNext: s.autoplayNext, liveListUrl: s.liveListUrl,
+    stremioAddon: s.stremioAddon ? String(s.stremioAddon).replace(/^(https?:\/\/[^\/]+\/).{12,}(\/manifest\.json)$/, "$1…$2") : ""
   };
   fetch(base() + "/tv/snapshot", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snap)
@@ -52,10 +53,48 @@ function apply(settings){
   pushSnapshot();
 }
 
+function report(id, ok, message){
+  fetch(base() + "/tv/actionresult", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: id, ok: ok, message: message })
+  }).catch(function(){});
+}
+
+function runAction(a){
+  if(!a || a.type !== "add") return;
+  if(!App.torbox.hasToken()){ report(a.id, false, "La TV aún no tiene API key de TorBox."); return; }
+  console.info("[remoto] añadir enlace:", String(a.link).slice(0, 80));
+  App.torbox.addLink(a.link, a.name).then(function(r){
+    var what = { torrents: "Torrent", usenet: "NZB", webdl: "Descarga web" }[r.kind] || "Enlace";
+    var name = (r.data && (r.data.name || r.data.hash)) || "";
+    App.ui.toast(what + " añadido a TorBox ✓");
+    report(a.id, true, what + " añadido a TorBox" + (name ? ": " + name : "") + ". Míralo en Descargas.");
+    App.bus.emit("torbox:added", r);
+  }).catch(function(e){
+    console.warn("[remoto] error al añadir:", e.message);
+    App.ui.toast("No se pudo añadir: " + e.message);
+    report(a.id, false, "Error: " + e.message);
+  });
+}
+
 function poll(){
   fetch(base() + "/tv/pending").then(function(r){ return r.json(); }).then(function(j){
     if(j && j.pending && j.pending.settings) apply(j.pending.settings);
+    if(j && j.actions) j.actions.forEach(runAction);
   }).catch(function(){});
+}
+
+/* Registro: enviar lo nuevo cada 3 s */
+var sentLog = 0, logBusy = false;
+function pushLogs(){
+  if(logBusy || App.logSeq() <= sentLog) return;
+  var batch = App.logs(sentLog);
+  if(!batch.length) return;
+  logBusy = true;
+  fetch(base() + "/tv/logs", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(batch)
+  }).then(function(){ sentLog = batch[batch.length - 1].n; })
+    .catch(function(){}).then(function(){ logBusy = false; });
 }
 
 function loadInfo(){
@@ -99,7 +138,8 @@ function start(){
     if(!ok) return;
     loadInfo().then(pushSnapshot);
     poll();
-    timer = setInterval(poll, 3000);
+    timer = setInterval(function(){ poll(); pushLogs(); }, 3000);
+    pushLogs();
     // La pantalla actual cambia sin evento: comprobar a menudo es barato
     setInterval(syncBanner, 500);
   });

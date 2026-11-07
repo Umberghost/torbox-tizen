@@ -59,26 +59,32 @@
 }
 .srch-box.focused{border-color:var(--accent);box-shadow:var(--focus-ring)}
 .srch-icon{color:var(--accent);font-size:32px}
-.srch-top .chips{margin:0;flex-wrap:nowrap}
-.srch-state{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;padding:90px 40px}
+.srch-state{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;padding:80px 40px}
 .srch-state h2{font-size:32px;font-weight:600}
-.srch-state p{color:var(--muted);max-width:820px}
+.srch-state p{color:var(--muted);max-width:900px}
+.srch-state p b{color:var(--text)}
 .srch-state.err h2{color:var(--danger)}
-.srch-none{margin:20px 4px}
-.srch-row{gap:18px}
+.srch-note{color:var(--muted);font-size:21px;margin:10px 4px}
+.srch-hrow{gap:28px;padding:16px 10px 26px}
+.srch-recent{margin-top:10px}
+.srch-head{padding:14px 0 6px}
+.srch-head-title{font-size:44px;font-weight:700;line-height:1.15}
+.srch-head-ov{color:#c9d3db;font-size:22px;margin-top:10px;max-width:1300px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.srch-list{max-width:1700px}
+.srch-row{gap:20px;padding:16px 24px}
+.srch-main{flex:1;min-width:0}
+.srch-rel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:24px}
+.srch-sub{color:var(--muted);font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.srch-badges{display:flex;gap:10px;align-items:center;flex:none}
 .srch-cached{
   flex:none;font-size:17px;font-weight:700;letter-spacing:.5px;color:var(--accent-ink);background:var(--accent);
-  padding:3px 12px;border-radius:6px;
+  padding:3px 12px;border-radius:6px;white-space:nowrap;
 }
-.srch-cached-text{color:var(--accent)}
+.srch-play{background:#3e63dd;color:#fff}
 .srch-seed{color:var(--accent)}
 .srch-q{color:var(--text);border-color:var(--surface-3)}
 .srch-size{min-width:110px;text-align:right}
-.srch-clear{margin-top:18px}
-.srch-meta{display:flex;gap:30px;align-items:flex-start;background:var(--surface);border-radius:14px;padding:22px;margin:14px 0}
-.srch-poster{width:150px;height:225px;object-fit:cover;border-radius:10px;flex:none;background:var(--surface-2)}
-.srch-meta-text h3{font-size:32px;font-weight:600;margin-bottom:6px}
-.srch-meta-text p{color:var(--muted);font-size:22px;margin-top:10px;max-width:1300px}
 
 /* ================= Descargas ================= */
 .dl-row{padding:18px 26px}
