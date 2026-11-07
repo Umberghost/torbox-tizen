@@ -1,0 +1,161 @@
+/* core.js — namespace App, almacenamiento, ajustes, bus de eventos, helpers y teclas. */
+(function(){
+"use strict";
+
+var App = window.App = window.App || {};
+App.version = "2.0.0";
+
+/* ---------------- Teclas ---------------- */
+App.K = {
+  LEFT:37, UP:38, RIGHT:39, DOWN:40, OK:13,
+  BACK:10009, BACK_LG:461, ESC:27, BACKSPACE:8,
+  PLAY:415, PAUSE:19, PLAYPAUSE:10252, STOP:413, FF:417, RW:412,
+  PREV:10232, NEXT:10233, CHUP:427, CHDOWN:428,
+  RED:403, GREEN:404, YELLOW:405, BLUE:406, INFO:457,
+  D0:48, D1:49, D2:50, D3:51, D4:52, D5:53, D6:54, D7:55, D8:56, D9:57
+};
+App.isBack = function(k){
+  var K = App.K;
+  return k===K.BACK || k===K.BACK_LG || k===K.ESC || k===K.BACKSPACE;
+};
+App.digit = function(k){ return (k>=48 && k<=57) ? k-48 : (k>=96 && k<=105 ? k-96 : -1); };
+
+/* Registrar teclas del mando (TizenBrew también usa "keys" de package.json). */
+App.registerKeys = function(){
+  try{
+    if(window.tizen && tizen.tvinputdevice){
+      ["MediaPlayPause","MediaPlay","MediaPause","MediaStop","MediaRewind","MediaFastForward",
+       "MediaTrackPrevious","MediaTrackNext","ChannelUp","ChannelDown",
+       "ColorF0Red","ColorF1Green","ColorF2Yellow","ColorF3Blue","Info",
+       "0","1","2","3","4","5","6","7","8","9"]
+        .forEach(function(k){ try{ tizen.tvinputdevice.registerKey(k); }catch(e){} });
+    }
+  }catch(e){}
+};
+
+/* ---------------- Almacenamiento ---------------- */
+var PREFIX = "tb_";
+App.store = {
+  get: function(key, def){
+    try{
+      var raw = localStorage.getItem(PREFIX+key);
+      return raw === null ? def : JSON.parse(raw);
+    }catch(e){ return def; }
+  },
+  set: function(key, val){
+    try{
+      if(val === undefined || val === null) localStorage.removeItem(PREFIX+key);
+      else localStorage.setItem(PREFIX+key, JSON.stringify(val));
+    }catch(e){ /* cuota llena: ignorar */ }
+  },
+  remove: function(key){ try{ localStorage.removeItem(PREFIX+key); }catch(e){} }
+};
+
+/* ---------------- Bus de eventos ---------------- */
+var handlers = {};
+App.bus = {
+  on: function(evt, fn){ (handlers[evt] = handlers[evt] || []).push(fn); },
+  off: function(evt, fn){
+    var l = handlers[evt]; if(!l) return;
+    var i = l.indexOf(fn); if(i >= 0) l.splice(i, 1);
+  },
+  emit: function(evt, data){
+    (handlers[evt] || []).slice().forEach(function(fn){
+      try{ fn(data); }catch(e){ console.error("[bus] "+evt, e); }
+    });
+  }
+};
+
+/* ---------------- Ajustes ---------------- */
+var DEFAULTS = {
+  torboxToken: "",
+  tmdbKey: "",
+  defaultSource: "all",          // all | torrents | usenet | webdl
+  autoplayNext: true,
+  subLang: "spa",                // ISO 639-2 preferido
+  audioLang: "spa",
+  subSize: "m",                  // s | m | l
+  uiLang: "es-ES",               // idioma para TMDB
+  liveListUrl: "https://www.tdtchannels.com/lists/tv.json",
+  appIds: {}                     // { tivify: "...", atresplayer: "...", mitele: "..." }
+};
+var settings = App.store.get("settings", {});
+/* Migración del token de la v1 */
+try{
+  var legacy = localStorage.getItem("torbox_token");
+  if(legacy && !settings.torboxToken){ settings.torboxToken = legacy; App.store.set("settings", settings); }
+}catch(e){}
+
+App.settings = {
+  define: function(k, def){ if(!(k in DEFAULTS)) DEFAULTS[k] = def; },
+  get: function(k){ return (k in settings) ? settings[k] : DEFAULTS[k]; },
+  set: function(k, v){
+    settings[k] = v; App.store.set("settings", settings);
+    App.bus.emit("settings:change", {key:k, value:v});
+  },
+  all: function(){
+    var o = {}, k;
+    for(k in DEFAULTS) o[k] = DEFAULTS[k];
+    for(k in settings) o[k] = settings[k];
+    return o;
+  },
+  reset: function(){ settings = {}; App.store.set("settings", settings); App.bus.emit("settings:change", {}); }
+};
+
+/* ---------------- Helpers ---------------- */
+App.esc = function(s){
+  return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+};
+App.fmtSize = function(b){
+  if(!b && b !== 0) return "";
+  var u = ["B","KB","MB","GB","TB"], i = 0; b = Number(b);
+  while(b >= 1024 && i < u.length-1){ b /= 1024; i++; }
+  return (b >= 100 || i === 0 ? Math.round(b) : b.toFixed(1)) + " " + u[i];
+};
+function pad2(n){ n = String(n); return n.length < 2 ? "0"+n : n; }
+App.fmtTime = function(s){
+  s = Math.max(0, Math.floor(s || 0));
+  var h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return h ? h+":"+pad2(m)+":"+pad2(x) : m+":"+pad2(x);
+};
+App.isVideo = function(f){
+  var n = String(f.short_name || f.name || "").toLowerCase();
+  if(f.mimetype && /^video\//.test(f.mimetype)) return true;
+  return /\.(mp4|mkv|webm|m4v|mov|avi|ts|m2ts|mts|flv|wmv|mpg|mpeg)$/.test(n);
+};
+App.isSubtitle = function(f){
+  return /\.(srt|vtt|ass|ssa|sub)$/i.test(String(f.short_name || f.name || ""));
+};
+App.baseName = function(f){
+  var n = String(f.short_name || f.name || "");
+  n = n.split("/").pop();
+  return n.replace(/\.[^.]+$/, "");
+};
+App.debounce = function(fn, ms){
+  var t;
+  return function(){
+    var a = arguments, self = this;
+    clearTimeout(t); t = setTimeout(function(){ fn.apply(self, a); }, ms);
+  };
+};
+App.isTizen = function(){ return !!(window.tizen || /Tizen/i.test(navigator.userAgent)); };
+
+/* ---------------- Hint de cabecera ---------------- */
+var hintTimer, hintDefault = "";
+App.setHintDefault = function(msg){
+  hintDefault = msg || "";
+  var el = document.getElementById("hint");
+  if(el && !hintTimer) el.textContent = hintDefault;
+};
+App.hint = function(msg, ms){
+  var el = document.getElementById("hint"); if(!el) return;
+  el.textContent = msg; el.classList.add("flash");
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(function(){
+    hintTimer = null; el.classList.remove("flash"); el.textContent = hintDefault;
+  }, ms || 3500);
+};
+
+})();

@@ -1,0 +1,158 @@
+/* base.css — tokens, layout, cabecera, filas, tarjetas, modales, estados. */
+:root{
+  --bg:#0b0f14;
+  --surface:#141b22;
+  --surface-2:#1b242d;
+  --surface-3:#26313c;
+  --text:#e8eef3;
+  --muted:#8b9aa8;
+  --accent:#17c964;
+  --accent-dim:rgba(23,201,100,.16);
+  --accent-ink:#06130c;
+  --danger:#ff6b6b;
+  --warn:#f5c451;
+  --radius:10px;
+  --gutter:56px;
+  --focus-ring:0 0 0 4px var(--accent),0 12px 34px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Samsung One","SamsungOne","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  font-size:26px;
+  line-height:1.4;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+
+/* ---- App shell ---- */
+#app{height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:28px;padding:28px var(--gutter) 18px;flex:none}
+.brand{font-size:40px;font-weight:700;letter-spacing:.3px}
+.brand b{color:var(--accent)}
+.tabs{display:flex;gap:10px;margin-left:12px}
+.tab{
+  padding:8px 24px;border-radius:999px;color:var(--muted);
+  font-size:24px;border:2px solid transparent;transition:color .15s,background .15s;cursor:pointer;
+}
+.tab.active{color:var(--text);border-color:rgba(23,201,100,.55);background:var(--accent-dim)}
+.tab.focused{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.spacer{flex:1}
+.hint{color:var(--muted);font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:760px}
+.hint.flash{color:var(--warn)}
+
+main{flex:1;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;display:none}
+.screen.on{display:block}
+.scroll{height:100%;overflow-y:auto;padding:8px var(--gutter) 64px}
+.scroll::-webkit-scrollbar,.hscroll::-webkit-scrollbar{width:0;height:0}
+.hscroll{display:flex;gap:24px;overflow-x:auto;padding:14px 4px 22px}
+
+/* Con el foco en la cabecera, atenuar el foco del contenido */
+body.zone-header .screen .focused{box-shadow:none!important;transform:none!important;outline:none!important}
+
+/* ---- Filas (listas) ---- */
+.row{
+  display:flex;align-items:center;gap:24px;
+  padding:20px 26px;margin:8px 0;border-radius:var(--radius);
+  background:var(--surface);
+  transition:transform .14s ease,background .14s ease,box-shadow .14s ease;
+}
+.row .title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .meta{color:var(--muted);font-size:21px;white-space:nowrap}
+.badge{
+  font-size:18px;color:var(--accent);border:1px solid var(--accent);
+  padding:2px 12px;border-radius:999px;white-space:nowrap;
+}
+.row.focused{
+  background:linear-gradient(90deg,var(--accent-dim),rgba(23,201,100,.03));
+  box-shadow:inset 5px 0 0 var(--accent),0 0 0 1px rgba(23,201,100,.35);
+  transform:translateX(8px);
+}
+.row.dim{opacity:.5}
+
+/* ---- Sección con título ---- */
+.section-title{font-size:30px;font-weight:600;margin:26px 0 4px}
+.section-title .muted{font-size:22px;font-weight:400;margin-left:12px}
+
+/* ---- Chips (filtros) ---- */
+.chips{display:flex;gap:12px;flex-wrap:wrap;margin:6px 0 10px}
+.chip{
+  padding:8px 22px;border-radius:999px;background:var(--surface);color:var(--muted);
+  font-size:22px;border:2px solid transparent;
+}
+.chip.active{color:var(--text);border-color:rgba(23,201,100,.55)}
+.chip.focused{background:var(--accent);color:var(--accent-ink);font-weight:700}
+
+/* ---- Botones ---- */
+.btn{
+  display:inline-block;padding:16px 36px;border-radius:var(--radius);
+  background:var(--surface-2);color:var(--text);font-size:24px;border:2px solid transparent;
+  text-align:center;
+}
+.btn.focused{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.primary{border-color:var(--accent)}
+
+/* ---- Inputs ---- */
+.input{
+  width:100%;padding:18px 22px;font-size:26px;
+  background:var(--bg);color:var(--text);border:2px solid var(--surface-2);
+  border-radius:var(--radius);outline:none;
+}
+.input.focused,.input:focus{border-color:var(--accent)}
+.box{width:860px;max-width:90vw;background:var(--surface);border-radius:16px;padding:48px;text-align:left}
+.setup-box h2{margin-bottom:10px}
+.setup-box .input{margin:26px 0}
+
+/* ---- Estados ---- */
+.center{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;text-align:center;padding:40px;
+}
+.center h2{font-size:34px;font-weight:600}
+.center p{color:var(--muted);max-width:760px}
+.center.err h2{color:var(--danger)}
+.spinner{
+  width:52px;height:52px;border-radius:50%;
+  border:5px solid var(--surface-2);border-top-color:var(--accent);
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- Modales ---- */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:200;
+  display:flex;align-items:center;justify-content:center;
+}
+.modal{
+  min-width:640px;max-width:1100px;max-height:86vh;background:var(--surface);border-radius:18px;
+  padding:42px 48px;box-shadow:0 30px 80px rgba(0,0,0,.6);display:flex;flex-direction:column;
+}
+.modal.wide{width:1100px}
+.modal h2{font-size:34px;margin-bottom:14px}
+.modal-body{color:var(--muted);margin-bottom:26px;overflow-y:auto}
+.modal-buttons{display:flex;gap:18px;flex-wrap:wrap}
+.modal.vertical .modal-buttons{flex-direction:column;flex-wrap:nowrap;overflow-y:auto;max-height:62vh;padding:6px}
+.modal.vertical .btn{text-align:left}
+
+/* ---- Toast ---- */
+.toast{
+  position:fixed;left:50%;bottom:60px;transform:translate(-50%,30px);opacity:0;
+  background:var(--surface-3);color:var(--text);padding:16px 30px;border-radius:999px;
+  font-size:24px;z-index:300;transition:opacity .2s,transform .2s;pointer-events:none;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---- Barra de progreso genérica ---- */
+.progress{height:6px;background:rgba(255,255,255,.18);border-radius:3px;overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--accent)}
+
+/* ---- Leyenda de botones de color ---- */
+.legend{display:flex;gap:26px;color:var(--muted);font-size:20px}
+.legend i{display:inline-block;width:16px;height:16px;border-radius:4px;margin-right:8px;vertical-align:-2px}
+.legend .red{background:#e5484d}.legend .green{background:#30a46c}
+.legend .yellow{background:#f5c451}.legend .blue{background:#3e63dd}
