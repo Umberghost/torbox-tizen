@@ -9,7 +9,19 @@ con **Tizen**. Es una web app que corre en el webview de TizenBrew; navegación 
 para mando a distancia (D-pad). La tele del usuario **no tiene antena** y Tizen es
 sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 
-## Estado actual (v1, funcional)
+## Estado actual (v2, 2026-11-07) — LEER ARCHITECTURE.md
+- v2 modular en `app/js/` (core, ui, torbox, main + pantallas). Contratos en `ARCHITECTURE.md`.
+- Hecho: biblioteca con carátulas TMDB y series agrupadas, AVPlay + fallback `<video>`/hls.js,
+  continuar viendo, subtítulos/pistas, TV en directo (TDTChannels, 378 canales), accesos a
+  Atresplayer/Mediaset Infinity/Tivify, buscador, descargas, ajustes, teclado en pantalla.
+- **CORS:** la API de TorBox solo admite origen `https://torbox.app` (comprobado). Por eso
+  `service.js` (serviceFile) levanta un proxy en `127.0.0.1:8095` y `App.net.fetch` lo usa.
+- Probado en Chrome headless con API simulada; **sin probar en la TV real**.
+- TV del usuario: **Samsung TU65DU7175UXXC** (2024, Tizen 8 de fábrica, actualizada a One UI Tizen).
+- Pendiente de verificar en TV: AVPlay disponible en TizenBrew, serviceFile arranca, endpoints
+  de búsqueda de TorBox (nombres de campo supuestos), appIds de las apps oficiales.
+
+## Estado v1 (histórico)
 - `package.json` — módulo `app`, `appPath: app/index.html`, teclas de medios registradas.
 - `app/index.html` — UI + lógica + reproductor, autocontenido. Hace:
   - Pide la **API key** de TorBox la 1ª vez (se guarda en `localStorage`).
