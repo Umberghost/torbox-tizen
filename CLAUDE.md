@@ -76,7 +76,9 @@ sistema cerrado (sin ADB), así que todo entra por red/APIs web.
     (Tivify también las lleva, pero por licencia comercial, no por técnica; y sus canales
     de Mediaset/Atresmedia son de pago en Tivify Plus.)
 
-## Roadmap (orden sugerido)
+## Pendientes actuales → ver `TODO.md`
+
+## Roadmap original (completado en v2.x)
 1. **AVPlay** — sostiene tanto el contenido de TorBox como los directos. Lo primero.
 2. **Continuar viendo** — guardar posición por archivo en `localStorage` y retomar.
 3. **Sección TV en directo** — cargar lista de TDTChannels (RTVE + públicos) con hls.js.
