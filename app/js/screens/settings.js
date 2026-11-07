@@ -184,6 +184,19 @@ function rows(){
       desc: t("settings.appId.desc"),
       value: function(){ return appId(a.id) || t("settings.appId.auto"); } });
   });
+  /* Filas registradas por otros módulos (App.settingsUI), agrupadas */
+  var extra = (App.settingsUI ? App.settingsUI.rows() : []), groups = [];
+  extra.forEach(function(row){ if(groups.indexOf(row._group) < 0) groups.push(row._group); });
+  groups.forEach(function(g){
+    r.push({ group: t(g) });
+    extra.forEach(function(row){
+      if(row._group !== g) return;
+      var o = {}; for(var k in row) o[k] = row[k];
+      ["label", "desc"].forEach(function(k){ if(typeof o[k] === "function") o[k] = o[k](); });
+      if(typeof o.options === "function") o.options = o.options();
+      r.push(o);
+    });
+  });
   r.push(
     { group: t("settings.group.data") },
     { id: "diagnostics", type: "action", label: t("settings.diag.title"), desc: t("settings.diag.desc"), run: showDiag },

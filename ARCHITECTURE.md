@@ -120,3 +120,67 @@ js/main.js                   router, header nav, despacho de teclas, setup, arra
   `{id, type, name, description, poster, background, releaseInfo, imdbRating, genres, videos:[{id, season, episode, name, overview, thumbnail, released}]}`
   en el idioma de contenido; si no hay traducción, cae a inglés/Cinemeta campo a campo. Search y Home la usan
   para fichas y episodios (en lugar de pedir Cinemeta /meta directamente).
+
+## Ronda 4 (v2.5) — contratos nuevos (LEER ENTERO ANTES DE TOCAR NADA)
+
+### Reglas generales para cada agente
+- Toca SOLO tus archivos (lista en tu encargo). Otros agentes trabajan a la vez en el resto.
+- Todo texto visible con `App.t()`; claves en TU `app/i18n/<modulo>.js`, en **en** y **es** completos.
+- ES2017 sin `?.` ni `??`, IIFE + "use strict", `App.esc()` para HTML. Valida con `node --check`.
+- **La máquina va justa de memoria**: como mucho UNA prueba headless corta (puppeteer-core está en
+  `C:\Users\MVILLA~1\AppData\Local\Temp\claude\c264a034cebec732\d0472b87-eeee-4167-84c3-0715ce822f75\scratchpad\e2e\`,
+  Chrome en `C:/Program Files/Google/Chrome/Application/chrome.exe`), cierra Chrome y no dejes servidores vivos.
+  Puerto propio para servir: el que te indique tu encargo (nunca 8080/8095).
+- No hagas commits ni push. Al final, informe breve: qué hiciste, qué no, qué verificar en la TV.
+- Lo que dependa de AVPlay real (24p, HDR, passthrough, PGS) NO se hace: queda pendiente.
+
+### A1 — Menú contextual (alternativa a botones de colores)
+- main.js: mantener OK ≥ 600 ms, o la tecla TOOLS (keyCode 10135), o la tecla MENU (18 en PC=Alt? no: usa
+  keyCode 10133 "Menu" si existe) abre `App.ui.menu()` con las acciones de la pantalla actual.
+- Cada pantalla puede definir `actions()` → `[{label, run}]` (texto ya traducido) según el elemento enfocado.
+  **Toda acción que hoy esté en un botón de color/INFO/números debe estar también en `actions()`.**
+- El reproductor tiene su propio panel de iconos (agente Player) y su `actions` vía `App.player.actions()`.
+- Pista en cabecera: añadir "· Hold OK: options" / "· Mantén OK: opciones" a los hints.
+
+### Registro de filas de Ajustes (ya existe en core.js)
+`App.settingsUI.add("settings.group.<x>", row)` — row como las de settings.js (`id`, `type`: menu|bool|text|
+secret|action, `label`/`desc`/`options` pueden ser funciones, `value()`, `run()`, `after()`). Cada agente registra
+aquí sus ajustes nuevos (NO editar settings.js salvo su dueño). La clave de grupo se traduce con `App.t`: añade
+la clave del grupo a tu i18n (p.ej. "settings.group.player": "Playback").
+
+### App.cache (agente Core) — IndexedDB asíncrono para cachés grandes
+`App.cache.get(key) → Promise<val|undefined>`, `App.cache.set(key, val, ttlMs) → Promise`, `App.cache.del(key)`,
+`App.cache.clear(prefix)`. Si IndexedDB falla, cae a memoria. Los demás agentes: usar App.cache para cachés
+grandes nuevas (con `if(App.cache)`), App.store solo para datos pequeños.
+
+### App.player (agente Player) — control remoto
+`App.player.status() → {active, title, subtitle, pos, dur, paused, live, key}`;
+`App.player.control(cmd, arg)`: cmd ∈ "playpause" | "play" | "pause" | "stop" | "seek" (arg = ±segundos) | "seekTo" (arg = s).
+Emite `player:state` cuando cambia (play/pause/stop) además de los eventos existentes.
+
+### App.notify (agente Remote) — avisos al móvil
+`App.notify.send(title, body)`: si el ajuste `ntfyTopic` está configurado, POST a `https://ntfy.sh/<topic>`
+(vía App.net.fetch). Sin topic, no hace nada. El agente Player lo llama desde watch.js al terminar una descarga;
+Search/follow al añadir un episodio nuevo automático.
+
+### App.follow (agente Search, js/follow.js) — seguir series
+`App.follow.list() → [{imdbId, name, poster, since}]`, `isFollowing(imdbId)`, `toggle({imdbId, name, poster})`,
+`upcoming() → Promise<[{imdbId, name, poster, season, episode, title, released}]>` (próximos/recientes 14 días,
+desde App.meta.title videos[].released). Emite `follow:change`. Motor de auto-descarga (ajuste `followAuto`)
+cada 6 h: episodios nuevos ya emitidos → mejor fuente (App.search.bestStream sobre add-ons) → si en caché,
+añadir a TorBox; si no, añadir y App.watch.track. Registro en App.store('followDone').
+
+### Acciones remotas (service.js → remote.js), agente Remote
+Además de settings/add: `{type:"play", mediaType:"movie"|"series", imdbId, season, episode}` →
+`App.search.playTitle(...)`; `{type:"playUrl", url, title}` → `App.player.play`; `{type:"control", cmd, arg}` →
+`App.player.control`; `{type:"key", key:"up|down|left|right|ok|back|..."}` → simula tecla en la app.
+La TV publica `App.player.status()` en `/tv/status` cada 2 s mientras reproduce.
+
+### Perfiles (agente Core)
+`App.profile.list()`, `current()`, `switch(id)`, `create(name, pin)`. Datos por perfil: historial, ajustes de
+idioma/preferencias, follow, favoritos. Claves de cuenta (torboxToken, tmdbKey, stremioAddon(s), trakt*) son
+globales. Implementación transparente en App.store (prefijo por perfil) — los demás módulos no cambian nada.
+
+### Varios add-ons (agente Search)
+Nuevo ajuste `stremioAddons` (array de URLs de manifest); `stremioAddon` (string) sigue valiendo como primero.
+Fuentes fusionadas y deduplicadas por infoHash/url.

@@ -6,6 +6,16 @@ Pendientes acordados el 2026-11-07. Prioridad sugerida: **1 + 4 + 2** primero.
 - [ ] Confirmar en la TV que la app instalada (`tizen-app/TorBox.wgt`) arranca su servicio y que AVPlay
       reproduce MKV/HEVC (Registro: `[diag] avplay disponible al arrancar: true`).
 
+## Prioridad alta (robustez, 2026-11-07)
+- [ ] **A1. Alternativas a los botones de colores** (Smart Remote sin colores/INFO/números): menú contextual
+      manteniendo OK (y tecla TOOLS) con las mismas acciones en cada pantalla; panel de iconos en el reproductor.
+- [ ] **A2. Arranque rápido y sin red** de la app instalada: un solo archivo empaquetado por versión + copia local.
+- [ ] **A3. Volver a la versión anterior**: fijar versión / "usar anterior" desde la web del móvil y autorrollback si no arranca.
+- [ ] **A4. Almacenamiento**: cachés grandes a IndexedDB, límites y aviso de espacio (no perder ajustes).
+- [ ] **A5. (PENDIENTE AVPlay)** Calidad: ajuste de frecuencia 24p, HDR, passthrough Dolby/Atmos, aviso de subtítulos PGS.
+- [ ] **A6. Registro persistente**: últimos errores guardados y mostrados al abrir ("la última vez falló…").
+- [ ] **A7. Seguridad**: recordatorio de rotar la API key y gestión cómoda del cambio de clave en todos los sitios.
+
 ## Uso diario
 - [ ] **1. Buscar en el móvil → "Ver en la TV"**: buscador en la web del móvil (teclado del móvil); al elegir
       episodio/película, la TV lo reproduce (acción remota vía service.js → remote.js → App.search.playTitle).

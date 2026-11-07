@@ -123,6 +123,19 @@ App.screens = {
   }
 };
 
+/* ---------------- Registro de filas de Ajustes ----------------
+ * Cualquier módulo añade opciones a la pantalla Ajustes sin tocar settings.js:
+ *   App.settingsUI.add("settings.group.player", { id:"subDelay", type:"menu"|"bool"|"text"|"secret"|"action",
+ *     label: function(){ return App.t("player.x"); }, desc: function(){...}, options:[{label,value}],
+ *     value: function(){...}, run: function(){...}, after: function(){...} });
+ * label/desc/options pueden ser funciones (se evalúan al pintar, ya con el idioma cargado).
+ */
+var settingsRows = [];
+App.settingsUI = {
+  add: function(groupKey, row){ row._group = groupKey; settingsRows.push(row); },
+  rows: function(){ return settingsRows.slice(); }
+};
+
 /* ---------------- Ajustes ---------------- */
 var DEFAULTS = {
   torboxToken: "",
