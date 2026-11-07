@@ -156,3 +156,15 @@ body.zone-header .screen .focused{box-shadow:none!important;transform:none!impor
 .legend i{display:inline-block;width:16px;height:16px;border-radius:4px;margin-right:8px;vertical-align:-2px}
 .legend .red{background:#e5484d}.legend .green{background:#30a46c}
 .legend .yellow{background:#f5c451}.legend .blue{background:#3e63dd}
+
+/* ---- Aviso de ajustes remotos (remote.js) ---- */
+.remote-banner{
+  position:fixed;left:50%;bottom:40px;transform:translateX(-50%);z-index:150;
+  display:none;align-items:center;gap:28px;padding:18px 34px;border-radius:16px;
+  background:var(--surface-2);border:2px solid rgba(23,201,100,.45);font-size:24px;
+  box-shadow:0 18px 50px rgba(0,0,0,.5);white-space:nowrap;
+}
+.remote-banner.on{display:flex}
+.remote-banner .rb-title{color:var(--muted)}
+.remote-banner .rb-url{font-weight:700;color:var(--text)}
+.remote-banner .rb-pin b{color:var(--accent);font-size:30px;letter-spacing:4px;margin-left:6px}

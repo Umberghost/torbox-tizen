@@ -3,7 +3,7 @@
 "use strict";
 
 var App = window.App = window.App || {};
-App.version = "2.0.0";
+App.version = "2.1.0";
 
 /* ---------------- Teclas ---------------- */
 App.K = {
