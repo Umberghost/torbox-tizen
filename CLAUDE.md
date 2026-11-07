@@ -74,7 +74,7 @@ sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 - **TizenBrew solo carga módulos desde jsDelivr** (`gh/usuario/repo` o `npm/paquete`); NO desde
   un servidor local. Módulo publicado: `gh/Umberghost/torbox-tizen` (repo público).
 - jsDelivr cachea la rama ~12 h: tras un push, purgar con
-  `curl https://purge.jsdelivr.net/gh/Umberghost/torbox-tizen@main/<ruta>` (package.json, app/…).
+  `curl https://purge.jsdelivr.net/gh/Umberghost/torbox-tizen@master/<ruta>` (package.json, app/…).
 - App servida en la TV desde `http://127.0.0.1:8081/module/gh%2FUmberghost%2Ftorbox-tizen/app/index.html`.
 - Prueba en PC: `npx http-server . -p 8080` → `http://localhost:8080/app/` (+ `node service.js` para el proxy).
 - TV: IP 192.168.1.147. API local `http://192.168.1.147:8001/api/v2/applications/<appId>` (GET estado,
