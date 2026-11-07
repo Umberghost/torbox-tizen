@@ -1,6 +1,6 @@
 {
   "name": "torbox-tizen",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "description": "Cliente de TorBox para Samsung Tizen vía TizenBrew: biblioteca con carátulas, series agrupadas, reproductor AVPlay, continuar viendo, TV en directo, buscador y subtítulos.",
   "packageType": "app",
   "appName": "TorBox",

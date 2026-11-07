@@ -18,7 +18,7 @@ var os = require("os");
 
 var PORT = 8095;
 var MAX_REDIRECTS = 5;
-var VERSION = "2.3.0";
+var VERSION = "2.4.0";
 
 /* ---------------- Estado de ajustes remotos ---------------- */
 var pin = String(Math.floor(1000 + Math.random() * 9000));
@@ -134,7 +134,7 @@ var PAGE = "<!doctype html><html><head><meta charset=\"utf-8\">\n<meta name=\"vi
 function tvOnline(){ return Date.now() - lastPoll < 15000; }
 
 /* ---------------- Servidor ---------------- */
-var server = http.createServer(function(req, res){
+function handler(req, res){
   if(req.method === "OPTIONS"){ res.writeHead(204, cors()); return res.end(); }
   var parsed = urlMod.parse(req.url, true);
   var p = parsed.pathname;
@@ -233,12 +233,29 @@ var server = http.createServer(function(req, res){
     return sendJson(res, 200, { ok: true, logs: logs.filter(function(e){ return e.n > since; }), tvOnline: tvOnline() });
   }
   sendJson(res, 404, { success: false, detail: "Ruta no encontrada" });
-});
+}
 
-server.on("error", function(e){
-  // Puerto ocupado: probablemente ya hay otra instancia corriendo.
-  console.log("[torbox-tizen service] " + e.message);
-});
-server.listen(PORT, "0.0.0.0", function(){
-  console.log("[torbox-tizen service] v" + VERSION + " en :" + PORT + " · PIN " + pin + " · " + lanIps().join(", "));
-});
+var server = null;
+function start(){
+  if(server) return;
+  server = http.createServer(handler);
+  server.on("error", function(e){
+    // Puerto ocupado: otra instancia (TizenBrew o la app instalada) ya da servicio.
+    console.log("[torbox-tizen service] " + e.message);
+  });
+  server.listen(PORT, "0.0.0.0", function(){
+    console.log("[torbox-tizen service] v" + VERSION + " en :" + PORT + " · PIN " + pin + " · " + lanIps().join(", "));
+  });
+}
+function stop(){ if(server){ try{ server.close(); }catch(e){} server = null; } }
+
+/* Servicio web de Tizen (app instalada) usa onStart/onStop; TizenBrew (vm) y Node arrancan directo. */
+try{
+  if(typeof module !== "undefined" && module.exports){
+    module.exports.onStart = start;
+    module.exports.onStop = stop;
+    module.exports.onExit = stop;
+    module.exports.onRequest = function(){};
+  }
+}catch(e){}
+start();

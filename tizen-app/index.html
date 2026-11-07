@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>TorBox</title>
+<!-- En la app instalada $WEBAPIS sí se resuelve: AVPlay disponible -->
+<script src="$WEBAPIS/webapis/webapis.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#0b0f14;color:#e8eef3;font-family:"Samsung One","Segoe UI",Arial,sans-serif;overflow:hidden}
+  #boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;text-align:center;z-index:999;background:#0b0f14}
+  #boot h1{font-size:64px;margin:0}#boot h1 b{color:#17c964}
+  #boot p{font-size:28px;color:#8b9aa8;max-width:1200px;margin:0}
+  #boot .err{color:#ff6b6b}
+  #boot .sp{width:56px;height:56px;border-radius:50%;border:6px solid #1b242d;border-top-color:#17c964;animation:s 1s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="boot"><h1>Tor<b>Box</b></h1><div class="sp" id="bootSp"></div><p id="bootMsg">Loading…</p></div>
+<script>
+/*
+ * Cargador de la app instalada.
+ * 1) Arranca el servicio local (proxy CORS + web de ajustes) incluido en este paquete.
+ * 2) Descarga app/index.html de GitHub (jsDelivr) y carga sus CSS y scripts con URLs absolutas,
+ *    así la app se actualiza sola sin reinstalar. Guarda una copia del index para arrancar sin red.
+ */
+(function(){
+  "use strict";
+  var REPO = "Umberghost/torbox-tizen";
+  var BASE = "https://cdn.jsdelivr.net/gh/" + REPO + "@master/app/";   // se sustituye por la última etiqueta
+  var PROXY = "http://127.0.0.1:8095";
+  var msg = document.getElementById("bootMsg");
+  function say(t, err){ msg.textContent = t; msg.className = err ? "err" : ""; if(err) document.getElementById("bootSp").style.display = "none"; }
+
+  // Teclas: Atrás en la pantalla de error sale de la app
+  document.addEventListener("keydown", function(e){
+    if(document.getElementById("boot") && (e.keyCode === 10009 || e.keyCode === 27)){
+      try{ tizen.application.getCurrentApplication().exit(); }catch(x){}
+    }
+  });
+
+  function ping(){
+    return fetch(PROXY + "/ping").then(function(r){ return r.json(); }).then(function(j){ return !!(j && j.ok); })
+      .catch(function(){ return false; });
+  }
+  function startService(){
+    return ping().then(function(ok){
+      if(ok) return true;
+      return new Promise(function(resolve){
+        try{
+          var pkg = tizen.application.getCurrentApplication().appInfo.packageId;
+          tizen.application.launchAppControl(
+            new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
+            pkg + ".Service",
+            function(){ resolve(true); },
+            function(e){ console.error("[boot] servicio: " + e.message); resolve(false); });
+        }catch(e){ console.error("[boot] servicio: " + e.message); resolve(false); }
+      }).then(function(){
+        // esperar a que escuche (máx ~5 s)
+        var tries = 0;
+        return (function wait(){
+          return ping().then(function(ok){
+            if(ok || ++tries > 10) return ok;
+            return new Promise(function(r){ setTimeout(r, 500); }).then(wait);
+          });
+        })();
+      });
+    });
+  }
+
+  /* Última versión publicada = última etiqueta vX.Y.Z del repo (inmutable en jsDelivr, sin caché vieja) */
+  function cmpVer(a, b){
+    a = a.replace(/^v/, "").split(".").map(Number); b = b.replace(/^v/, "").split(".").map(Number);
+    for(var i = 0; i < 3; i++){ if((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); }
+    return 0;
+  }
+  function resolveVersion(){
+    return fetch("https://api.github.com/repos/" + REPO + "/tags?per_page=30", { cache: "no-store" })
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(tags){
+        var v = (tags || []).map(function(t){ return t.name; }).filter(function(n){ return /^v\d+\.\d+\.\d+$/.test(n); })
+          .sort(cmpVer).pop();
+        if(!v) throw new Error("sin etiquetas");
+        try{ localStorage.setItem("tb_boot_ver", v); }catch(e){}
+        return v;
+      })
+      .catch(function(e){
+        var v = null; try{ v = localStorage.getItem("tb_boot_ver"); }catch(x){}
+        console.warn("[boot] no se pudo consultar la última versión (" + e.message + "): " + (v || "@master"));
+        return v;
+      })
+      .then(function(v){ if(v) BASE = "https://cdn.jsdelivr.net/gh/" + REPO + "@" + v + "/app/"; console.info("[boot] versión: " + (v || "master")); });
+  }
+
+  function getIndex(){
+    return fetch(BASE + "index.html", { cache: "no-store" }).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function(html){
+      try{ localStorage.setItem("tb_boot_index", html); }catch(e){}
+      return html;
+    }).catch(function(e){
+      var cached = null;
+      try{ cached = localStorage.getItem("tb_boot_index"); }catch(x){}
+      if(cached) return cached;
+      throw e;
+    });
+  }
+
+  function abs(u){ return /^https?:/i.test(u) ? u : BASE + u.replace(/^\.\//, ""); }
+
+  function loadApp(html){
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    // CSS
+    Array.prototype.forEach.call(doc.querySelectorAll('link[rel="stylesheet"]'), function(l){
+      var n = document.createElement("link");
+      n.rel = "stylesheet"; n.href = abs(l.getAttribute("href"));
+      document.head.appendChild(n);
+    });
+    // Marcado del body (sin scripts)
+    var holder = document.createElement("div");
+    Array.prototype.forEach.call(doc.body.children, function(el){
+      if(el.tagName !== "SCRIPT") holder.appendChild(document.importNode(el, true));
+    });
+    while(holder.firstChild) document.body.insertBefore(holder.firstChild, document.getElementById("boot"));
+    // Scripts en orden (sin el de $WEBAPIS: ya está cargado arriba)
+    var srcs = Array.prototype.map.call(doc.querySelectorAll("script[src]"), function(s){ return s.getAttribute("src"); })
+      .filter(function(s){ return s.indexOf("$WEBAPIS") < 0; });
+    return new Promise(function(resolve, reject){
+      (function next(i){
+        if(i >= srcs.length){ resolve(); return; }
+        var sc = document.createElement("script");
+        sc.src = abs(srcs[i]); sc.async = false;
+        sc.onload = function(){ next(i + 1); };
+        sc.onerror = function(){ reject(new Error("No se pudo cargar " + srcs[i])); };
+        document.body.appendChild(sc);
+      })(0);
+    });
+  }
+
+  say("Starting…");
+  startService().then(function(svc){
+    if(!svc) console.warn("[boot] el servicio local no responde: TorBox puede fallar por CORS");
+    say("Loading…");
+    return resolveVersion().then(getIndex);
+  }).then(loadApp).then(function(){
+    var b = document.getElementById("boot");
+    if(b) b.parentNode.removeChild(b);
+  }).catch(function(e){
+    say("Could not load TorBox (" + e.message + "). Check the TV's internet connection. Press Back to exit.", true);
+  });
+})();
+</script>
+</body>
+</html>

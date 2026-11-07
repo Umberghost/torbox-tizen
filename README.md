@@ -28,3 +28,12 @@ Ver `ARCHITECTURE.md`.
 2. **Edit code** → borra todo, pega el contenido de `cloud/worker.js` → **Deploy**.
 3. Abre `https://torbox.<tu-subdominio>.workers.dev/` en cualquier navegador. La app se sirve siempre desde
    la rama `master` de este repo (se actualiza sola). Ratón/táctil: clic = OK; botón ← = Atrás.
+
+## App instalada (recomendada): AVPlay para MKV/HEVC
+Dentro de TizenBrew la página no tiene APIs de Samsung (sin AVPlay → no abre MKV). La app instalada
+`tizen-app/` sí: carga el código de la última versión etiquetada en GitHub en cada arranque (se actualiza
+sola) y trae su propio servicio (proxy + web del móvil), así que no necesita TizenBrew.
+1. TV en modo desarrollador con Host PC IP = IP de tu PC; reinicia.
+2. `python tizen-app/build.py` → `tizen-app/TorBox.wgt`.
+3. TizenBrew Installer (PC) → Select file to install → `TorBox.wgt` (lo firma con tu certificado).
+4. Vuelve a poner Host PC IP = 127.0.0.1 y reinicia.

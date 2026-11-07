@@ -15,8 +15,12 @@ sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 - v2.3: Inicio (catálogos TMDB-addon localizados), Buscar estilo Stremio (Cinemeta/TMDB + add-on Torrentio del
   usuario, mejor fuente en un clic, packs de temporada, estado de descarga), OpenSubtitles, aviso "ya está listo",
   Trakt, EPG en TV en directo, formatos no compatibles (App.caps), web del móvil con Ajustes/Añadir/Registro.
-- **Hallazgo en TV real (Tizen 9, Chromium 120):** dentro de TizenBrew NO hay `webapis` (AVPlay) → se usa
-  `<video>` y fallan MKV/HEVC. Plan B pendiente: app empaquetada (launcher wgt) que cargue el código remoto.
+- **Hallazgo en TV real (Tizen 9, Chromium 120):** dentro de TizenBrew la página NO tiene `tizen` ni `webapis`
+  (AVPlay) y `<video>` no abre MKV (mkv=no; mp4 h264/hevc sí). Solución: **app instalada `tizen-app/`**
+  (package TrBxApp001): cargador que resuelve la última etiqueta vX.Y.Z vía API de GitHub y carga
+  `app/` desde jsDelivr@tag + servicio propio (`tizen:service`, mismo service.js). `python tizen-app/build.py`.
+- Publicar = commit + tag vX.Y.Z + push (la app instalada y el Worker usan la última etiqueta; sin purgas).
+- `cloud/worker.js`: Cloudflare Worker para usar la app en navegador (sirve app + proxy con lista blanca).
 - TorBox cerró su Search API (search-api.torbox.app no existe): por eso Buscar usa add-ons de Stremio.
 
 ## Estado v2.0 (histórico)

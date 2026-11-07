@@ -13,8 +13,24 @@
  */
 
 const REPO = "gh/Umberghost/torbox-tizen";
-const BRANCH = "master";                 // la app se sirve desde esta rama
-const CDN = `https://cdn.jsdelivr.net/${REPO}@${BRANCH}/app/`;
+const GH_REPO = "Umberghost/torbox-tizen";
+/* La app se sirve desde la última etiqueta vX.Y.Z (inmutable en jsDelivr). Se consulta como mucho cada 5 min. */
+let cachedVer = null, cachedAt = 0;
+function cmpVer(a, b) {
+  a = a.replace(/^v/, "").split(".").map(Number); b = b.replace(/^v/, "").split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0);
+  return 0;
+}
+async function latestVersion() {
+  if (cachedVer && Date.now() - cachedAt < 300000) return cachedVer;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/tags?per_page=30`, { headers: { "User-Agent": "TorBox-TV-Worker" } });
+    const tags = await r.json();
+    const v = tags.map((t) => t.name).filter((n) => /^v\d+\.\d+\.\d+$/.test(n)).sort(cmpVer).pop();
+    if (v) { cachedVer = v; cachedAt = Date.now(); }
+  } catch (e) { /* se usa la última conocida o master */ }
+  return cachedVer || "master";
+}
 
 const ALLOWED_HOSTS = [
   /(^|\.)torbox\.app$/i,
@@ -52,7 +68,8 @@ function json(obj, status) {
 async function serveApp(path) {
   if (!path || path.endsWith("/")) path += "index.html";
   if (path.indexOf("..") >= 0) return new Response("Bad path", { status: 400 });
-  const res = await fetch(CDN + path, { cf: { cacheTtl: 300, cacheEverything: true } });
+  const ver = await latestVersion();
+  const res = await fetch(`https://cdn.jsdelivr.net/${REPO}@${ver}/app/${path}`, { cf: { cacheTtl: 3600, cacheEverything: true } });
   if (!res.ok) return new Response("Not found", { status: res.status });
   const ext = (path.split(".").pop() || "").toLowerCase();
   const h = new Headers();
