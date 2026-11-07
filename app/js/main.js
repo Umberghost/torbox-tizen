@@ -117,7 +117,7 @@ var railList = [];
 function renderNav(){
   if(!railEl) return;
   railList = railEntries();
-  var html = '<div class="rail-brand">T<b>B</b></div>';
+  var html = '<div class="rail-brand"><svg width="44" height="44" viewBox="0 0 104 104" role="img" aria-label="Faro"><rect x="4" y="4" width="96" height="96" rx="28" fill="#1C2430"/><path d="M33 23h40v12H45v10h22v12H45v24H33z" fill="#F2F5F8"/><path d="M57 63l16 9-16 9z" fill="var(--accent)"/></svg></div>';
   var bottomDone = false;
   railList.forEach(function(s){
     if(s.bottom && !bottomDone){ html += '<div class="rail-spacer"></div>'; bottomDone = true; }
