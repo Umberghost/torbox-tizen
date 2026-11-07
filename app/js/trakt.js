@@ -213,6 +213,36 @@ function history(limit){
   });
 }
 
+/* Calendario de estrenos de las series del usuario: [{imdbId, name, poster, season, episode, title, released}] */
+function ymd(d){
+  function z(n){ return (n < 10 ? "0" : "") + n; }
+  return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate());
+}
+function calendar(days){
+  if(!isLinked()) return Promise.resolve([]);
+  return call("/calendars/my/shows/" + ymd(new Date()) + "/" + (days || 14), { auth: true }).then(function(list){
+    return (list || []).map(function(x){
+      var sh = x.show || {}, ep = x.episode || {}, ids = sh.ids || {};
+      if(!ids.imdb || !x.first_aired) return null;
+      return { imdbId: ids.imdb, name: sh.title || "", poster: posterOf(ids.imdb),
+               season: ep.season, episode: ep.number, title: ep.title || "", released: x.first_aired };
+    }).filter(Boolean);
+  });
+}
+
+/* Películas vistas en Trakt: { "tt123": true } (caché 30 min) */
+var wdCache = null;
+function watchedIds(){
+  if(!isLinked()) return Promise.resolve({});
+  if(wdCache && Date.now() - wdCache.t < 30 * 60 * 1000) return Promise.resolve(wdCache.v);
+  return call("/sync/watched/movies", { auth: true }).then(function(list){
+    var o = {};
+    (list || []).forEach(function(x){ if(x.movie && x.movie.ids && x.movie.ids.imdb) o[x.movie.ids.imdb] = true; });
+    wdCache = { t: Date.now(), v: o };
+    return o;
+  }).catch(function(){ return {}; });
+}
+
 /* ---------------- Scrobble ---------------- */
 var cur = null;   // {key, body, lastSent, pct}
 
@@ -282,6 +312,8 @@ App.trakt = {
   status: status,
   watchlist: watchlist,
   history: history,
+  calendar: calendar,
+  watchedIds: watchedIds,
   call: call
 };
 

@@ -61,6 +61,83 @@ function checkVersion(){
   }).catch(function(e){ console.warn("[settings] version check failed:", e.message); });
 }
 
+/* ---------- Estado de la cuenta TorBox (solo lectura) ---------- */
+var acct = { data: null, usage: null, error: "", loading: false, at: 0 };
+function fetchAccount(force){
+  if(!App.torbox.hasToken()){ acct.data = null; return; }
+  if(acct.loading || (!force && Date.now() - acct.at < 300000 && acct.data)) return;
+  acct.loading = true; acct.error = "";
+  App.torbox.api("/user/me?settings=false").then(function(j){
+    acct.data = j.data || {}; acct.at = Date.now();
+    return Promise.all(App.torbox.SOURCES.map(function(src){
+      return App.torbox.list(src, { all: true }).catch(function(){ return []; });
+    })).then(function(l){
+      var n = 0, size = 0, active = 0;
+      l.forEach(function(arr){ arr.forEach(function(d){
+        n++; size += Number(d.size || 0);
+        if(!App.torbox.isFinished(d)) active++;
+      }); });
+      acct.usage = { n: n, size: size, active: active };
+    });
+  }).catch(function(e){ acct.error = e.message || "error"; console.warn("[settings] user/me", acct.error); })
+    .then(function(){ acct.loading = false; if(App.current() === "settings" && s.grid) render(); });
+}
+function fmtDate(v){
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString(App.i18n.lang() === "es" ? "es-ES" : "en-GB");
+}
+function planName(p){
+  if(p === undefined || p === null) return "—";
+  var k = "settings.acct.plan." + p, v = t(k);
+  return v === k ? t("settings.acct.planN", { n: p }) : v;
+}
+function acctExpiry(d){
+  if(!d || !d.premium_expires_at) return "";
+  var ms = Date.parse(d.premium_expires_at);
+  if(isNaN(ms)) return "";
+  var days = Math.ceil((ms - Date.now()) / 86400000);
+  return days >= 0 ? t("settings.acct.expires", { date: fmtDate(ms), n: days }) : t("settings.acct.expired", { date: fmtDate(ms) });
+}
+function acctValue(){
+  if(!App.torbox.hasToken()) return t("settings.notSet");
+  if(acct.error && !acct.data) return t("settings.acct.error");
+  if(!acct.data) return t("settings.acct.loading");
+  var parts = [planName(acct.data.plan)], e = acctExpiry(acct.data);
+  if(e) parts.push(e);
+  return parts.join(" · ");
+}
+function acctDesc(){
+  var d = acct.data, parts = [];
+  if(d && d.additional_concurrent_slots !== undefined) parts.push(t("settings.acct.slots", { n: d.additional_concurrent_slots }));
+  if(acct.usage) parts.push(t("settings.acct.usage", { n: acct.usage.n, size: App.fmtSize(acct.usage.size) }));
+  if(acct.usage && acct.usage.active) parts.push(t("settings.acct.active", { n: acct.usage.active }));
+  return parts.join(" · ") || t("settings.acct.desc");
+}
+function showAccount(){
+  fetchAccount(true);
+  var d = acct.data || {}, r = [];
+  r.push([t("settings.acct.plan"), planName(d.plan)]);
+  if(d.premium_expires_at) r.push([t("settings.acct.expiry"), acctExpiry(d) || String(d.premium_expires_at)]);
+  if(d.email) r.push([t("settings.acct.email"), d.email]);
+  if(d.is_subscribed !== undefined) r.push([t("settings.acct.subscribed"), d.is_subscribed ? t("ui.yes") : t("ui.no")]);
+  if(d.additional_concurrent_slots !== undefined) r.push([t("settings.acct.extraSlots"), String(d.additional_concurrent_slots)]);
+  if(d.total_downloaded !== undefined) r.push([t("settings.acct.downloaded"), App.fmtSize(d.total_downloaded)]);
+  if(d.cooldown_until && Date.parse(d.cooldown_until) > Date.now()) r.push([t("settings.acct.cooldown"), fmtDate(d.cooldown_until)]);
+  if(d.created_at) r.push([t("settings.acct.since"), fmtDate(d.created_at)]);
+  if(acct.usage){
+    r.push([t("settings.acct.library"), t("settings.acct.usage", { n: acct.usage.n, size: App.fmtSize(acct.usage.size) })]);
+    r.push([t("settings.acct.activeDl"), String(acct.usage.active)]);
+  }
+  if(acct.error) r.push([t("settings.acct.error"), acct.error]);
+  App.ui.modal({
+    title: t("settings.acct.title"),
+    html: '<div class="set-diag">' + r.map(function(x){
+      return '<div class="set-diag-row"><b>' + App.esc(x[0]) + '</b><span>' + App.esc(x[1]) + '</span></div>';
+    }).join("") + '</div>',
+    buttons: [{ label: t("ui.close"), value: true }]
+  });
+}
+
 /* ---------- Diagnóstico ---------- */
 function showDiag(){
   var av = false;
@@ -74,7 +151,9 @@ function showDiag(){
     [t("settings.diag.remote"), url || "—"],
     [t("settings.diag.lang"), App.i18n.lang() + " / " + App.i18n.contentLang()],
     [t("settings.diag.ua"), navigator.userAgent]
-  ].map(function(r){
+  ].concat((App.diag && App.diag.rows ? App.diag.rows() : []).map(function(r){
+    return [t("settings.diag." + r[0]), r[1]];
+  })).map(function(r){
     return '<div class="set-diag-row"><b>' + App.esc(r[0]) + '</b><span>' + App.esc(r[1]) + '</span></div>';
   }).join("");
   var logHtml = logs.length ? logs.map(function(e){
@@ -117,6 +196,7 @@ function rows(){
   var langOpts = App.i18n.LANGS.map(function(l){ return { label: l.label, value: l.code }; });
   var r = [
     { group: t("settings.group.account") },
+    { id: "accountStatus", type: "action", label: t("settings.acct.title"), desc: acctDesc(), value: acctValue, run: showAccount },
     { id: "torboxToken", type: "secret", label: t("settings.torboxToken"),
       desc: t("settings.torboxToken.desc"),
       value: function(){ return mask(S.get("torboxToken")); },
@@ -184,18 +264,25 @@ function rows(){
       desc: t("settings.appId.desc"),
       value: function(){ return appId(a.id) || t("settings.appId.auto"); } });
   });
-  /* Filas registradas por otros módulos (App.settingsUI), agrupadas */
+  /* Filas registradas por otros módulos (App.settingsUI). Si su grupo ya existe en la
+   * lista base, se insertan al final de ese grupo; si no, se crea el grupo. */
   var extra = (App.settingsUI ? App.settingsUI.rows() : []), groups = [];
   extra.forEach(function(row){ if(groups.indexOf(row._group) < 0) groups.push(row._group); });
   groups.forEach(function(g){
-    r.push({ group: t(g) });
+    var label = t(g), rowsG = [];
     extra.forEach(function(row){
       if(row._group !== g) return;
       var o = {}; for(var k in row) o[k] = row[k];
       ["label", "desc"].forEach(function(k){ if(typeof o[k] === "function") o[k] = o[k](); });
       if(typeof o.options === "function") o.options = o.options();
-      r.push(o);
+      rowsG.push(o);
     });
+    var gi = -1;
+    for(var i = 0; i < r.length; i++){ if(r[i].group !== undefined && r[i].group === label){ gi = i; break; } }
+    if(gi < 0){ r.push({ group: label }); r.push.apply(r, rowsG); return; }
+    var end = gi + 1;
+    while(end < r.length && r[end].group === undefined) end++;
+    Array.prototype.splice.apply(r, [end, 0].concat(rowsG));
   });
   r.push(
     { group: t("settings.group.data") },
@@ -269,6 +356,11 @@ function render(){
   if(document.body.classList.contains("zone-header")) s.grid.blur();
 }
 
+function resetRow(row){
+  if(row && RESETTABLE.indexOf(row.id) >= 0){ S.resetKey(row.id); if(row.after) row.after(); render(); App.ui.toast(t("settings.resetDone")); }
+  else if(row && row.type === "appid"){ setAppId(row.app.id, ""); render(); App.ui.toast(t("settings.resetDone")); }
+}
+
 function rowAt(el){ return s.rows[Number(el.getAttribute("data-i"))]; }
 
 function edit(row){
@@ -327,14 +419,22 @@ App.screens.register({
     s.el = el;
     App.bus.on("settings:change", function(){ if(App.current() === "settings" && s.grid) render(); });
   },
-  show: function(){ render(); checkVersion(); },
+  show: function(){ render(); checkVersion(); fetchAccount(false); },
   focus: function(){ if(s.grid){ s.grid.refresh(); s.grid.focus(s.grid.index, true); } },
   blur: function(){ if(s.grid) s.grid.blur(); },
+  actions: function(){
+    var cur = s.grid && s.grid.current(), row = cur && rowAt(cur), out = [];
+    if(!row) return out;
+    out.push({ label: t(row.type === "action" ? "settings.act.run" : "settings.act.change"), run: function(){ edit(row); } });
+    if(RESETTABLE.indexOf(row.id) >= 0 || row.type === "appid")
+      out.push({ label: t("settings.act.reset"), run: function(){ resetRow(row); } });
+    if(row.id === "accountStatus") out.push({ label: t("settings.act.refreshAcct"), run: function(){ fetchAccount(true); render(); } });
+    return out;
+  },
   onKey: function(k){
     if(k === K.RED){
-      var cur = s.grid && s.grid.current(), row = cur && rowAt(cur);
-      if(row && RESETTABLE.indexOf(row.id) >= 0){ S.resetKey(row.id); if(row.after) row.after(); render(); App.ui.toast(t("settings.resetDone")); }
-      else if(row && row.type === "appid"){ setAppId(row.app.id, ""); render(); App.ui.toast(t("settings.resetDone")); }
+      var cur = s.grid && s.grid.current();
+      resetRow(cur && rowAt(cur));
       return true;
     }
     return s.grid ? s.grid.handleKey(k) : false;

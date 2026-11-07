@@ -217,4 +217,94 @@ A.add("es", {
   "watch.playFailed": "No se pudo reproducir: {msg}",
   "watch.tracking": "Te avisaré cuando esté listo"
 });
+
+/* ---- Ronda 4: panel de iconos, saltar intro, temporizador, velocidad, zoom, info ---- */
+A.add("en", {
+  "settings.group.player": "Playback",
+  "player.keyPanel": "▼ Controls",
+  "player.subsFound.one": "{n} subtitle found online",
+  "player.subsFound.other": "{n} subtitles found online",
+  "continue.hint": "OK resume · Hold OK: options",
+  "continue.legendRemove": "Remove from list (or hold OK)",
+
+  "player.ctl.rw": "Back 10 s", "player.ctl.ff": "Forward 10 s", "player.ctl.replay": "Replay 10 s",
+  "player.ctl.playpause": "Play/Pause", "player.ctl.audio": "Audio", "player.ctl.subs": "Subtitles",
+  "player.ctl.subdelay": "Sub delay", "player.ctl.speed": "Speed", "player.ctl.zoom": "Aspect",
+  "player.ctl.info": "Info", "player.ctl.sleep": "Timer", "player.ctl.next": "Next episode", "player.ctl.close": "Close",
+
+  "player.speedTitle": "Playback speed", "player.speedSet": "Speed {v}×", "player.speedFail": "This player cannot change the speed",
+  "player.zoomTitle": "Zoom / aspect ratio", "player.zoomFail": "This player cannot change the aspect ratio",
+  "player.zoom.fit": "Fit (original)", "player.zoom.fill": "Fill (crop)", "player.zoom.stretch": "Stretch", "player.zoom.cinema": "Zoom 21:9",
+
+  "player.subDelayTitle": "Subtitle delay ({v})", "player.subDelayReset": "Reset to 0",
+  "player.subDelayNow": "Subtitle delay: {v} s",
+
+  "player.infoTitle": "Technical info", "player.info.engine": "Engine", "player.info.res": "Resolution",
+  "player.info.vcodec": "Video codec", "player.info.acodec": "Audio codec", "player.info.bitrate": "Bitrate",
+  "player.info.fps": "Frame rate", "player.info.dropped": "Dropped frames", "player.info.size": "File size",
+  "player.info.server": "Server", "player.info.speed": "Speed",
+
+  "player.sleep.title": "Sleep timer", "player.sleep.optEnd": "At the end of the episode",
+  "player.sleep.opt.other": "In {n} minutes", "player.sleep.opt.one": "In {n} minute", "player.sleep.optOff": "Off",
+  "player.sleep.off": "Timer off", "player.sleep.setEnd": "The player will stop at the end of the episode",
+  "player.sleep.set": "The player will stop in {n} min", "player.sleep.warn": "Stopping in {n} s…",
+  "player.sleep.done": "Sleep timer: playback stopped",
+
+  "player.skipIntro": "Skip intro", "player.skipRecap": "Skip recap", "player.skipNext": "Next episode", "player.skipAuto": "Intro skipped",
+  "player.recap.title": "Previously, season {n}", "player.recap.skip": "Any key to skip",
+
+  "player.set.speed": "Default speed", "player.set.speed.desc": "Playback speed applied when a video starts.",
+  "player.set.rewind": "Rewind 5 s on resume", "player.set.rewind.desc": "Go back 5 seconds when resuming to recover context.",
+  "player.set.skipAuto": "Skip intros automatically", "player.set.skipAuto.desc": "Jump over the intro without pressing OK (needs skip data for the episode).",
+
+  "watch.notifyTitle": "Download ready", "watch.notifyBody": "{title} is ready to watch",
+
+  "continue.actResume": "Resume", "continue.actStart": "Play from the beginning",
+  "continue.actWatched": "Mark as watched", "continue.actRemove": "Remove from the list"
+});
+
+A.add("es", {
+  "settings.group.player": "Reproducción",
+  "player.keyPanel": "▼ Controles",
+  "player.subsFound.one": "{n} subtítulo encontrado en internet",
+  "player.subsFound.other": "{n} subtítulos encontrados en internet",
+  "continue.hint": "OK reanudar · Mantén OK: opciones",
+  "continue.legendRemove": "Quitar de la lista (o mantén OK)",
+
+  "player.ctl.rw": "Atrás 10 s", "player.ctl.ff": "Adelante 10 s", "player.ctl.replay": "Repetir 10 s",
+  "player.ctl.playpause": "Play/Pausa", "player.ctl.audio": "Audio", "player.ctl.subs": "Subtítulos",
+  "player.ctl.subdelay": "Desfase subs", "player.ctl.speed": "Velocidad", "player.ctl.zoom": "Aspecto",
+  "player.ctl.info": "Info", "player.ctl.sleep": "Temporizador", "player.ctl.next": "Siguiente", "player.ctl.close": "Cerrar",
+
+  "player.speedTitle": "Velocidad de reproducción", "player.speedSet": "Velocidad {v}×", "player.speedFail": "Este reproductor no puede cambiar la velocidad",
+  "player.zoomTitle": "Zoom / relación de aspecto", "player.zoomFail": "Este reproductor no puede cambiar el aspecto",
+  "player.zoom.fit": "Ajustar (original)", "player.zoom.fill": "Rellenar (recortar)", "player.zoom.stretch": "Estirar", "player.zoom.cinema": "Zoom 21:9",
+
+  "player.subDelayTitle": "Desfase de subtítulos ({v})", "player.subDelayReset": "Restablecer a 0",
+  "player.subDelayNow": "Desfase de subtítulos: {v} s",
+
+  "player.infoTitle": "Información técnica", "player.info.engine": "Motor", "player.info.res": "Resolución",
+  "player.info.vcodec": "Códec de vídeo", "player.info.acodec": "Códec de audio", "player.info.bitrate": "Bitrate",
+  "player.info.fps": "Fotogramas/s", "player.info.dropped": "Fotogramas perdidos", "player.info.size": "Tamaño del archivo",
+  "player.info.server": "Servidor", "player.info.speed": "Velocidad",
+
+  "player.sleep.title": "Temporizador de apagado", "player.sleep.optEnd": "Al terminar el episodio",
+  "player.sleep.opt.other": "En {n} minutos", "player.sleep.opt.one": "En {n} minuto", "player.sleep.optOff": "Desactivado",
+  "player.sleep.off": "Temporizador desactivado", "player.sleep.setEnd": "El reproductor se detendrá al terminar el episodio",
+  "player.sleep.set": "El reproductor se detendrá en {n} min", "player.sleep.warn": "Se detiene en {n} s…",
+  "player.sleep.done": "Temporizador: reproducción detenida",
+
+  "player.skipIntro": "Saltar intro", "player.skipRecap": "Saltar resumen", "player.skipNext": "Siguiente episodio", "player.skipAuto": "Intro saltada",
+  "player.recap.title": "Anteriormente, temporada {n}", "player.recap.skip": "Cualquier tecla para saltar",
+
+  "player.set.speed": "Velocidad predeterminada", "player.set.speed.desc": "Velocidad de reproducción al empezar un vídeo.",
+  "player.set.rewind": "Retroceder 5 s al reanudar", "player.set.rewind.desc": "Vuelve 5 segundos al reanudar para recuperar el hilo.",
+  "player.set.skipAuto": "Saltar intros automáticamente", "player.set.skipAuto.desc": "Salta la intro sin pulsar OK (requiere datos del episodio).",
+
+  "watch.notifyTitle": "Descarga lista", "watch.notifyBody": "{title} está listo para ver",
+
+  "continue.actResume": "Reanudar", "continue.actStart": "Ver desde el principio",
+  "continue.actWatched": "Marcar como visto", "continue.actRemove": "Quitar de la lista"
+});
+
 })();

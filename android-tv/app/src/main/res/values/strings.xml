@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TorBox</string>
+    <string name="url_hint">https://torbox.tu-subdominio.workers.dev/</string>
+    <string name="url_title">URL del Worker de TorBox</string>
+    <string name="url_save">Guardar</string>
+    <string name="url_invalid">URL no válida</string>
+    <string name="exit_hint">Pulsa Atrás otra vez para salir</string>
+</resources>

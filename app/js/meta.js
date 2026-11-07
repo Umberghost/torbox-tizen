@@ -174,6 +174,13 @@ M.lookup = function(q){
   });
 };
 
+/* peek({title, year, type}) → meta|null|undefined (solo caché, sin red; undefined = no consultado aún) */
+M.peek = function(q){
+  if(!q || !q.title) return undefined;
+  var type = q.type === "tv" ? "tv" : "movie";
+  return cget("l:" + lang() + ":" + type + ":" + (App.parse ? App.parse.norm(q.title) : q.title) + ":" + (q.year || ""));
+};
+
 /* details(type, id) → meta ampliado (géneros, nº temporadas, runtime…) */
 M.details = function(type, id){
   if(!id || !M.hasKey()) return Promise.resolve(null);

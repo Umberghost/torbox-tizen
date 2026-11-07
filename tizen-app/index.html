@@ -22,16 +22,43 @@
 /*
  * Cargador de la app instalada.
  * 1) Arranca el servicio local (proxy CORS + web de ajustes) incluido en este paquete.
- * 2) Descarga app/index.html de GitHub (jsDelivr) y carga sus CSS y scripts con URLs absolutas,
- *    así la app se actualiza sola sin reinstalar. Guarda una copia del index para arrancar sin red.
+ * 2) Resuelve la versión (última etiqueta vX.Y.Z de GitHub, o la fijada con tb_pin_ver / desde el móvil por
+ *    http://127.0.0.1:8095/tv/pin, saltando las marcadas como malas en tb_bad_vers).
+ * 3) Descarga <tag>/app/dist/{index.html,app.js,app.css} (un solo JS y CSS por versión; si no existen usa los
+ *    archivos sueltos de app/index.html) y guarda una copia local (Cache API 'tb-boot-<ver>', o localStorage).
+ * 4) Si la red tarda más de 4 s arranca YA desde la copia local (la red sigue en segundo plano y actualiza la copia
+ *    para el siguiente arranque). Sin red también arranca desde la copia.
+ * 5) Autorrollback: si la app no llama a window.__tbBooted() en 20 s, esa versión se marca como mala (tb_bad_vers)
+ *    y se recarga; el cargador elegirá la anterior.
+ * Claves localStorage: tb_pin_ver, tb_bad_vers, tb_vers_list, tb_cached_vers, tb_boot_ver, tb_boot_used, tb_good_ver.
  */
 (function(){
   "use strict";
   var REPO = "Umberghost/torbox-tizen";
-  var BASE = "https://cdn.jsdelivr.net/gh/" + REPO + "@master/app/";   // se sustituye por la última etiqueta
+  var CDN = "https://cdn.jsdelivr.net/gh/" + REPO + "@";
   var PROXY = "http://127.0.0.1:8095";
+  var NET_WAIT = 4000;          // ms antes de arrancar desde la copia local
+  var WATCHDOG = 20000;         // ms para que la app llame a __tbBooted
+  var KEEP_COPIES = 2;
   var msg = document.getElementById("bootMsg");
+  var BOOT = window.__tbBoot = { ver: "", source: "", pinned: false };   // lo lee la app (App.bootVersion)
+  var booted = false, wd = null, started = false;
+
   function say(t, err){ msg.textContent = t; msg.className = err ? "err" : ""; if(err) document.getElementById("bootSp").style.display = "none"; }
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k, v){ try{ if(v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; }catch(e){ return false; } }
+  function jget(k, def){ try{ var r = localStorage.getItem(k); return r === null ? def : JSON.parse(r); }catch(e){ return def; } }
+  function jset(k, v){ return lsSet(k, JSON.stringify(v)); }
+  function delay(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function withTimeout(p, ms, label){
+    return Promise.race([p, new Promise(function(_, rej){ setTimeout(function(){ rej(new Error(label || "timeout")); }, ms); })]);
+  }
+  function cmpVer(a, b){
+    a = a.replace(/^v/, "").split(".").map(Number); b = b.replace(/^v/, "").split(".").map(Number);
+    for(var i = 0; i < 3; i++){ if((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); }
+    return 0;
+  }
+  function baseOf(label){ return CDN + (label || "master") + "/app/"; }
 
   // Teclas: Atrás en la pantalla de error sale de la app
   document.addEventListener("keydown", function(e){
@@ -40,9 +67,10 @@
     }
   });
 
+  /* ---------------- Servicio local ---------------- */
   function ping(){
-    return fetch(PROXY + "/ping").then(function(r){ return r.json(); }).then(function(j){ return !!(j && j.ok); })
-      .catch(function(){ return false; });
+    return withTimeout(fetch(PROXY + "/ping").then(function(r){ return r.json(); }), 2000)
+      .then(function(j){ return !!(j && j.ok); }).catch(function(){ return false; });
   }
   function startService(){
     return ping().then(function(ok){
@@ -57,106 +85,278 @@
             function(e){ console.error("[boot] servicio: " + e.message); resolve(false); });
         }catch(e){ console.error("[boot] servicio: " + e.message); resolve(false); }
       }).then(function(){
-        // esperar a que escuche (máx ~5 s)
         var tries = 0;
         return (function wait(){
           return ping().then(function(ok){
             if(ok || ++tries > 10) return ok;
-            return new Promise(function(r){ setTimeout(r, 500); }).then(wait);
+            return delay(500).then(wait);
           });
         })();
       });
     });
   }
 
-  /* Última versión publicada = última etiqueta vX.Y.Z del repo (inmutable en jsDelivr, sin caché vieja) */
-  function cmpVer(a, b){
-    a = a.replace(/^v/, "").split(".").map(Number); b = b.replace(/^v/, "").split(".").map(Number);
-    for(var i = 0; i < 3; i++){ if((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); }
-    return 0;
-  }
-  function resolveVersion(){
-    return fetch("https://api.github.com/repos/" + REPO + "/tags?per_page=30", { cache: "no-store" })
-      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function(tags){
-        var v = (tags || []).map(function(t){ return t.name; }).filter(function(n){ return /^v\d+\.\d+\.\d+$/.test(n); })
-          .sort(cmpVer).pop();
-        if(!v) throw new Error("sin etiquetas");
-        try{ localStorage.setItem("tb_boot_ver", v); }catch(e){}
-        return v;
-      })
-      .catch(function(e){
-        var v = null; try{ v = localStorage.getItem("tb_boot_ver"); }catch(x){}
-        console.warn("[boot] no se pudo consultar la última versión (" + e.message + "): " + (v || "@master"));
-        return v;
-      })
-      .then(function(v){ if(v) BASE = "https://cdn.jsdelivr.net/gh/" + REPO + "@" + v + "/app/"; console.info("[boot] versión: " + (v || "master")); });
+  /* ---------------- Fijar versión desde el móvil (/tv/pin, lo expone el agente Remote) ----------------
+   * Respuesta esperada: {ver:"v2.4.1", ts:123} para fijar, {ver:""} / {clear:true} para volver a automático.
+   * Si el endpoint no existe se ignora. Se aplica una sola vez por cada ts/ver nuevo. */
+  function fetchRemotePin(svcOk){
+    if(!svcOk) return Promise.resolve();
+    return withTimeout(fetch(PROXY + "/tv/pin", { cache: "no-store" }).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }), 1500).then(function(j){
+      if(!j || typeof j !== "object") return;
+      // El servicio responde {pin: "v2.4.1" | null}; se normaliza al formato {ver} / {clear}
+      if(j.ver === undefined && j.clear === undefined && "pin" in j){
+        j = j.pin ? { ver: String(j.pin) } : { clear: true };
+      }
+      var stamp = String(j.ts || "") + "|" + String(j.ver === undefined ? (j.clear ? "clear" : "") : j.ver);
+      if(stamp === "|" || stamp === lsGet("tb_pin_seen")) return;
+      lsSet("tb_pin_seen", stamp);
+      if(j.clear || j.ver === ""){ lsSet("tb_pin_ver", null); console.info("[boot] versión desfijada desde el móvil"); return; }
+      if(typeof j.ver === "string" && /^v?\d+\.\d+\.\d+$/.test(j.ver)){
+        var v = j.ver.charAt(0) === "v" ? j.ver : "v" + j.ver;
+        lsSet("tb_pin_ver", v);
+        jset("tb_bad_vers", (jget("tb_bad_vers", []) || []).filter(function(x){ return x !== v; }));
+        console.info("[boot] versión fijada desde el móvil: " + v);
+      }
+    }).catch(function(){ /* sin endpoint: ignorar */ });
   }
 
-  function fetchIndex(base){
-    return fetch(base + "index.html", { cache: "no-store" }).then(function(r){
-      if(!r.ok) throw new Error("HTTP " + r.status);
+  /* ---------------- Versiones ---------------- */
+  function isBad(v){ return (jget("tb_bad_vers", []) || []).indexOf(v) >= 0; }
+  function markBad(v){
+    if(!v || v === "master") return;
+    var bad = jget("tb_bad_vers", []) || [];
+    if(bad.indexOf(v) < 0) bad.push(v);
+    jset("tb_bad_vers", bad.slice(-10));
+  }
+  function pinned(){ var p = lsGet("tb_pin_ver"); return p && !isBad(p) ? p : null; }
+  function pickVersion(list){
+    var p = pinned();
+    if(p){ BOOT.pinned = true; return p; }
+    var ok = list.filter(function(v){ return !isBad(v); });
+    if(ok.length) return ok[0];
+    if(list.length){ jset("tb_bad_vers", []); return list[0]; }   // todas marcadas: empezar de nuevo
+    return null;
+  }
+  function resolveVersion(){
+    return withTimeout(fetch("https://api.github.com/repos/" + REPO + "/tags?per_page=30", { cache: "no-store" })
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); }), 6000, "tags timeout")
+      .then(function(tags){
+        var list = (tags || []).map(function(t){ return t.name; }).filter(function(n){ return /^v\d+\.\d+\.\d+$/.test(n); })
+          .sort(cmpVer).reverse().slice(0, 12);
+        if(!list.length) throw new Error("sin etiquetas");
+        jset("tb_vers_list", list);
+        lsSet("tb_boot_ver", list[0]);
+        return pickVersion(list);
+      })
+      .catch(function(e){
+        var list = jget("tb_vers_list", []) || [];
+        var v = list.length ? pickVersion(list) : (pinned() || lsGet("tb_boot_ver"));
+        console.warn("[boot] no se pudo consultar la última versión (" + e.message + "): " + (v || "@master"));
+        return v;
+      });
+  }
+
+  /* ---------------- Copia local (Cache API, o localStorage si no hay) ---------------- */
+  function ckey(label, f){ return "https://tb.local/" + label + "/" + f; }
+  function cachedList(){ return jget("tb_cached_vers", []) || []; }
+  function markCached(label){
+    var list = cachedList().filter(function(x){ return x !== label; });
+    list.unshift(label);
+    list.slice(KEEP_COPIES).forEach(dropCopy);
+    jset("tb_cached_vers", list.slice(0, KEEP_COPIES));
+  }
+  function dropCopy(label){
+    try{ if(window.caches) caches.delete("tb-boot-" + label); }catch(e){}
+    lsSet("tb_boot_lc_" + label, null);
+  }
+  function forgetCopy(label){
+    dropCopy(label);
+    jset("tb_cached_vers", cachedList().filter(function(x){ return x !== label; }));
+  }
+  function saveBundle(label, b){
+    var done = function(){ markCached(label); };
+    if(window.caches && window.Response){
+      var h = function(t){ return { headers: { "Content-Type": t } }; };
+      return caches.open("tb-boot-" + label).then(function(c){
+        return Promise.all([
+          c.put(ckey(label, "index.html"), new Response(b.index, h("text/html"))),
+          c.put(ckey(label, "app.js"), new Response(b.js, h("application/javascript"))),
+          c.put(ckey(label, "app.css"), new Response(b.css, h("text/css")))
+        ]);
+      }).then(done).catch(function(e){ console.warn("[boot] Cache API: " + e.message); lsCopy(label, b, done); });
+    }
+    lsCopy(label, b, done); return Promise.resolve();
+  }
+  function lsCopy(label, b, done){
+    var s = JSON.stringify(b);
+    if(s.length < 1500000 && lsSet("tb_boot_lc_" + label, s)) done();
+  }
+  function loadBundle(label){
+    function text(c, f){
+      return c.match(ckey(label, f)).then(function(r){ if(!r) throw new Error("falta " + f); return r.text(); });
+    }
+    var viaCache = (window.caches ? caches.open("tb-boot-" + label).then(function(c){
+      return Promise.all([text(c, "index.html"), text(c, "app.js"), text(c, "app.css")]);
+    }).then(function(a){ return { index: a[0], js: a[1], css: a[2] }; }) : Promise.reject(new Error("sin Cache API")));
+    return viaCache.catch(function(){
+      var s = lsGet("tb_boot_lc_" + label);
+      if(!s) return null;
+      try{ return JSON.parse(s); }catch(e){ return null; }
+    });
+  }
+  /* Copia local a usar: la fijada, si no la primera guardada que no esté marcada como mala */
+  function findLocal(){
+    var list = cachedList(), p = pinned();
+    var order = (p && list.indexOf(p) >= 0) ? [p].concat(list.filter(function(x){ return x !== p; })) : list;
+    order = order.filter(function(v){ return !isBad(v); });
+    return (function next(i){
+      if(i >= order.length) return Promise.resolve(null);
+      return loadBundle(order[i]).then(function(b){
+        if(b && b.js) return { ver: order[i], index: b.index, js: b.js, css: b.css, source: "cache" };
+        return next(i + 1);
+      }).catch(function(){ return next(i + 1); });
+    })(0);
+  }
+
+  /* ---------------- Red: bundle o archivos sueltos ---------------- */
+  function fetchText(url, mutable){
+    return fetch(url, mutable ? { cache: "no-store" } : undefined).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status + " " + url.split("/").pop());
       return r.text();
     });
   }
-  function getIndex(){
-    var master = "https://cdn.jsdelivr.net/gh/" + REPO + "@master/app/";
-    return fetchIndex(BASE).catch(function(e){
-      // La etiqueta recién publicada puede tardar unos minutos en existir en jsDelivr
-      if(BASE === master) throw e;
-      console.warn("[boot] " + BASE + " no disponible (" + e.message + "), uso @master");
-      BASE = master;
-      return fetchIndex(BASE);
-    }).then(function(html){
-      try{ localStorage.setItem("tb_boot_index", html); localStorage.setItem("tb_boot_base", BASE); }catch(e){}
-      return html;
-    }).catch(function(e){
-      var cached = null, cbase = null;
-      try{ cached = localStorage.getItem("tb_boot_index"); cbase = localStorage.getItem("tb_boot_base"); }catch(x){}
-      if(cached){ if(cbase) BASE = cbase; return cached; }
-      throw e;
+  function fetchFrom(label){
+    var base = baseOf(label), mutable = (label === "master");
+    return Promise.all([fetchText(base + "dist/index.html", mutable), fetchText(base + "dist/app.js", mutable), fetchText(base + "dist/app.css", mutable)])
+      .then(function(a){ return { ver: label, index: a[0], js: a[1], css: a[2], source: "net" }; })
+      .catch(function(e){
+        // sin dist en esa versión: archivos sueltos
+        console.warn("[boot] sin bundle en " + label + " (" + e.message + "): archivos sueltos");
+        return fetchText(base + "index.html", true).then(function(html){
+          lsSet("tb_boot_index", html); lsSet("tb_boot_base", base);
+          return { ver: label, loose: true, html: html, base: base, source: "loose" };
+        });
+      });
+  }
+  function fetchBundle(ver){
+    var label = ver || "master";
+    return withTimeout(fetchFrom(label), 20000, "descarga lenta").catch(function(e){
+      if(label === "master") throw e;
+      console.warn("[boot] " + label + " no disponible (" + e.message + "), uso @master");
+      return withTimeout(fetchFrom("master"), 20000, "descarga lenta");
+    }).then(function(b){
+      if(!b.loose) saveBundle(b.ver, b);
+      return b;
     });
   }
 
-  function abs(u){ return /^https?:/i.test(u) ? u : BASE + u.replace(/^\.\//, ""); }
-
-  function loadApp(html){
+  /* ---------------- Ejecutar la app ---------------- */
+  function abs(base, u){ return /^https?:/i.test(u) ? u : base + u.replace(/^\.\//, ""); }
+  function mountBody(html){
     var doc = new DOMParser().parseFromString(html, "text/html");
-    // CSS
-    Array.prototype.forEach.call(doc.querySelectorAll('link[rel="stylesheet"]'), function(l){
-      var n = document.createElement("link");
-      n.rel = "stylesheet"; n.href = abs(l.getAttribute("href"));
-      document.head.appendChild(n);
-    });
-    // Marcado del body (sin scripts)
     var holder = document.createElement("div");
     Array.prototype.forEach.call(doc.body.children, function(el){
       if(el.tagName !== "SCRIPT") holder.appendChild(document.importNode(el, true));
     });
     while(holder.firstChild) document.body.insertBefore(holder.firstChild, document.getElementById("boot"));
-    // Scripts en orden (sin el de $WEBAPIS: ya está cargado arriba)
+    return doc;
+  }
+  function armWatchdog(ver){
+    clearTimeout(wd);
+    wd = setTimeout(function(){
+      if(booted) return;
+      console.error("[boot] la app no arrancó en " + (WATCHDOG / 1000) + " s: " + ver + " marcada como mala");
+      markBad(ver); forgetCopy(ver);
+      lsSet("tb_pin_ver", lsGet("tb_pin_ver") === ver ? null : lsGet("tb_pin_ver"));
+      location.reload();
+    }, WATCHDOG);
+  }
+  window.__tbBooted = function(){
+    booted = true; clearTimeout(wd);
+    lsSet("tb_good_ver", BOOT.ver); lsSet("tb_boot_used", BOOT.ver);
+    if(isBad(BOOT.ver)) jset("tb_bad_vers", (jget("tb_bad_vers", []) || []).filter(function(x){ return x !== BOOT.ver; }));
+  };
+  function runBundle(b){
+    BOOT.ver = b.ver; BOOT.source = b.source;
+    var st = document.createElement("style"); st.textContent = b.css; document.head.appendChild(st);
+    mountBody(b.index);
+    armWatchdog(b.ver);
+    var sc = document.createElement("script");
+    sc.text = b.js;                                    // se ejecuta síncrono al insertarlo
+    document.body.appendChild(sc);
+    return Promise.resolve();
+  }
+  function runLoose(b){
+    BOOT.ver = b.ver; BOOT.source = "loose";
+    var doc = mountBody(b.html);
+    Array.prototype.forEach.call(doc.querySelectorAll('link[rel="stylesheet"]'), function(l){
+      var n = document.createElement("link");
+      n.rel = "stylesheet"; n.href = abs(b.base, l.getAttribute("href"));
+      document.head.appendChild(n);
+    });
     var srcs = Array.prototype.map.call(doc.querySelectorAll("script[src]"), function(s){ return s.getAttribute("src"); })
       .filter(function(s){ return s.indexOf("$WEBAPIS") < 0; });
+    armWatchdog(b.ver);
     return new Promise(function(resolve, reject){
       (function next(i){
         if(i >= srcs.length){ resolve(); return; }
         var sc = document.createElement("script");
-        sc.src = abs(srcs[i]); sc.async = false;
+        sc.src = abs(b.base, srcs[i]); sc.async = false;
         sc.onload = function(){ next(i + 1); };
         sc.onerror = function(){ reject(new Error("No se pudo cargar " + srcs[i])); };
         document.body.appendChild(sc);
       })(0);
     });
   }
+  function run(b){
+    if(started) return Promise.resolve();
+    started = true;
+    return (b.loose ? runLoose(b) : runBundle(b)).then(function(){
+      var el = document.getElementById("boot");
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
+  /* Última baza sin bundle ni copia: el index suelto guardado la última vez */
+  function lastResort(err){
+    var cached = lsGet("tb_boot_index"), cbase = lsGet("tb_boot_base");
+    if(cached && cbase) return run({ ver: lsGet("tb_boot_ver") || "cached", loose: true, html: cached, base: cbase, source: "cache" });
+    throw err;
+  }
 
+  /* ---------------- Arranque ---------------- */
   say("Starting…");
-  startService().then(function(svc){
-    if(!svc) console.warn("[boot] el servicio local no responde: TorBox puede fallar por CORS");
-    say("Loading…");
-    return resolveVersion().then(getIndex);
-  }).then(loadApp).then(function(){
-    var b = document.getElementById("boot");
-    if(b) b.parentNode.removeChild(b);
+  var svcP = startService();
+  var localP = findLocal();
+  var netP = svcP.then(function(ok){ return withTimeout(fetchRemotePin(ok), 2500).catch(function(){}); })
+    .then(resolveVersion).then(fetchBundle);
+  netP.catch(function(e){ console.warn("[boot] red: " + e.message); });   // evita rechazo sin capturar si gana la copia local
+
+  Promise.race([
+    netP.then(function(b){ return { b: b }; }, function(e){ return { err: e }; }),
+    delay(NET_WAIT).then(function(){ return { timeout: true }; })
+  ]).then(function(r){
+    if(r.b) return r.b;
+    // red lenta o caída: ¿hay copia local?
+    return localP.then(function(local){
+      if(local){
+        say(r.timeout ? "Starting from local copy…" : "Offline — starting from local copy…");
+        console.info("[boot] arranque desde copia local " + local.ver + (r.timeout ? " (red lenta; se actualiza en segundo plano)" : " (sin red)"));
+        return local;
+      }
+      if(r.err) throw r.err;
+      say("Loading…");
+      return netP;
+    });
+  }).then(function(b){
+    return svcP.then(function(svc){
+      if(!svc) console.warn("[boot] el servicio local no responde: TorBox puede fallar por CORS");
+      return run(b);
+    });
+  }).catch(function(e){
+    return lastResort(e);
   }).catch(function(e){
     say("Could not load TorBox (" + e.message + "). Check the TV's internet connection. Press Back to exit.", true);
   });

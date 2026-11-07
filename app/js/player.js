@@ -97,21 +97,25 @@ function build(){
     '<div class="pl-sub" id="plSub"><span></span></div>' +
     '<div class="pl-spinner" id="plSpin"><div class="spinner"></div><span id="plBuf"></span></div>' +
     '<div class="pl-pause" id="plPause"><i></i><i></i></div>' +
-    '<div class="pl-seek num" id="plSeek"></div>' +
+    '<div class="pl-seek num" id="plSeek"><div class="pl-thumb" id="plThumb"></div><span id="plSeekTxt"></span></div>' +
+    '<div class="pl-skip" id="plSkip"></div>' +
+    '<div class="pl-sleep" id="plSleep"></div>' +
+    '<div class="pl-recap" id="plRecap"></div>' +
     '<div class="pl-osd" id="plOsd">' +
       '<div class="pl-top"><span class="pl-live" id="plLive">' + App.esc(App.t("player.live")) + '</span>' +
         '<div class="pl-titles"><div class="pl-title" id="plTitle"></div><div class="pl-subtitle" id="plSubtitle"></div></div>' +
         '<div class="pl-engine" id="plEngine"></div></div>' +
       '<div class="pl-progress" id="plProg"><div class="pl-bar"><i id="plFill"></i><b id="plHead"></b></div>' +
         '<div class="pl-times num"><span id="plCur">0:00</span><span id="plRemain"></span><span id="plDur">0:00</span></div></div>' +
-      '<div class="pl-keys legend"><span><i class="red"></i>' + App.esc(App.t("player.keyAudio")) + '</span>' +
-        '<span><i class="green"></i>' + App.esc(App.t("player.keySubs")) + '</span>' +
+      '<div class="pl-panel" id="plPanel"></div>' +
+      '<div class="pl-keys legend"><span>' + App.esc(App.t("player.keyPanel")) + '</span>' +
         '<span>' + App.esc(App.t("player.keyTracks")) + '</span><span id="plNextHint">' + App.esc(App.t("player.keyNext")) + '</span></div>' +
     '</div>' +
     '<div class="pl-countdown" id="plCount"></div>' +
     '<div class="pl-error" id="plErr"></div>';
   ["plAv","plVideo","plSub","plSpin","plBuf","plPause","plSeek","plOsd","plLive","plTitle","plSubtitle",
-   "plEngine","plProg","plFill","plHead","plCur","plRemain","plDur","plNextHint","plCount","plErr"]
+   "plEngine","plProg","plFill","plHead","plCur","plRemain","plDur","plNextHint","plCount","plErr",
+   "plThumb","plSeekTxt","plSkip","plSleep","plRecap","plPanel"]
     .forEach(function(id){ els[id] = document.getElementById(id); });
   els.subSpan = els.plSub.querySelector("span");
 }
@@ -124,10 +128,10 @@ function showOsd(ms){
   root.classList.add("osd-on");
   clearTimeout(P.osdT);
   if(!P.paused || (P.opts && P.opts.live)){
-    P.osdT = setTimeout(hideOsd, ms || 4000);
+    P.osdT = setTimeout(hideOsd, P.panelOpen ? 10000 : (ms || 4000));
   }
 }
-function hideOsd(){ if(root){ clearTimeout(P.osdT); els.plOsd.classList.add("hide"); root.classList.remove("osd-on"); } }
+function hideOsd(){ if(root){ closePanel(); clearTimeout(P.osdT); els.plOsd.classList.add("hide"); root.classList.remove("osd-on"); } }
 
 function setBuffering(on, pct){
   P.buffering = !!on;
@@ -136,8 +140,10 @@ function setBuffering(on, pct){
 }
 
 function setPaused(p){
+  var was = P.paused;
   P.paused = !!p;
   setClass(P.paused, "on", els.plPause);
+  if(was !== P.paused) emitState();
   if(P.paused){ showOsd(); saveNow(); }
   else showOsd();
 }
@@ -166,7 +172,8 @@ AvplayEngine.prototype.open = function(url, startAt){
       av.open(url);
       var w = window.innerWidth || 1920, hh = window.innerHeight || 1080;
       var f = 1920 / w;    // AVPlay trabaja en coordenadas de 1920x1080
-      av.setDisplayRect(0, 0, Math.round(w * f), Math.round(hh * f));
+      self._rh = Math.round(hh * f);
+      av.setDisplayRect(0, 0, 1920, self._rh);
       try{ av.setDisplayMethod("PLAYER_DISPLAY_MODE_LETTER_BOX"); }catch(e){}
       av.setListener({
         onbufferingstart: function(){ h.buffering(true, 0); },
@@ -239,6 +246,40 @@ AvplayEngine.prototype.selectText = function(i){
     this.av.setSilentSubtitle(false);
     return true;
   }catch(e){ return false; }
+};
+AvplayEngine.prototype.setSpeed = function(x){ try{ this.av.setSpeed(x); return true; }catch(e){ return false; } };
+AvplayEngine.prototype.setZoom = function(mode){
+  var av = this.av, h = this._rh || 1080, M = { fit: "PLAYER_DISPLAY_MODE_LETTER_BOX", fill: "PLAYER_DISPLAY_MODE_CROPPED_FULL",
+    stretch: "PLAYER_DISPLAY_MODE_FULL_SCREEN", cinema: "PLAYER_DISPLAY_MODE_LETTER_BOX" };
+  try{
+    if(mode === "cinema"){
+      av.setDisplayMethod(M.cinema);
+      av.setDisplayRect(-Math.round(1920 * 0.165), -Math.round(h * 0.165), Math.round(1920 * 1.33), Math.round(h * 1.33));
+    } else {
+      av.setDisplayRect(0, 0, 1920, h);
+      av.setDisplayMethod(M[mode] || M.fit);
+    }
+    return true;
+  }catch(e){ return false; }
+};
+AvplayEngine.prototype.setSubOffset = function(sec){ try{ this.av.setSubtitlePosition(Math.round(sec * 1000)); return true; }catch(e){ return false; } };
+AvplayEngine.prototype.info = function(){
+  var out = [];
+  try{
+    (this.av.getCurrentStreamInfo() || []).forEach(function(s){
+      var ex = {};
+      try{ ex = typeof s.extra_info === "string" ? JSON.parse(s.extra_info) : (s.extra_info || {}); }catch(e){}
+      if(s.type === "VIDEO"){
+        if(ex.Width && ex.Height) out.push(["res", ex.Width + "×" + ex.Height]);
+        if(ex.fourCC) out.push(["vcodec", String(ex.fourCC).toUpperCase()]);
+        if(ex.Bit_rate) out.push(["bitrate", Math.round(Number(ex.Bit_rate) / 1000) + " kbps"]);
+        if(ex.framerate) out.push(["fps", String(ex.framerate)]);
+      } else if(s.type === "AUDIO"){
+        if(ex.fourCC) out.push(["acodec", String(ex.fourCC).toUpperCase() + (ex.channels ? " · " + ex.channels + "ch" : "")]);
+      }
+    });
+  }catch(e){}
+  return out;
 };
 AvplayEngine.prototype.suspend = function(){ try{ this.av.suspend(); }catch(e){} };
 AvplayEngine.prototype.restore = function(){ try{ this.av.restore(); }catch(e){} };
@@ -371,6 +412,29 @@ VideoEngine.prototype.selectAudio = function(i){
   return false;
 };
 VideoEngine.prototype.selectText = function(){ return false; };
+VideoEngine.prototype.setSpeed = function(x){ try{ this.v.defaultPlaybackRate = x; this.v.playbackRate = x; return true; }catch(e){ return false; } };
+VideoEngine.prototype.setZoom = function(mode){
+  var st = this.v.style;
+  st.objectFit = mode === "fill" ? "cover" : mode === "stretch" ? "fill" : "contain";
+  st.transform = mode === "cinema" ? "scale(1.33)" : "";
+  return true;
+};
+VideoEngine.prototype.setSubOffset = function(){ return false; };
+VideoEngine.prototype.info = function(){
+  var v = this.v, out = [];
+  if(v.videoWidth) out.push(["res", v.videoWidth + "×" + v.videoHeight]);
+  try{
+    var q = v.getVideoPlaybackQuality && v.getVideoPlaybackQuality();
+    if(q) out.push(["dropped", q.droppedVideoFrames + " / " + q.totalVideoFrames]);
+  }catch(e){}
+  if(this.hls && this.hls.levels && this.hls.currentLevel >= 0){
+    var lv = this.hls.levels[this.hls.currentLevel];
+    if(lv && lv.bitrate) out.push(["bitrate", Math.round(lv.bitrate / 1000) + " kbps"]);
+    if(lv && lv.videoCodec) out.push(["vcodec", lv.videoCodec]);
+    if(lv && lv.audioCodec) out.push(["acodec", lv.audioCodec]);
+  }
+  return out;
+};
 VideoEngine.prototype.suspend = function(){ this.v.pause(); };
 VideoEngine.prototype.restore = function(){};
 VideoEngine.prototype.close = function(){
@@ -418,10 +482,11 @@ function updateUi(){
   }
   // subtítulos externos
   if(P.sub.kind === "ext" && P.extCues.length){
-    var cue = findCue(P.extCues, t);
+    var cue = findCue(P.extCues, t - (P.subDelay || 0));
     var html = cue ? subHtml(cue.text) : "";
     if(html !== P._lastSub){ P._lastSub = html; showSubText(html); }
   }
+  skipTick(t);
 }
 
 function findCue(cues, t){
@@ -455,6 +520,7 @@ function clearTimers(){
   clearTimeout(P.osdT);
   clearTimeout(P.seekT); P.seekT = null; P.seekTarget = null;
   clearTimeout(P.embTimer);
+  clearTimeout(P.recapT); P.recapT = null;
   stopCountdown();
 }
 
@@ -476,6 +542,10 @@ function setupUi(o){
   els.plErr.classList.remove("on");
   els.plSeek.classList.remove("on");
   showSubText(""); P._lastSub = "";
+  closePanel(); closeRecap(true);
+  els.plVideo.style.objectFit = ""; els.plVideo.style.transform = "";
+  P.skip = null; P.skipCur = null; els.plSkip.classList.remove("on");
+  els.plThumb.style.backgroundImage = ""; P.still = "";
   root.classList.add("on");
   document.body.classList.add("player-on");
 }
@@ -524,8 +594,10 @@ function start(o, startAt, engineName, urlIdx){
       if(!o.live) App.bus.emit("player:progress", { key: o.key || null, meta: o.meta || {}, pos: curTime(), dur: P.dur || 0 });
     }, 10000);
     setTimeout(function(){ if(P.engine === engine) autoSelectTracks(); }, 600);
+    afterStart(o, engine, startAt || 0);
     if(o.onStart) try{ o.onStart(); }catch(e){}
     App.bus.emit("player:start", { key: o.key || null, meta: o.meta || {}, title: o.title || "", live: !!o.live });
+    emitState();
   }).catch(function(err){
     if(P.engine !== engine) return;
     // URLs alternativas: probar la siguiente antes de mostrar error
@@ -608,7 +680,10 @@ function onEnded(){
   P.ended = true;
   if(o.key){ saveNow(); App.history.markWatched(o.key); }
   App.bus.emit("player:ended", { key: o.key || null, meta: o.meta || {} });
-  if(o.next && App.settings.get("autoplayNext")){
+  if(P.sleep && P.sleep.mode === "end"){
+    App.ui.toast(App.t("player.sleep.done"), 5000);
+    stop();
+  } else if(o.next && App.settings.get("autoplayNext")){
     startCountdown();
   } else {
     stop();
@@ -640,6 +715,9 @@ function goNext(){
   var o = P.opts;
   if(!o || !o.next){ App.hint(App.t("player.noNext")); return; }
   saveNow();
+  if(!P.ended && o.key && !o.live){   // #18: saltar al siguiente = visto
+    try{ App.history.markWatched(o.key); }catch(e){}
+  }
   setBuffering(true, 0);
   App.ui.toast(App.t("player.loadingNext"));
   Promise.resolve().then(function(){ return o.next(); }).then(function(nx){
@@ -827,7 +905,8 @@ function seekBy(delta){
   var max = P.dur > 0 ? Math.max(0, P.dur - 2) : Infinity;
   P.seekTarget = Math.max(0, Math.min(max, base + delta));
   var diff = Math.round(P.seekTarget - curTime());
-  els.plSeek.textContent = (diff >= 0 ? "+" : "−") + App.fmtTime(Math.abs(diff)) + "  →  " + App.fmtTime(P.seekTarget);
+  els.plSeekTxt.textContent = (diff >= 0 ? "+" : "−") + App.fmtTime(Math.abs(diff)) + "  →  " + App.fmtTime(P.seekTarget);
+  els.plThumb.style.display = P.still ? "block" : "none";
   els.plSeek.classList.add("on");
   showOsd();
   updateUi();
@@ -844,6 +923,411 @@ function togglePause(){
   if(!P.engine || !P.started) return;
   if(P.paused){ P.engine.play(); setPaused(false); }
   else { P.engine.pause(); setPaused(true); }
+}
+
+/* ================= Estado público / eventos ================= */
+function statusObj(){
+  var o = P.opts || {};
+  var active = !!(P.active && P.opts);
+  return {
+    active: active,
+    title: active ? (o.title || "") : "",
+    subtitle: active ? (o.subtitle || "") : "",
+    pos: active && P.engine && P.started ? curTime() : 0,
+    dur: P.dur || 0,
+    paused: !!P.paused,
+    live: active ? !!o.live : false,
+    key: active ? (o.key || null) : null
+  };
+}
+function emitState(){ App.bus.emit("player:state", statusObj()); }
+
+function control(cmd, arg){
+  if(!P.active || !P.engine) return false;
+  switch(cmd){
+    case "playpause": togglePause(); return true;
+    case "play": if(P.paused) togglePause(); return true;
+    case "pause": if(!P.paused) togglePause(); return true;
+    case "stop": stop(); return true;
+    case "seek": if(P.started && !P.opts.live){ var t = Math.max(0, curTime() + Number(arg || 0)); P.engine.seek(t); showOsd(); } return true;
+    case "seekTo": if(P.started && !P.opts.live){ P.engine.seek(Math.max(0, Number(arg || 0))); showOsd(); } return true;
+  }
+  return false;
+}
+
+/* ================= Velocidad ================= */
+var SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+function setSpeed(x){
+  x = Number(x) || 1;
+  if(!P.engine) return;
+  if(P.engine.setSpeed(x)){ P.speed = x; if(x !== 1 || P._speedShown) App.hint(App.t("player.speedSet", { v: x })); P._speedShown = true; }
+  else App.hint(App.t("player.speedFail"));
+}
+function speedMenu(){
+  App.ui.menu(App.t("player.speedTitle"), SPEEDS.map(function(x){
+    return { label: x + "×", value: x, selected: (P.speed || 1) === x };
+  })).then(function(v){ if(v !== null && P.active) setSpeed(v); });
+}
+
+/* ================= Zoom / aspecto ================= */
+var ZOOMS = ["fit", "fill", "stretch", "cinema"];
+function setZoom(m){
+  if(!P.engine) return;
+  if(P.engine.setZoom(m)){ P.zoom = m; App.hint(App.t("player.zoom." + m)); }
+  else App.hint(App.t("player.zoomFail"));
+}
+function zoomMenu(){
+  App.ui.menu(App.t("player.zoomTitle"), ZOOMS.map(function(m){
+    return { label: App.t("player.zoom." + m), value: m, selected: (P.zoom || "fit") === m };
+  })).then(function(v){ if(v && P.active) setZoom(v); });
+}
+
+/* ================= Desfase de subtítulos (por serie) ================= */
+function showKeyOf(o){
+  var m = (o && o.meta) || {};
+  return String(m.imdbId || m.showTitle || m.title || (o && o.title) || (o && o.key) || "");
+}
+function loadSubDelay(o){
+  var map = App.store.get("subDelay", {}) || {};
+  P.subDelay = Number(map[showKeyOf(o)]) || 0;
+  applySubDelayEngine();
+}
+function applySubDelayEngine(){
+  if(P.engine && P.sub.kind === "emb" && P.engine.setSubOffset) P.engine.setSubOffset(P.subDelay || 0);
+}
+function setSubDelay(v){
+  P.subDelay = Math.round(v * 100) / 100;
+  var map = App.store.get("subDelay", {}) || {};
+  var k = showKeyOf(P.opts);
+  if(P.subDelay) map[k] = P.subDelay; else delete map[k];
+  App.store.set("subDelay", map);
+  applySubDelayEngine();
+  P._lastSub = "";
+  App.hint(App.t("player.subDelayNow", { v: (P.subDelay > 0 ? "+" : "") + P.subDelay.toFixed(2).replace(/0$/, "") }));
+}
+function subDelayMenu(){
+  var cur = P.subDelay || 0;
+  var items = [
+    { label: "+0,25 s", value: 0.25 }, { label: "+0,5 s", value: 0.5 },
+    { label: "−0,25 s", value: -0.25 }, { label: "−0,5 s", value: -0.5 },
+    { label: App.t("player.subDelayReset"), value: "reset" }
+  ];
+  App.ui.menu(App.t("player.subDelayTitle", { v: cur.toFixed(2) + " s" }), items).then(function(v){
+    if(v === null || !P.active) return;
+    if(v === "reset") setSubDelay(0); else setSubDelay(cur + Number(v));
+  });
+}
+
+/* ================= Información técnica ================= */
+function infoPanel(){
+  if(!P.engine) return;
+  var o = P.opts || {}, rows = [];
+  rows.push([App.t("player.info.engine"), P.engineName === "avplay" ? "AVPlay" : "HTML5"]);
+  P.engine.info().forEach(function(r){ rows.push([App.t("player.info." + r[0]), r[1]]); });
+  var m = o.meta || {}, size = Number(m.size || m.bytes || 0);
+  if(size > 0 && P.dur > 0 && !rows.some(function(r){ return r[0] === App.t("player.info.bitrate"); })){
+    rows.push([App.t("player.info.bitrate"), "~" + Math.round(size * 8 / P.dur / 1000) + " kbps"]);
+  }
+  if(size > 0) rows.push([App.t("player.info.size"), App.fmtSize(size)]);
+  var dm = String(urlList(o)[P.urlIdx || 0] || "").match(/^https?:\/\/([^\/?#]+)/i);
+  if(dm) rows.push([App.t("player.info.server"), dm[1]]);
+  if(P.speed && P.speed !== 1) rows.push([App.t("player.info.speed"), P.speed + "×"]);
+  App.ui.modal({
+    title: App.t("player.infoTitle"),
+    html: '<table class="pl-info">' + rows.map(function(r){
+      return "<tr><td>" + App.esc(r[0]) + "</td><td>" + App.esc(r[1]) + "</td></tr>";
+    }).join("") + "</table>",
+    buttons: [{ label: App.t("ui.close"), value: true }], cancelValue: true
+  });
+}
+
+/* ================= Temporizador de apagado ================= */
+function clearSleep(){
+  if(P.sleep && P.sleep.t) clearInterval(P.sleep.t);
+  P.sleep = null;
+  if(els.plSleep) els.plSleep.classList.remove("on");
+}
+function setSleep(mode){
+  clearSleep();
+  P.speed = 1; P.zoom = "fit"; P.subDelay = 0; P._speedShown = false;
+  if(mode === "off"){ App.hint(App.t("player.sleep.off")); return; }
+  if(mode === "end"){
+    P.sleep = { mode: "end" };
+    App.hint(App.t("player.sleep.setEnd"));
+    return;
+  }
+  var mins = Number(mode);
+  P.sleep = { mode: "min", at: Date.now() + mins * 60000, warned: false };
+  App.hint(App.t("player.sleep.set", { n: mins }));
+  P.sleep.t = setInterval(sleepTick, 1000);
+}
+function sleepTick(){
+  var S = P.sleep;
+  if(!S || S.mode !== "min"){ return; }
+  var left = Math.round((S.at - Date.now()) / 1000);
+  if(left <= 30 && left > 0){
+    S.warned = true;
+    els.plSleep.textContent = App.t("player.sleep.warn", { n: left });
+    els.plSleep.classList.add("on");
+  }
+  if(left <= 0){
+    clearInterval(S.t);
+    try{ if(P.engine && !P.paused) P.engine.pause(); }catch(e){}
+    App.ui.toast(App.t("player.sleep.done"), 6000);
+    stop();
+  }
+}
+function sleepMenu(){
+  var cur = P.sleep ? (P.sleep.mode === "end" ? "end" : "min") : "off";
+  var items = [
+    { label: App.t("player.sleep.optEnd"), value: "end", selected: cur === "end" },
+    { label: App.t("player.sleep.opt", { n: 30 }), value: 30 },
+    { label: App.t("player.sleep.opt", { n: 60 }), value: 60 },
+    { label: App.t("player.sleep.opt", { n: 90 }), value: 90 },
+    { label: App.t("player.sleep.optOff"), value: "off", selected: cur === "off" }
+  ];
+  App.ui.menu(App.t("player.sleep.title"), items).then(function(v){
+    if(v === null || !P.active) return;
+    setSleep(v);
+  });
+}
+
+/* ================= Saltar intro / créditos ================= */
+var skipMem = {};
+function cacheGet(k){
+  if(App.cache && App.cache.get) return App.cache.get(k).catch(function(){ return undefined; });
+  return Promise.resolve(skipMem[k]);
+}
+function cacheSet(k, v, ttl){
+  if(App.cache && App.cache.set) { try{ App.cache.set(k, v, ttl); }catch(e){} }
+  else skipMem[k] = v;
+}
+function skipRemote(m){
+  var isNum = function(x){ return x !== undefined && x !== null && x !== ""; };
+  // Anime con id de MyAnimeList: AniSkip
+  if(m.malId && isNum(m.episode)){
+    var u = "https://api.aniskip.com/v2/skip-times/" + encodeURIComponent(m.malId) + "/" + encodeURIComponent(m.episode) +
+      "?types[]=op&types[]=ed&types[]=recap&episodeLength=0";
+    return App.net.fetch(u).then(function(r){ if(!r.ok) return []; return r.json(); }).then(function(j){
+      var out = [];
+      ((j && j.results) || []).forEach(function(x){
+        var iv = x.interval || {};
+        var kind = /^(op|mixed-op)$/.test(x.skipType) ? "intro" : /^(ed|mixed-ed)$/.test(x.skipType) ? "credits" : x.skipType === "recap" ? "recap" : null;
+        if(kind && iv.endTime > iv.startTime) out.push({ kind: kind, s: Number(iv.startTime), e: Number(iv.endTime) });
+      });
+      return out;
+    });
+  }
+  if(!m.imdbId || !/^tt\d+$/.test(String(m.imdbId))) return Promise.resolve([]);
+  // TheIntroDB (sin clave): imdb_id + temporada/episodio
+  var url = "https://api.theintrodb.org/v2/media?imdb_id=" + m.imdbId +
+    (isNum(m.season) && isNum(m.episode) ? "&season=" + m.season + "&episode=" + m.episode : "");
+  return App.net.fetch(url).then(function(r){ if(!r.ok) return null; return r.json(); }).then(function(j){
+    var out = [];
+    if(!j) return out;
+    ["intro", "recap", "credits"].forEach(function(kind){
+      (j[kind] || []).forEach(function(x){
+        var s = Number(x.start_ms) / 1000, e = x.end_ms === null || x.end_ms === undefined ? 0 : Number(x.end_ms) / 1000;
+        if(isFinite(s) && (e === 0 || e > s)) out.push({ kind: kind, s: s, e: e });
+      });
+    });
+    return out;
+  });
+}
+function fetchSkip(o){
+  if(!o || o.live) return;
+  var m = o.meta || {};
+  if(!m.imdbId && !m.malId) return;
+  var key = "skip:" + (m.malId ? "mal" + m.malId : m.imdbId) + ":" + (m.season !== undefined && m.season !== null ? m.season : "m") + ":" + (m.episode !== undefined && m.episode !== null ? m.episode : "");
+  cacheGet(key).then(function(v){
+    if(v !== undefined && v !== null) return v;
+    return skipRemote(m).then(function(list){
+      cacheSet(key, list, list.length ? 14 * 86400000 : 2 * 86400000);
+      return list;
+    });
+  }).then(function(list){
+    if(P.opts !== o || !list) return;
+    P.skip = { list: list.map(function(x){ return { kind: x.kind, s: x.s, e: x.e, done: false }; }) };
+  }).catch(function(e){ console.warn("[player] skip", e && e.message); });
+}
+function skipTick(t){
+  if(!P.skip || !P.skip.list.length || P.seekTarget !== null){ return; }
+  var cur = null, dur = P.dur || 0;
+  P.skip.list.forEach(function(x){
+    var e = x.e || dur || 0;
+    if(x.kind === "credits" && !(P.opts && P.opts.next)) return;
+    if(t >= x.s && (e === 0 || t < e - 1) && !cur) cur = x;
+  });
+  if(cur === P.skipCur) return;
+  P.skipCur = cur;
+  if(!cur){ els.plSkip.classList.remove("on"); return; }
+  if(cur.kind !== "credits" && !cur.done && App.settings.get("skipIntroAuto") === true && cur.e > 0){
+    cur.done = true; P.skipCur = null;
+    els.plSkip.classList.remove("on");
+    App.hint(App.t("player.skipAuto"));
+    P.engine.seek(cur.e);
+    return;
+  }
+  els.plSkip.innerHTML = App.esc(App.t(cur.kind === "credits" ? "player.skipNext" : cur.kind === "recap" ? "player.skipRecap" : "player.skipIntro")) +
+    ' <span class="pl-skip-ok">OK</span>';
+  els.plSkip.classList.add("on");
+}
+function doSkip(){
+  var cur = P.skipCur;
+  if(!cur) return false;
+  cur.done = true;
+  els.plSkip.classList.remove("on");
+  P.skipCur = null;
+  if(cur.kind === "credits"){ goNext(); return true; }
+  if(cur.e > 0 && P.engine) P.engine.seek(cur.e);
+  return true;
+}
+
+/* ================= Miniatura del episodio (#3) y resumen de temporada (#16) ================= */
+function afterStart(o, engine, startAt){
+  if(o.live) return;
+  loadSubDelay(o);
+  var spd = Number(App.settings.get("playerSpeed")) || 1;
+  if(P.speed && P.speed !== 1) spd = P.speed;
+  if(spd !== 1 && engine.setSpeed) { if(engine.setSpeed(spd)) P.speed = spd; }
+  if(P.zoom && P.zoom !== "fit") engine.setZoom(P.zoom);
+  fetchSkip(o);
+  fetchStill(o);
+  maybeRecap(o, startAt);
+}
+function fetchStill(o){
+  var m = o.meta || {};
+  if(m.season === undefined || m.season === null || m.episode === undefined || m.episode === null || !App.meta) return;
+  var setStill = function(url){
+    if(P.opts !== o || !url) return;
+    P.still = url;
+    els.plThumb.style.backgroundImage = "url('" + String(url).replace(/'/g, "%27") + "')";
+  };
+  var viaTitle = function(){
+    if(!m.imdbId || !App.meta.title) return null;
+    return App.meta.title("series", m.imdbId).then(function(t){
+      var v = t && (t.videos || []).filter(function(x){ return Number(x.season) === Number(m.season) && Number(x.episode) === Number(m.episode); })[0];
+      if(v && v.thumbnail) setStill(v.thumbnail);
+    });
+  };
+  var p = null;
+  if(m.tmdbId && App.meta.season){
+    p = App.meta.season(m.tmdbId, m.season).then(function(s){
+      var ep = s && (s.episodes || []).filter(function(x){ return Number(x.episode) === Number(m.episode); })[0];
+      if(ep && ep.still) setStill(ep.still); else return viaTitle();
+    });
+  } else p = viaTitle();
+  if(p && p.catch) p.catch(function(){});
+}
+
+function closeRecap(silent){
+  clearTimeout(P.recapT); P.recapT = null;
+  if(els.plRecap) els.plRecap.classList.remove("on");
+  if(P.recap){
+    P.recap = false;
+    if(!silent && P.engine && !P.paused){ P.engine.play(); }
+  }
+}
+function maybeRecap(o, startAt){
+  var m = o.meta || {};
+  if(!(Number(m.season) > 1) || Number(m.episode) !== 1 || startAt > 5 || !App.meta) return;
+  var done = function(text){
+    if(!text || P.opts !== o || !P.active) return;
+    P.recap = true;
+    try{ P.engine.pause(); }catch(e){}
+    els.plRecap.innerHTML = '<div class="pl-recap-h">' + App.esc(App.t("player.recap.title", { n: Number(m.season) - 1 })) + '</div>' +
+      '<div class="pl-recap-t">' + App.esc(text) + '</div>' +
+      '<div class="pl-recap-k">' + App.esc(App.t("player.recap.skip")) + '</div>';
+    els.plRecap.classList.add("on");
+    P.recapT = setTimeout(function(){ closeRecap(false); }, 6000);
+  };
+  var fromTitle = function(){
+    if(!m.imdbId || !App.meta.title) return null;
+    return App.meta.title("series", m.imdbId).then(function(t){
+      var vs = ((t && t.videos) || []).filter(function(x){ return Number(x.season) === Number(m.season) - 1 && x.overview; });
+      var last = vs.length ? vs[vs.length - 1] : null;
+      return last ? last.overview : "";
+    });
+  };
+  var p = null;
+  if(m.tmdbId && App.meta.season){
+    p = App.meta.season(m.tmdbId, Number(m.season) - 1).then(function(s){
+      return (s && s.overview) ? s.overview : fromTitle();
+    });
+  } else p = fromTitle();
+  if(p && p.then) p.then(function(txt){ done(txt ? String(txt).slice(0, 420) : ""); }).catch(function(){});
+}
+
+/* ================= Panel de controles con iconos (A1) ================= */
+function panelItems(){
+  var o = P.opts || {}, live = !!o.live, L = [];
+  function add(id, icon, key, run, opt){
+    opt = opt || {};
+    if(opt.show === false) return;
+    L.push({ id: id, icon: icon, label: App.t(key), run: run, keep: !!opt.keep });
+  }
+  add("rw", "−10", "player.ctl.rw", function(){ seekBy(-10); }, { keep: true, show: !live });
+  add("pp", P.paused ? "▶" : "❚❚", "player.ctl.playpause", togglePause, { keep: true });
+  add("ff", "+10", "player.ctl.ff", function(){ seekBy(10); }, { keep: true, show: !live });
+  add("replay", "↺10", "player.ctl.replay", function(){
+    if(!P.started) return;
+    P.engine.seek(Math.max(0, curTime() - 10));
+    if(P.paused) togglePause();
+    showOsd();
+  }, { keep: true, show: !live });
+  add("audio", "♪", "player.ctl.audio", audioMenu);
+  add("subs", "CC", "player.ctl.subs", subMenu);
+  add("subdelay", "CC±", "player.ctl.subdelay", subDelayMenu, { show: !live });
+  add("speed", (P.speed || 1) + "×", "player.ctl.speed", speedMenu, { show: !live });
+  add("zoom", "⤢", "player.ctl.zoom", zoomMenu);
+  add("info", "i", "player.ctl.info", infoPanel);
+  add("sleep", "☾", "player.ctl.sleep", sleepMenu);
+  add("next", "⏭", "player.ctl.next", function(){ goNext(); }, { show: !!o.next && !live });
+  add("close", "✕", "player.ctl.close", stop);
+  return L;
+}
+function renderPanel(){
+  var items = P.panelItems = panelItems();
+  if(P.panelIdx >= items.length) P.panelIdx = items.length - 1;
+  if(P.panelIdx < 0) P.panelIdx = 0;
+  els.plPanel.innerHTML = items.map(function(it, i){
+    return '<div class="pl-ic' + (i === P.panelIdx ? " focused" : "") + '"><b>' + App.esc(it.icon) + '</b><span>' + App.esc(it.label) + '</span></div>';
+  }).join("");
+}
+function openPanel(){
+  if(!P.started) return;
+  P.panelOpen = true;
+  P.panelIdx = P.panelIdx || 1;
+  els.plPanel.classList.add("on");
+  root.classList.add("panel-on");
+  renderPanel();
+  showOsd(10000);
+}
+function closePanel(){
+  if(!els || !els.plPanel) return;
+  P.panelOpen = false;
+  els.plPanel.classList.remove("on");
+  if(root) root.classList.remove("panel-on");
+}
+function panelKey(k){
+  var n = (P.panelItems || []).length;
+  if(App.isBack(k) || k === K.UP || k === K.DOWN){ closePanel(); showOsd(); return true; }
+  if(k === K.LEFT){ P.panelIdx = (P.panelIdx + n - 1) % n; renderPanel(); showOsd(10000); return true; }
+  if(k === K.RIGHT){ P.panelIdx = (P.panelIdx + 1) % n; renderPanel(); showOsd(10000); return true; }
+  if(k === K.OK){
+    var it = P.panelItems[P.panelIdx];
+    if(it){
+      if(!it.keep) closePanel();
+      it.run();
+      if(it.keep && P.panelOpen){ renderPanel(); showOsd(10000); }
+    }
+    return true;
+  }
+  return false;
+}
+function actions(){
+  if(!P.active) return [];
+  return panelItems().map(function(it){ return { label: it.label, run: it.run }; });
 }
 
 /* ================= API pública ================= */
@@ -871,7 +1355,8 @@ function play(opts){
     cancelValue: null,
     onClose: function(v){
       if(v === null){ if(P.active) stop(); return; }
-      P._startAt = v ? resume : 0;
+      var rw = App.settings.get("resumeRewind") !== false ? 5 : 0;
+      P._startAt = v ? Math.max(0, resume - rw) : 0;
       start(o, P._startAt);
     }
   });
@@ -883,6 +1368,8 @@ function stop(){
   if(P.active) saveNow();
   clearTimers();
   closeEngine();
+  clearSleep();
+  closePanel(); closeRecap(true);
   P.active = false;
   P.started = false;
   if(root){
@@ -894,6 +1381,7 @@ function stop(){
   P.opts = null;
   if(o && o.onClose){ try{ o.onClose(); }catch(e){} }
   App.bus.emit("player:close", { key: o ? o.key : null, meta: o ? (o.meta || {}) : {}, pos: closePos, dur: closeDur });
+  emitState();
   // repintar foco de la pantalla de debajo
   try{
     var def = App.screens && App.current() && App.screens.get(App.current());
@@ -911,6 +1399,11 @@ function onKey(k){
     return true;
   }
 
+  // Tarjeta "resumen de la temporada anterior": cualquier tecla la salta
+  if(P.recap){ closeRecap(false); return true; }
+
+  if(P.panelOpen && k !== K.STOP){ if(panelKey(k)) return true; }
+
   if(App.isBack(k) || k === K.STOP){ stop(); return true; }
 
   // Números (directo)
@@ -923,7 +1416,12 @@ function onKey(k){
   }
 
   switch(k){
-    case K.OK: case K.PLAYPAUSE: togglePause(); return true;
+    case K.OK:
+      if(P.skipCur && doSkip()) return true;
+      if(P.started && !P.paused && root.classList.contains("osd-on") && !els.plOsd.classList.contains("hide")){ openPanel(); return true; }
+      if(P.started && P.paused && !els.plOsd.classList.contains("hide")){ openPanel(); return true; }
+      togglePause(); return true;
+    case K.PLAYPAUSE: togglePause(); return true;
     case K.PLAY: if(P.paused) togglePause(); else showOsd(); return true;
     case K.PAUSE: if(!P.paused) togglePause(); else showOsd(); return true;
     case K.LEFT: seekBy(-10); return true;
@@ -931,10 +1429,12 @@ function onKey(k){
     case K.RW: seekBy(-60); return true;
     case K.FF: seekBy(60); return true;
     case K.UP: tracksPanel(); return true;
-    case K.DOWN: case K.INFO: showOsd(); return true;
+    case K.DOWN: openPanel(); showOsd(); return true;
+    case K.INFO: infoPanel(); return true;
     case K.NEXT: if(o.next) goNext(); else App.hint(App.t("player.noNext")); return true;
     case K.PREV: if(!o.live && P.started){ P.engine.seek(0); showOsd(); } return true;
     case K.GREEN: subMenu(); return true;
+    case K.BLUE: speedMenu(); return true;
     case K.RED: audioMenu(); return true;
     case K.YELLOW: tracksPanel(); return true;
     case K.CHUP: case K.CHDOWN: return true;
@@ -970,7 +1470,24 @@ App.player = {
   engine: function(){ return P.active ? P.engineName : null; },
   hasAvplay: hasAvplay,
   parseSubs: parseSubs,
-  current: function(){ return P.active && P.opts ? { key: P.opts.key, meta: P.opts.meta || {}, title: P.opts.title } : null; }
+  current: function(){ return P.active && P.opts ? { key: P.opts.key, meta: P.opts.meta || {}, title: P.opts.title } : null; },
+  status: statusObj,
+  control: control,
+  actions: actions
 };
+
+/* ================= Ajustes (grupo Reproducción) ================= */
+App.settings.define("playerSpeed", 1);
+App.settings.define("resumeRewind", true);
+App.settings.define("skipIntroAuto", false);
+if(App.settingsUI){
+  App.settingsUI.add("settings.group.player", { id: "playerSpeed", type: "menu",
+    label: function(){ return App.t("player.set.speed"); }, desc: function(){ return App.t("player.set.speed.desc"); },
+    options: function(){ return SPEEDS.map(function(x){ return { label: x + "×", value: x }; }); } });
+  App.settingsUI.add("settings.group.player", { id: "resumeRewind", type: "bool",
+    label: function(){ return App.t("player.set.rewind"); }, desc: function(){ return App.t("player.set.rewind.desc"); } });
+  App.settingsUI.add("settings.group.player", { id: "skipIntroAuto", type: "bool",
+    label: function(){ return App.t("player.set.skipAuto"); }, desc: function(){ return App.t("player.set.skipAuto.desc"); } });
+}
 
 })();

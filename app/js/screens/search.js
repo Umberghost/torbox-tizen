@@ -15,16 +15,42 @@ var t = function(k, v){ return App.t(k, v); };
 var CINEMETA = "https://v3-cinemeta.strem.io";
 var RECENT_KEY = "recentSearches";
 var ADDON_TIMEOUT = 20000;
-var HOLD_MS = 600;
+if(App.settings.define) App.settings.define("stremioAddons", []);
 
 /* ======================= Utilidades ======================= */
 
-function addonBase(){
-  var u = String(App.settings.get("stremioAddon") || "").trim();
+function normAddon(u){
+  u = String(u || "").trim();
   if(!u) return "";
   u = u.replace(/^stremio:\/\//i, "https://");
   u = u.replace(/\/manifest\.json(\?.*)?$/i, "");
   return u.replace(/\/+$/, "");
+}
+
+/* Todos los add-ons configurados: `stremioAddon` (primero) + `stremioAddons` (array), sin duplicados */
+function addonBases(){
+  var raw = [App.settings.get("stremioAddon")];
+  var arr = App.settings.get("stremioAddons");
+  if(Array.isArray(arr)) raw = raw.concat(arr);
+  var out = [];
+  raw.forEach(function(u){
+    var b = normAddon(u);
+    if(b && out.indexOf(b) < 0) out.push(b);
+  });
+  return out;
+}
+function addonBase(){ var l = addonBases(); return l.length ? l[0] : ""; }
+
+var ADDON_NAMES = [[/torrentio/i, "Torrentio"], [/comet/i, "Comet"], [/mediafusion/i, "MediaFusion"], [/torbox/i, "TorBox"],
+                   [/aiostreams/i, "AIOStreams"], [/jackettio/i, "Jackettio"], [/knightcrawler/i, "KnightCrawler"]];
+function addonHost(base){
+  var m = String(base || "").match(/^https?:\/\/([^\/]+)/i);
+  return m ? m[1].replace(/^www\./, "") : String(base || "").slice(0, 24);
+}
+function addonName(base){
+  var h = addonHost(base);
+  for(var i = 0; i < ADDON_NAMES.length; i++) if(ADDON_NAMES[i][0].test(h)) return ADDON_NAMES[i][1];
+  return h.length > 18 ? h.slice(0, 18) + "…" : h;
 }
 
 function withTimeout(p, ms, msg){
@@ -332,32 +358,88 @@ function sortStreams(list){
 var streamCache = {};
 var STREAM_TTL = 5 * 60000;
 function fetchStreams(type, id, force){
-  var base = addonBase();
-  if(!base) return Promise.reject(new Error(t("search.noAddon.title")));
-  var ck = base + "|" + type + "|" + id;
+  var bases = addonBases();
+  if(!bases.length) return Promise.reject(new Error(t("search.noAddon.title")));
+  var ck = bases.join(",") + "|" + type + "|" + id;
   var c = streamCache[ck];
   if(c && !force && Date.now() - c.t < STREAM_TTL) return c.p;
-  var p = fetchStreamsRaw(base, type, id);
+  var p = fetchStreamsRaw(bases, type, id);
   streamCache[ck] = { t: Date.now(), p: p };
   p.catch(function(){ if(streamCache[ck] && streamCache[ck].p === p) delete streamCache[ck]; });
   return p;
 }
-function fetchStreamsRaw(base, type, id){
-  return getJson(base + "/stream/" + type + "/" + encodeURIComponent(id).replace(/%3A/g, ":") + ".json",
-                 ADDON_TIMEOUT, t("search.err.addonTimeout"))
-    .then(function(j){
-      var list = (j.streams || []).map(normStream).filter(function(x){ return x.url || x.hash; });
-      // Marcar caché con TorBox para los que solo traen infoHash
-      var hashes = list.filter(function(x){ return x.hash && !x.cached; }).map(function(x){ return x.hash; });
-      var chk = hashes.length && App.torbox.checkCached ? App.torbox.checkCached(hashes).catch(function(){ return {}; }) : Promise.resolve({});
-      return chk.then(function(set){
-        list.forEach(function(x){ if(x.hash && set[x.hash]) x.cached = true; });
-        var hide = App.caps && App.caps.hideUnsupported ? App.caps.hideUnsupported() : false;
-        var visible = [], hidden = [];
-        list.forEach(function(x){ (hide && x.compatible === false ? hidden : visible).push(x); });
-        return { visible: sortStreams(visible), hidden: sortStreams(hidden) };
-      });
+/* Fusiona listas de varios add-ons; deduplica por infoHash (o url si no hay hash) entre add-ons distintos */
+function mergeStreams(lists){
+  var out = [], seen = {};
+  lists.forEach(function(L){
+    var mine = {};
+    L.list.forEach(function(x){
+      x.addon = L.name; x.addons = [L.name];
+      var k = x.hash ? "h:" + x.hash : (x.url ? "u:" + x.url : "");
+      var e = k ? seen[k] : null;
+      if(!e){
+        out.push(x);
+        if(k) mine[k] = x;
+        return;
+      }
+      if(e.addons.indexOf(L.name) < 0) e.addons.push(L.name);
+      if(x.cached && !e.cached) e.cached = true;
+      if(x.url && (!e.url || (e.uncachedDebrid && !x.uncachedDebrid))){ e.url = x.url; e.uncachedDebrid = x.uncachedDebrid; }
+      if(e.cached) e.uncachedDebrid = false;
+      if(!e.size && x.size) e.size = x.size;
+      if(e.seeders === null && x.seeders !== null) e.seeders = x.seeders;
+      if(!e.filename && x.filename) e.filename = x.filename;
+      if(!e.provider && x.provider) e.provider = x.provider;
+      if(e.fileIdx === undefined && x.fileIdx !== undefined) e.fileIdx = x.fileIdx;
     });
+    for(var k2 in mine) seen[k2] = mine[k2];
+  });
+  return out;
+}
+
+function fetchStreamsRaw(bases, type, id){
+  var path = "/stream/" + type + "/" + encodeURIComponent(id).replace(/%3A/g, ":") + ".json";
+  var counter = 0;
+  return Promise.all(bases.map(function(base){
+    return getJson(base + path, ADDON_TIMEOUT, t("search.err.addonTimeout"))
+      .then(function(j){
+        var list = (j.streams || []).map(function(st){ return normStream(st, counter++); }).filter(function(x){ return x.url || x.hash; });
+        return { name: addonName(base), list: list };
+      })
+      .catch(function(e){ console.warn("[buscar] add-on " + addonHost(base) + ":", e && e.message); return { err: e }; });
+  })).then(function(res){
+    var ok = res.filter(function(r){ return !r.err; });
+    if(!ok.length){
+      // Si alguno falló por otra causa que 404, ese error es el relevante
+      var real = res.filter(function(r){ return r.err.status !== 404; })[0];
+      throw (real || res[0]).err;
+    }
+    var list = mergeStreams(ok);
+    // Marcar caché con TorBox para los que solo traen infoHash
+    var hashes = list.filter(function(x){ return x.hash && !x.cached; }).map(function(x){ return x.hash; });
+    var chk = hashes.length && App.torbox.checkCached ? App.torbox.checkCached(hashes).catch(function(){ return {}; }) : Promise.resolve({});
+    return chk.then(function(set){
+      list.forEach(function(x){ if(x.hash && set[x.hash]){ x.cached = true; x.uncachedDebrid = false; } });
+      var hide = App.caps && App.caps.hideUnsupported ? App.caps.hideUnsupported() : false;
+      var visible = [], hidden = [];
+      list.forEach(function(x){ (hide && x.compatible === false ? hidden : visible).push(x); });
+      return { visible: sortStreams(visible), hidden: sortStreams(hidden) };
+    });
+  });
+}
+
+/* bestDownload(streams) → mejor fuente NO instantánea con hash (episodio suelto), para descarga automática */
+function bestDownload(streams){
+  var cands = (streams || []).filter(function(x){ return x.hash && !x.pack && x.compatible !== false && withinSize(x); });
+  if(!cands.length) return null;
+  cands.sort(function(a, b){
+    var la = langScore(a), lb = langScore(b);
+    if(la !== lb) return lb - la;
+    var qa = qualityScore(a), qb = qualityScore(b);
+    if(qa !== qb) return qb - qa;
+    return (b.seeders || 0) - (a.seeders || 0);
+  });
+  return cands[0];
 }
 
 function langLabels(x){ return x.langs.map(function(l){ return t("search.lang." + l); }); }
@@ -462,7 +544,8 @@ function playTitle(o){
   });
 }
 
-App.search = { bestStream: bestStream, playTitle: playTitle, fetchStreams: fetchStreams };
+App.search = { bestStream: bestStream, bestDownload: bestDownload, playTitle: playTitle, fetchStreams: fetchStreams,
+                suggest: function(p){ return suggest(p); }, addons: function(){ return addonBases(); } };
 
 /* ======================= Estado ======================= */
 
@@ -481,6 +564,7 @@ var s = {
   focusMem: {},                // índice de foco por nivel
   playing: false,
   openMode: false, openLevel: null,  // llegado desde Inicio con params.open
+  didYou: "", seen: [],
   packMode: null, packs: null, packsHidden: [], packsErr: "", packsLoading: false
 };
 
@@ -693,6 +777,7 @@ function renderRoot(){
     if(!mv.length && !sr.length){
       h += stateBlock("", t("search.noResults.title"), App.esc(t("search.noResults.text", { q: s.q })));
     } else {
+      if(s.didYou) h += '<div class="srch-didyou">' + App.esc(t("search.didYou", { q: s.didYou })) + '</div>';
       if(mv.length){
         h += '<div class="section-title">' + App.esc(t("search.movies")) + ' <span class="muted">' + mv.length + '</span></div><div class="hscroll srch-hrow">';
         mv.forEach(function(m, i){ h += posterCard(m, i); });
@@ -710,6 +795,12 @@ function renderRoot(){
     if(rc.length){
       h += '<div class="section-title">' + App.esc(t("search.recent")) + '</div><div class="chips srch-recent">';
       rc.forEach(function(q, i){ h += '<div class="chip focusable" data-act="recent" data-i="' + i + '">' + App.esc(q) + '</div>'; });
+      h += '</div>';
+    }
+    s.seen = seenTitles(rc);
+    if(s.seen.length){
+      h += '<div class="section-title">' + App.esc(t("search.seen")) + '</div><div class="chips srch-recent">';
+      s.seen.forEach(function(q, i){ h += '<div class="chip focusable" data-act="seen" data-i="' + i + '">' + App.esc(q) + '</div>'; });
       h += '</div>';
     }
     if(!addonBase()) h += noAddonHtml();
@@ -730,6 +821,7 @@ function onRootSelect(i, el){
   var act = el.getAttribute("data-act");
   if(act === "kb") return openKeyboard();
   if(act === "recent"){ var q = recent()[Number(el.getAttribute("data-i"))]; if(q) doSearch(q); return; }
+  if(act === "seen"){ var sq = (s.seen || [])[Number(el.getAttribute("data-i"))]; if(sq) doSearch(sq); return; }
   if(act === "item"){
     var m = itemFromEl(el);
     if(!m) return;
@@ -756,20 +848,127 @@ function catalog(type, q){
     });
 }
 
-function doSearch(q){
-  s.q = q; s.loading = true; s.error = ""; s.results = null; s.focusMem.root = 0;
-  s.openMode = false; s.openLevel = null;
-  pushRecent(q);
-  var id = ++s.reqId;
-  renderRoot();
-  Promise.all([
+/* ---- #31 tolerancia a faltas / #32 sugerencias ---- */
+function stripAccents(x){
+  x = String(x || "");
+  return x.normalize ? x.normalize("NFD").replace(/[̀-ͯ]/g, "") : x;
+}
+function normQ(x){ return stripAccents(x).toLowerCase().replace(/\s+/g, " ").trim(); }
+
+function editDist(a, b){
+  if(a === b) return 0;
+  if(!a.length) return b.length;
+  if(!b.length) return a.length;
+  var prev = [], i, j;
+  for(j = 0; j <= b.length; j++) prev[j] = j;
+  for(i = 1; i <= a.length; i++){
+    var cur = [i];
+    for(j = 1; j <= b.length; j++){
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/* Títulos vistos (historial del reproductor), sin repetidos */
+function historyTitles(){
+  var out = [];
+  try{
+    var l = App.history && App.history.list ? App.history.list() : [];
+    (l || []).forEach(function(e){
+      if(!e || String(e.key || "").indexOf("live:") === 0) return;
+      var m = (e && e.meta) || {};
+      var ti = m.showTitle || m.title || (e && e.title) || "";
+      if(ti && out.indexOf(ti) < 0) out.push(ti);
+    });
+  }catch(e){}
+  return out;
+}
+function seenTitles(rc){
+  var low = (rc || []).map(normQ);
+  return historyTitles().filter(function(x){ return low.indexOf(normQ(x)) < 0; }).slice(0, 8);
+}
+
+/* suggest(prefix) → búsquedas anteriores y títulos vistos que encajan con lo escrito */
+function suggest(prefix){
+  var p = normQ(prefix);
+  if(!p) return [];
+  var out = [];
+  recent().concat(historyTitles()).forEach(function(x){
+    var n = normQ(x);
+    if(n !== p && n.indexOf(p) >= 0 && out.indexOf(x) < 0) out.push(x);
+  });
+  return out.slice(0, 6);
+}
+
+/* Variaciones a probar cuando Cinemeta no devuelve nada */
+function variantsOf(q){
+  var out = [], ql = normQ(q);
+  function add(v){
+    v = String(v || "").trim();
+    if(v.length < 2 || v === q) return;
+    if(out.indexOf(v) < 0) out.push(v);
+  }
+  var near = [];
+  recent().concat(historyTitles()).forEach(function(k){
+    var kn = normQ(k);
+    if(!kn || kn === ql) return;
+    var d = editDist(ql, kn);
+    if(d <= Math.max(1, Math.floor(Math.min(ql.length, kn.length) / 4))) near.push({ k: k, d: d });
+  });
+  near.sort(function(a, b){ return a.d - b.d; }).slice(0, 2).forEach(function(n){ add(n.k); });
+  var na = stripAccents(q);
+  if(na !== q) add(na);
+  var words = ql.split(" ");
+  if(words.length > 1){
+    add(words.join(""));                                   // "spider man" → "spiderman"
+    var longest = words.slice().sort(function(a, b){ return b.length - a.length; })[0];
+    if(longest.length >= 4) add(longest);
+  } else if(ql.length >= 8){
+    var half = Math.ceil(ql.length / 2);
+    add(ql.slice(0, half) + " " + ql.slice(half));         // palabras pegadas: intento partir por la mitad
+  }
+  if(ql.length > 4) add(ql.slice(0, -1));
+  if(ql.length > 6) add(ql.slice(0, -2));
+  return out.slice(0, 6);
+}
+
+function runCatalogs(q){
+  return Promise.all([
     catalog("movie", q).catch(function(e){ return { err: e }; }),
     catalog("series", q).catch(function(e){ return { err: e }; })
-  ]).then(function(r){
-    if(id !== s.reqId) return;
+  ]);
+}
+function hasAny(r){ return (!r[0].err && r[0].length) || (!r[1].err && r[1].length); }
+
+function doSearch(q){
+  s.q = q; s.loading = true; s.error = ""; s.results = null; s.focusMem.root = 0; s.didYou = "";
+  s.openMode = false; s.openLevel = null;
+  var id = ++s.reqId;
+  renderRoot();
+  runCatalogs(q).then(function(r){
+    if(id !== s.reqId) return null;
+    if(r[0].err && r[1].err || hasAny(r)) return { r: r, v: "" };
+    // 0 resultados: reintentar con variaciones (se prueban en serie, la primera con resultados gana)
+    var vars = variantsOf(q), n = 0;
+    function next(){
+      if(id !== s.reqId) return Promise.resolve(null);
+      if(n >= vars.length) return Promise.resolve({ r: r, v: "" });
+      var v = vars[n++];
+      return runCatalogs(v).then(function(rv){ return hasAny(rv) ? { r: rv, v: v } : next(); });
+    }
+    return next();
+  }).then(function(o){
+    if(!o || id !== s.reqId) return;
+    var r = o.r;
     s.loading = false;
     if(r[0].err && r[1].err){ s.error = t("search.err.cinemetaDown", { msg: r[0].err.message }); }
-    else s.results = { movies: r[0].err ? [] : r[0], series: r[1].err ? [] : r[1] };
+    else {
+      s.results = { movies: r[0].err ? [] : r[0], series: r[1].err ? [] : r[1] };
+      s.didYou = o.v;
+      if(s.results.movies.length || s.results.series.length) pushRecent(o.v || q);
+    }
     // foco directo al primer resultado
     s.focusMem.root = s.results && (s.results.movies.length || s.results.series.length) ? 1 : 0;
     if(App.current() === "search" && s.level === "root") renderRoot();
@@ -845,6 +1044,10 @@ function renderDetail(){
   var h = '<div class="lib-backdrop' + (meta.background ? " on" : "") + '"' +
           (meta.background ? ' style="background-image:url(\'' + App.esc(meta.background) + '\')"' : '') + '></div><div class="lib-shade"></div>';
   h += '<div class="scroll lib-detail-scroll">' + heroHtml(meta);
+  if(App.follow && s.item){
+    h += '<div class="chips srch-follow"><div class="chip focusable' + (App.follow.isFollowing(s.item.id) ? " active" : "") + '" data-act="follow">' +
+         App.esc(t(App.follow.isFollowing(s.item.id) ? "search.follow.btnOn" : "search.follow.btnOff")) + '</div></div>';
+  }
   if(!s.seasons.length){
     h += stateBlock("", t("search.noEpisodes.title"), App.esc(t("search.noEpisodes.text")));
   } else {
@@ -893,6 +1096,11 @@ function epFromEl(el){
 
 function onDetailSelect(i, el){
   var act = el.getAttribute("data-act");
+  if(act === "follow"){
+    var sr = curSeries();
+    if(sr){ toggleFollow(sr); s.focusMem.detail = i; renderDetail(); }
+    return;
+  }
   if(act === "season"){
     var n = Number(el.getAttribute("data-s"));
     if(n !== s.season){ s.season = n; s.focusMem.detail = i; renderDetail(); }
@@ -989,6 +1197,7 @@ function streamRow(x, i, incompatible, est){
   else if(x.uncachedDebrid) badges += '<span class="srch-cached srch-dl">' + App.esc(t("search.badge.download")) + '</span>';
   else if(x.url) badges += '<span class="srch-cached srch-play">' + App.esc(t("search.badge.direct")) + '</span>';
   langLabels(x).forEach(function(l){ badges += '<span class="badge srch-lang">' + App.esc(l) + '</span>'; });
+  if(x.addons && addonBases().length > 1) badges += '<span class="badge srch-addon">' + App.esc(x.addons.join(" + ")) + '</span>';
   if(x.quality) badges += '<span class="badge srch-q">' + App.esc(x.quality) + '</span>';
   x.tags.forEach(function(tg){ badges += '<span class="badge srch-q">' + App.esc(tg) + '</span>'; });
   var meta = [];
@@ -1317,9 +1526,7 @@ function onPackSelect(x){
   confirmPack(x, false).then(function(v){ if(v === "dl") addPack(x); });
 }
 
-/* ======================= Mantener OK / lista completa ======================= */
-
-var hold = null;
+/* ======================= Elemento enfocado / lista completa ======================= */
 
 /* Elemento enfocado sobre el que tiene sentido "mejor fuente": película en raíz o episodio en detalle */
 function bestTarget(){
@@ -1342,13 +1549,6 @@ function openTarget(tg, autoPlay){
   else { s.ep = tg.ep; openStreams({ autoPlay: autoPlay }); }
 }
 
-document.addEventListener("keyup", function(e){
-  if(e.keyCode !== K.OK || !hold) return;
-  clearTimeout(hold.timer);
-  var h = hold; hold = null;
-  if(App.current() === "search" && s.grid && s.grid.current() === h.tg.el) openTarget(h.tg, true);
-}, true);
-
 /* ======================= Navegación ======================= */
 
 function leaveOpen(){
@@ -1370,11 +1570,117 @@ function goBack(){
   return false;
 }
 
+function newSearch(){
+  s.openMode = false; s.openLevel = null;
+  if(s.level !== "root"){ s.reqId++; renderRoot(); }
+  openKeyboard();
+}
+
+function toggleFollow(m){
+  if(!App.follow) return;
+  var on = App.follow.toggle({ imdbId: m.id, name: m.name, poster: m.poster });
+  App.ui.toast(t(on ? "search.follow.added" : "search.follow.removed", { name: m.name || "" }), 3500);
+  return on;
+}
+function followLabel(id){ return t(App.follow && App.follow.isFollowing(id) ? "search.act.unfollow" : "search.act.follow"); }
+function curSeries(){
+  if(!s.item || s.item.type !== "series") return null;
+  var meta = s.meta || {};
+  return { id: s.item.id, name: meta.name || s.item.name, poster: meta.poster || s.item.poster };
+}
+
+/* A1: acciones del menú contextual (OK mantenido). Incluye todo lo que hay en teclas de color/INFO. */
+function actions(){
+  var a = [];
+  var el = s.grid && s.grid.current();
+  var hasAddon = !!addonBase();
+  if(s.level === "root"){
+    var m = itemFromEl(el);
+    if(m){
+      if(m.type === "movie"){
+        if(hasAddon) a.push({ label: t("search.act.bestSource"), run: function(){ remember(); openItem(m, { autoPlay: true }); } });
+        a.push({ label: t("search.act.allSources"), run: function(){ remember(); openItem(m, { autoPlay: false }); } });
+      } else {
+        a.push({ label: t("search.act.open"), run: function(){ remember(); openItem(m, {}); } });
+        if(App.follow) a.push({ label: followLabel(m.id), run: function(){ toggleFollow(m); } });
+      }
+    }
+    if(recent().length) a.push({ label: t("search.act.clearRecent"), run: function(){ App.store.set(RECENT_KEY, []); renderRoot(); } });
+  } else if(s.level === "detail"){
+    var v = epFromEl(el);
+    if(v){
+      if(hasAddon) a.push({ label: t("search.act.bestSource"), run: function(){ remember(); s.ep = v; openStreams({ autoPlay: true }); } });
+      a.push({ label: t("search.act.allSources"), run: function(){ remember(); s.ep = v; openStreams({ autoPlay: false }); } });
+    }
+    if(hasAddon){
+      if(s.season !== 0 && s.season !== null) a.push({ label: t("search.pack.fullSeason", { n: s.season }), run: function(){ remember(); openPacks("season"); } });
+      a.push({ label: t("search.pack.series"), run: function(){ remember(); openPacks("series"); } });
+    }
+    var sr = curSeries();
+    if(sr && App.follow) a.push({ label: followLabel(sr.id), run: function(){ toggleFollow(sr); renderDetail(); } });
+    var si = s.seasons.indexOf(s.season);
+    if(si > 0) a.push({ label: t("search.act.prevSeason"), run: function(){ changeSeason(-1); } });
+    if(si >= 0 && si < s.seasons.length - 1) a.push({ label: t("search.act.nextSeason"), run: function(){ changeSeason(1); } });
+  } else if(s.level === "streams" || s.level === "packs"){
+    var isPacks = s.level === "packs";
+    var act = el ? el.getAttribute("data-act") : "";
+    var x = act === "stream" ? s.rendered[Number(el.getAttribute("data-i"))] : null;
+    if(x){
+      a.push({ label: t(isPacks ? "search.act.addPack" : "search.act.playAdd"), run: function(){ onStreamSelect(0, el); } });
+      if(!isPacks && x.hash) a.push({ label: t("search.act.addTorbox"), run: function(){ guardPack(x, function(){ addToTorbox(x); }); } });
+    }
+    if(act === "showhidden") a.push({ label: t("search.act.showHidden"), run: function(){ onStreamSelect(0, el); } });
+    a.push({ label: t("search.act.reload"), run: function(){ if(isPacks) openPacks(s.packMode, true); else openStreams({ autoPlay: false, force: true }); } });
+    var sr2 = curSeries();
+    if(sr2 && App.follow) a.push({ label: followLabel(sr2.id), run: function(){ toggleFollow(sr2); } });
+  }
+  a.push({ label: t("search.act.newSearch"), run: newSearch });
+  return a;
+}
+
 function rerender(){
   if(s.level === "detail" && s.meta) renderDetail();
   else if(s.level === "streams" && s.item) renderStreams();
   else if(s.level === "packs" && s.item && s.meta) renderPacks();
   else renderRoot();
+}
+
+/* ======================= Ajustes: add-ons ======================= */
+
+function removeAddon(base){
+  var arr = App.settings.get("stremioAddons");
+  arr = Array.isArray(arr) ? arr.filter(function(u){ return normAddon(u) !== base; }) : [];
+  if(normAddon(App.settings.get("stremioAddon")) === base) App.settings.set("stremioAddon", "");
+  App.settings.set("stremioAddons", arr);
+  App.ui.toast(t("search.addons.removed", { name: addonName(base) }), 3000);
+}
+function showAddonHelp(){
+  var url = App.remote && App.remote.url ? App.remote.url() : "";
+  App.ui.modal({
+    title: t("search.addons.helpTitle"),
+    html: '<p>' + App.esc(t("search.addons.help")) + (url ? ' <b>' + App.esc(url) + '</b>' : '') + '</p>' +
+          '<p>' + App.esc(t("search.addons.suggest")) + '</p>' +
+          '<p>Torrentio — torrentio.strem.fun<br>Comet — comet.elfhosted.com<br>MediaFusion — mediafusion.elfhosted.com<br>' +
+          App.esc(t("search.addons.torbox")) + ' — stremio.torbox.app/manifest.json</p>',
+    buttons: [{ label: t("ui.close"), value: true }]
+  });
+}
+function manageAddons(){
+  var list = addonBases();
+  var items = list.map(function(b){ return { label: addonName(b) + " · " + addonHost(b), value: b }; });
+  items.push({ label: t("search.addons.helpItem"), value: "__help" });
+  App.ui.menu(t(list.length ? "search.addons.menuTitle" : "search.addons.none"), items).then(function(v){
+    if(!v) return;
+    if(v === "__help"){ showAddonHelp(); return; }
+    App.ui.confirm(t("search.addons.removeTitle", { name: addonName(v) }), t("search.addons.removeText"), t("search.addons.remove"), t("ui.cancel"))
+      .then(function(ok){ if(ok) removeAddon(v); });
+  });
+}
+if(App.settingsUI){
+  App.settingsUI.add("settings.group.search", { id: "stremioAddonsList", type: "action",
+    label: function(){ return t("search.addons.label") + " (" + addonBases().length + ")"; },
+    desc: function(){ return t("search.addons.desc"); },
+    run: manageAddons });
 }
 
 App.screens.register({
@@ -1383,7 +1689,7 @@ App.screens.register({
   mount: function(el){
     s.el = el;
     App.bus.on("settings:change", function(ev){
-      if(ev && ev.key && ev.key !== "stremioAddon" && ev.key !== "hideUnsupported") return;
+      if(ev && ev.key && ev.key !== "stremioAddon" && ev.key !== "stremioAddons" && ev.key !== "hideUnsupported") return;
       if(App.current() === "search" && s.el) rerender();
     });
   },
@@ -1407,30 +1713,22 @@ App.screens.register({
     }
     rerender();
   },
-  hide: function(){ remember(); stopPolling(); clearTimeout(pv.timer); if(hold){ clearTimeout(hold.timer); hold = null; } },
+  hide: function(){ remember(); stopPolling(); clearTimeout(pv.timer); },
   focus: function(){
     if(s.playing){ s.playing = false; }
     setTimeout(syncPolling, 300);
     if(s.grid){ s.grid.refresh(); s.grid.focus(s.grid.index, true); }
   },
   blur: function(){ if(s.grid) s.grid.blur(); },
+  actions: actions,
   onKey: function(k, e){
-    if(k === K.YELLOW){ s.openMode = false; s.openLevel = null; if(s.level !== "root"){ s.reqId++; renderRoot(); } openKeyboard(); return true; }
+    if(k === K.YELLOW){ newSearch(); return true; }
     if(App.isBack(k)) return goBack();
 
-    // Mejor fuente: mantener OK / INFO / VERDE → lista completa; OK corto → reproducir la mejor
+    // INFO / VERDE → lista completa de fuentes; OK → mejor fuente (si autoPlayBest) vía onSelect
     if(s.level === "root" || s.level === "detail"){
       var tg = bestTarget();
       if(tg && (k === K.INFO || k === K.GREEN)){ openTarget(tg, false); return true; }
-      if(tg && k === K.OK && App.settings.get("autoPlayBest") && addonBase()){
-        if(e && e.repeat) return true;
-        if(hold) return true;
-        hold = { tg: tg, timer: setTimeout(function(){
-          var h = hold; hold = null;
-          if(h && App.current() === "search") openTarget(h.tg, false);
-        }, HOLD_MS) };
-        return true;
-      }
     }
     if(s.level === "detail" && (k === K.CHUP || k === K.CHDOWN)){ changeSeason(k === K.CHUP ? 1 : -1); return true; }
     if(s.level === "packs" && k === K.GREEN){

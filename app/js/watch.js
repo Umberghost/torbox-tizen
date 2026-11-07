@@ -90,6 +90,9 @@ function ready(entry, item){
   App.torbox.invalidate();
   App.bus.emit("watch:ready", { entry: entry, item: item });
   App.ui.toast(App.t("watch.toast", { title: entry.title || item.name }), 5000);
+  if(App.notify && typeof App.notify.send === "function"){
+    try{ App.notify.send(App.t("watch.notifyTitle"), App.t("watch.notifyBody", { title: entry.title || item.name })); }catch(e){}
+  }
   queue.push({ entry: entry, item: item });
   showNext();
 }

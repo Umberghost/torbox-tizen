@@ -7,7 +7,9 @@
   --text:#e8eef3;
   --muted:#8b9aa8;
   --accent:#17c964;
-  --accent-dim:rgba(23,201,100,.16);
+  --accent-rgb:23,201,100;
+  --ui-scale:1;
+  --accent-dim:rgba(var(--accent-rgb),.16);
   --accent-ink:#06130c;
   --danger:#ff6b6b;
   --warn:#f5c451;
@@ -39,7 +41,7 @@ header{display:flex;align-items:center;gap:28px;padding:28px var(--gutter) 18px;
   padding:8px 24px;border-radius:999px;color:var(--muted);
   font-size:24px;border:2px solid transparent;transition:color .15s,background .15s;cursor:pointer;
 }
-.tab.active{color:var(--text);border-color:rgba(23,201,100,.55);background:var(--accent-dim)}
+.tab.active{color:var(--text);border-color:rgba(var(--accent-rgb),.55);background:var(--accent-dim)}
 .tab.focused{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 .spacer{flex:1}
 .hint{color:var(--muted);font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:760px}
@@ -69,8 +71,8 @@ body.zone-header .screen .focused{box-shadow:none!important;transform:none!impor
   padding:2px 12px;border-radius:999px;white-space:nowrap;
 }
 .row.focused{
-  background:linear-gradient(90deg,var(--accent-dim),rgba(23,201,100,.03));
-  box-shadow:inset 5px 0 0 var(--accent),0 0 0 1px rgba(23,201,100,.35);
+  background:linear-gradient(90deg,var(--accent-dim),rgba(var(--accent-rgb),.03));
+  box-shadow:inset 5px 0 0 var(--accent),0 0 0 1px rgba(var(--accent-rgb),.35);
   transform:translateX(8px);
 }
 .row.dim{opacity:.5}
@@ -85,7 +87,7 @@ body.zone-header .screen .focused{box-shadow:none!important;transform:none!impor
   padding:8px 22px;border-radius:999px;background:var(--surface);color:var(--muted);
   font-size:22px;border:2px solid transparent;
 }
-.chip.active{color:var(--text);border-color:rgba(23,201,100,.55)}
+.chip.active{color:var(--text);border-color:rgba(var(--accent-rgb),.55)}
 .chip.focused{background:var(--accent);color:var(--accent-ink);font-weight:700}
 
 /* ---- Botones ---- */
@@ -161,7 +163,7 @@ body.zone-header .screen .focused{box-shadow:none!important;transform:none!impor
 .remote-banner{
   position:fixed;left:50%;bottom:40px;transform:translateX(-50%);z-index:150;
   display:none;align-items:center;gap:28px;padding:18px 34px;border-radius:16px;
-  background:var(--surface-2);border:2px solid rgba(23,201,100,.45);font-size:24px;
+  background:var(--surface-2);border:2px solid rgba(var(--accent-rgb),.45);font-size:24px;
   box-shadow:0 18px 50px rgba(0,0,0,.5);white-space:nowrap;
 }
 .remote-banner.on{display:flex}
@@ -177,3 +179,53 @@ body.zone-header .screen .focused{box-shadow:none!important;transform:none!impor
 }
 .touch-back:active{background:var(--accent);color:var(--accent-ink)}
 @media (hover:hover){ .focusable{cursor:pointer} }
+
+/* ================= Temas (#92) ================= */
+html[data-theme="blue"]{--accent:#4c8dff;--accent-rgb:76,141,255;--accent-ink:#06101f}
+html[data-theme="oled"]{--bg:#000;--surface:#0b0b0b;--surface-2:#141414;--surface-3:#202020;--muted:#8a8a8a}
+
+/* ================= Tamaño de interfaz (#93) =================
+ * zoom sobre la cabecera/contenido y los modales; la altura se compensa porque 100vh no escala. */
+html.scaled #app{zoom:var(--ui-scale);height:calc(100vh / var(--ui-scale))}
+html.scaled .modal{zoom:var(--ui-scale)}
+
+/* ================= Qué hay de nuevo (#89) ================= */
+.wn-ver{color:var(--accent);font-weight:700;margin:6px 0 4px}
+.wn-list{margin:0 0 14px 28px;color:var(--text)}
+.wn-list li{margin:6px 0;line-height:1.35}
+
+/* ================= Salvapantallas (#94) ================= */
+#screensaver{position:fixed;inset:0;z-index:900;background:#000;overflow:hidden}
+#screensaver .ss-layer{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 2.5s ease;transform:scale(1.02)}
+#screensaver .ss-layer.on{opacity:.9;animation:ssZoom 14s ease-out forwards}
+@keyframes ssZoom{from{transform:scale(1.02)}to{transform:scale(1.1)}}
+#screensaver .ss-logo{position:absolute;font-size:72px;font-weight:700;color:rgba(255,255,255,.55);transition:left 3s,top 3s;display:none}
+#screensaver .ss-logo b{color:var(--accent)}
+#screensaver .ss-clock{position:absolute;font-size:44px;color:rgba(255,255,255,.8);text-shadow:0 2px 14px rgba(0,0,0,.8);transition:left 3s,top 3s}
+
+/* ================= Modo móvil (#13): body.mobile lo pone main.js (<1000 px o vertical) ================= */
+body.mobile{font-size:17px}
+body.mobile{--gutter:14px}
+body.mobile header{gap:10px;padding:12px var(--gutter) 8px;flex-wrap:nowrap}
+body.mobile .brand{font-size:24px;flex:none}
+body.mobile .tabs{margin-left:0;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+body.mobile .tabs::-webkit-scrollbar{display:none}
+body.mobile .tab{flex:none;padding:6px 16px;font-size:16px;white-space:nowrap}
+body.mobile .spacer,body.mobile .hint{display:none}
+body.mobile .row{padding:12px 14px;gap:12px}
+body.mobile .row .meta{font-size:14px}
+body.mobile .badge{font-size:13px}
+body.mobile .section-title{font-size:20px;margin:16px 0 2px}
+body.mobile .chip{font-size:15px;padding:6px 14px}
+body.mobile .btn{font-size:17px;padding:12px 22px}
+body.mobile .input{font-size:18px;padding:12px 14px}
+body.mobile .box{padding:22px;width:94vw}
+body.mobile .center h2{font-size:22px}
+body.mobile .modal{min-width:0;width:92vw;max-width:92vw;padding:22px 20px}
+body.mobile .modal.wide{width:94vw}
+body.mobile .modal h2{font-size:22px}
+body.mobile .toast{font-size:16px;padding:10px 18px;max-width:92vw;white-space:normal;text-align:center;border-radius:18px;bottom:96px}
+body.mobile .touch-back{width:56px;height:56px;font-size:30px;left:14px;bottom:14px}
+body.mobile .remote-banner{white-space:normal;flex-wrap:wrap;gap:8px;font-size:16px;width:92vw}
+body.mobile .hscroll{gap:12px}
+body.mobile .scroll{padding-bottom:96px}

@@ -59,7 +59,22 @@ function run(){
   }catch(e){}
 }
 
-App.bus.on("app:ready", function(){ setTimeout(run, 500); });
+/* A3/A4/A6/#100: versión cargada por el cargador, espacio, errores guardados y visitas (todo local) */
+App.diag = {
+  rows: function(){
+    var v = App.visits ? App.visits() : {}, ids = Object.keys(v).sort(function(a, b){ return v[b] - v[a]; }).slice(0, 5);
+    return [
+      ["boot", App.bootVersion ? (App.bootVersion + (App.bootInfo && App.bootInfo.source ? " (" + App.bootInfo.source + ")" : "")) : "-"],
+      ["storage", (App.store.usage() / 1048576).toFixed(2) + " MB"],
+      ["errors", String(App.lastErrors ? App.lastErrors().length : 0)],
+      ["visits", ids.map(function(i){ return i + "=" + v[i]; }).join(" ") || "-"]
+    ];
+  }
+};
+App.bus.on("app:ready", function(){
+  setTimeout(run, 500);
+  setTimeout(function(){ console.info("[diag] " + App.diag.rows().map(function(r){ return r[0] + "=" + r[1]; }).join(" · ")); }, 1500);
+});
 })();
 
 /* ================= App.caps — ¿puede la TV reproducir este archivo? =================

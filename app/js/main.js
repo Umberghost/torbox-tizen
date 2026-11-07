@@ -53,6 +53,7 @@ function activate(id, params){
     }
   }
   App.setHintDefault(def.hint || DEFAULT_HINT);
+  App.bus.emit("screen:show", { id: id, params: params || {} });
 }
 
 App.go = function(id, params){
@@ -100,6 +101,9 @@ function syncNav(){
     var t = tabs[j];
     t.classList.toggle("active", t.dataset.id === sectionId);
     t.classList.toggle("focused", zone === "header" && j === navIndex);
+    if((t.classList.contains("active") && zone !== "header") || (zone === "header" && j === navIndex)){
+      if(App.ui.scrollIntoView) App.ui.scrollIntoView(t);
+    }
   }
   document.body.classList.toggle("zone-header", zone === "header");
 }
@@ -154,8 +158,78 @@ function headerKey(k){
   }
 }
 
-/* ================= Teclado ================= */
+/* ================= Menú contextual (A1) =================
+ * Se abre con OK mantenido (>= 600 ms), la tecla TOOLS (10135) o Menu (10133 / tecla de contexto en PC).
+ * Cada pantalla puede definir actions() → [{label, run}]; si no, menú global.
+ */
+var HOLD_MS = 600;
+function globalActions(){
+  var a = [];
+  if(screens.search) a.push({ label: App.t("main.act.search"), run: function(){ App.section("search"); } });
+  if(screens.settings) a.push({ label: App.t("main.act.settings"), run: function(){ App.section("settings"); } });
+  a.push({ label: App.t("main.act.reload"), run: function(){ location.reload(); } });
+  return a;
+}
+App.openMenu = function(){
+  if(App.ui.isModalOpen() || (App.ui.keyboard && App.ui.keyboard.isOpen && App.ui.keyboard.isOpen())) return;
+  var def = current && screens[current.id], acts = null;
+  if(zone === "content" && def && typeof def.actions === "function"){
+    try{ acts = def.actions(); }catch(err){ console.error("[actions " + current.id + "]", err); }
+  }
+  if(!Array.isArray(acts) || !acts.length) acts = globalActions();
+  acts = acts.filter(function(a){ return a && a.label; });
+  App.ui.menu(App.t("main.options"), acts.map(function(a, i){ return { label: a.label, value: i, selected: !!a.selected }; })).then(function(i){
+    if(i === null || i === undefined || !acts[i] || typeof acts[i].run !== "function") return;
+    try{
+      var r = acts[i].run();
+      if(r && r.catch) r.catch(function(err){ console.error("[action]", err); });
+    }catch(err){ console.error("[action]", err); }
+  });
+};
+
+/* OK mantenido: el OK normal se retrasa hasta soltar la tecla; solo para teclas reales (isTrusted) en la
+ * zona de contenido, sin modal/teclado/reproductor/input. */
+var okHold = null;   // {t, ev, fired}
+function canHoldOK(){
+  if(App.ui.keyboard && App.ui.keyboard.isOpen && App.ui.keyboard.isOpen()) return false;
+  if(App.ui.isModalOpen()) return false;
+  if(App.player && App.player.isActive && App.player.isActive()) return false;
+  if(zone !== "content") return false;
+  var ae = document.activeElement;
+  if(ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return false;
+  return !(current && (current.id === "setup" || current.id === "profiles"));
+}
+function fireHold(){
+  okHold.fired = true;
+  App.openMenu();
+}
 function onKeyDown(e){
+  if(e.keyCode === K.OK && e.isTrusted === true){
+    if(okHold && Date.now() - okHold.t > 4000) okHold = null;   // keyup perdido
+    if(okHold){                                   // tecla mantenida: repetición de keydown
+      e.preventDefault(); e.stopPropagation();
+      if(!okHold.fired && Date.now() - okHold.t >= HOLD_MS) fireHold();
+      return;
+    }
+    if(canHoldOK()){
+      okHold = { t: Date.now(), ev: e, fired: false };
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+  }
+  dispatchKey(e);
+}
+function onKeyUp(e){
+  if(e.keyCode !== K.OK || !okHold) return;
+  var h = okHold; okHold = null;
+  e.preventDefault(); e.stopPropagation();
+  if(h.fired) return;
+  if(Date.now() - h.t >= HOLD_MS){ okHold = h; fireHold(); okHold = null; return; }   // keyup tardío
+  dispatchKey(h.ev);
+}
+
+/* ================= Teclado ================= */
+function dispatchKey(e){
   var k = e.keyCode;
 
   // 1) Teclado en pantalla
@@ -176,6 +250,8 @@ function onKeyDown(e){
   if(App.watch && App.watch.onKey){
     try{ if(App.watch.onKey(k, e) === true){ e.preventDefault(); return; } }catch(err){ console.error(err); }
   }
+  // 3c) Menú contextual: TOOLS / Menu
+  if(k === K.TOOLS || k === K.MENU || k === K.CONTEXT){ e.preventDefault(); App.openMenu(); return; }
   // 4) Input nativo con foco: dejar escribir, pero no tragarse flechas verticales
   var ae = document.activeElement;
   var typing = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA");
@@ -265,6 +341,70 @@ function firstSection(){
   return screens.library ? "library" : (list[0] ? list[0].id : "setup");
 }
 
+/* ================= Selector de perfil al arrancar (TODO 6) ================= */
+var pick = { el: null, grid: null, list: [] };
+App.screens.register({
+  id: "profiles", label: "Profiles", nav: false,
+  get hint(){ return App.t("profile.pickHint"); },
+  mount: function(el){ pick.el = el; },
+  show: function(){
+    pick.list = App.profile.list();
+    pick.el.innerHTML = '<div class="center"><div class="box"><h2>' + App.esc(App.t("profile.pickTitle")) + '</h2>' +
+      pick.list.map(function(p, i){
+        return '<div class="row focusable" data-i="' + i + '"><div class="title">' + App.esc(p.name) + '</div>' +
+          (p.hasPin ? '<span class="badge">PIN</span>' : '') + '</div>';
+      }).join("") + '</div></div>';
+    var cur = App.profile.current(), idx = 0;
+    pick.list.forEach(function(p, i){ if(p.id === cur) idx = i; });
+    pick.grid = new App.ui.FocusGrid(pick.el, { onSelect: function(i){ choose(pick.list[i]); }, onEdge: function(){ return true; } });
+    pick.grid.focus(idx, true);
+  },
+  focus: function(){ if(pick.grid) pick.grid.focus(pick.grid.index, true); },
+  onKey: function(k){
+    if(App.isBack(k)) return true;
+    return pick.grid ? pick.grid.handleKey(k) : false;
+  }
+});
+function choose(p, pin){
+  var r = App.profile.choose(p.id, pin);
+  if(r === "pin"){
+    if(pin !== undefined) App.ui.toast(App.t("profile.wrongPin"));
+    App.ui.keyboard.open({ title: App.t("profile.enterPin", {name: p.name}), value: "", secret: true,
+      onDone: function(v){ choose(p, String(v || "").trim()); } });
+    return;
+  }
+  if(r === "same") startApp();
+}
+function startApp(){
+  if(App.torbox.hasToken()) App.section(firstSection());
+  else App.section("setup");
+}
+
+/* ================= Modo móvil (TODO 13) =================
+ * En el móvil (Worker / navegador) el viewport pasa a device-width y body.mobile activa el CSS compacto.
+ * En la TV (Tizen) o en pantallas anchas todo queda como estaba (viewport 1920).
+ */
+function isPhoneDevice(){
+  if(App.isTizen()) return false;
+  var sw = Math.min(window.screen ? screen.width : 9999, window.screen ? screen.height : 9999);
+  return sw < 700 || /Android.*Mobile|iPhone|iPod|Mobile Safari/i.test(navigator.userAgent);
+}
+function applyMobile(){
+  var narrow = window.innerWidth < 1000 || window.innerHeight > window.innerWidth;
+  document.body.classList.toggle("mobile", narrow);
+  document.body.classList.toggle("portrait", window.innerHeight > window.innerWidth);
+}
+function initMobile(){
+  if(isPhoneDevice()){
+    var m = document.querySelector('meta[name="viewport"]');
+    if(!m){ m = document.createElement("meta"); m.name = "viewport"; document.head.appendChild(m); }
+    m.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+  }
+  applyMobile();
+  window.addEventListener("resize", App.debounce(applyMobile, 150));
+  window.addEventListener("orientationchange", function(){ setTimeout(applyMobile, 200); });
+}
+
 /* ================= Arranque ================= */
 function boot(){
   DEFAULT_HINT = App.t("main.hint");
@@ -275,13 +415,15 @@ function boot(){
   booted = true;
   renderNav();
   document.addEventListener("keydown", onKeyDown, true);
+  document.addEventListener("keyup", onKeyUp, true);
+  initMobile();
   // Clic de ratón (útil al probar en PC): seleccionar pestaña
   navEl.addEventListener("click", function(ev){
     var t = ev.target.closest ? ev.target.closest(".tab") : null;
     if(t) App.section(t.dataset.id);
   });
-  if(App.torbox.hasToken()) App.section(firstSection());
-  else App.section("setup");
+  if(App.profile.needsSelect()) App.section("profiles");
+  else startApp();
   /* Botón Atrás flotante fuera de la TV (móvil / PC con ratón) */
   if(!App.isTizen()){
     var bb = document.createElement("div");
@@ -294,6 +436,8 @@ function boot(){
     document.body.appendChild(bb);
   }
   App.bus.emit("app:ready");
+  /* Avisa al cargador (tizen-app/index.html): arranque correcto → no hacer rollback */
+  try{ if(typeof window.__tbBooted === "function") window.__tbBooted(App.version); }catch(e){}
 }
 
 if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

@@ -42,14 +42,14 @@ function render(keepIndex){
   else S.grid.focus(S.grid.index, true);
 }
 
-function resume(e){
+function resume(e, fromStart){
   if(!e || S.busy) return;
   var m = e.meta || {};
   // Reproducido desde Buscar (add-on de Stremio): volver a pedir la mejor fuente
   if(m.source === "stremio" && m.imdbId && App.search && App.search.playTitle){
     App.ui.toast(App.t("continue.preparing"));
     Promise.resolve(App.search.playTitle({ type: m.type, id: m.imdbId, season: m.season, episode: m.episode,
-                                           name: m.title || e.title, poster: e.poster }))
+                                           name: m.title || e.title, poster: e.poster, startAt: fromStart ? 0 : undefined }))
       .catch(function(err){ App.hint(App.t("continue.cantResume", { msg: err.message })); });
     return;
   }
@@ -63,7 +63,7 @@ function resume(e){
     S.busy = false;
     App.player.play({
       title: e.title, subtitle: e.subtitle, url: url, key: e.key,
-      poster: e.poster, meta: m,
+      poster: e.poster, meta: m, startAt: fromStart ? 0 : undefined,
       subtitles: m.subtitles || undefined,
       next: (App.library && App.library.nextFor) ? function(){ return App.library.nextFor(e.key, m); } : undefined
     });
@@ -82,6 +82,18 @@ function removeFocused(){
   });
 }
 
+/* Acciones del menu contextual global (mantener OK): sobre la tarjeta enfocada */
+function actions(){
+  var e = S.grid ? S.entries[S.grid.index] : null;
+  if(!e) return [];
+  return [
+    { label: App.t("continue.actResume"), run: function(){ resume(e); } },
+    { label: App.t("continue.actStart"), run: function(){ resume(e, true); } },
+    { label: App.t("continue.actWatched"), run: function(){ App.history.markWatched(e.key); App.ui.toast(App.t("continue.removed")); } },
+    { label: App.t("continue.actRemove"), run: removeFocused }
+  ];
+}
+
 App.bus.on("history:change", function(){
   if(S.visible && !(App.player && App.player.isActive())) render(true);
   else S.dirty = true;
@@ -96,6 +108,7 @@ App.screens.register({
   hide: function(){ S.visible = false; },
   focus: function(){ if(S.grid){ S.grid.refresh(false); S.grid.focus(S.grid.index, true); } },
   blur: function(){ if(S.grid) S.grid.blur(); },
+  actions: actions,
   onKey: function(k){
     if(k === K.RED){ removeFocused(); return true; }
     if(S.grid) return S.grid.handleKey(k);

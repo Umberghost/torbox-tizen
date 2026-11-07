@@ -11,6 +11,7 @@ var esc = App.esc;
  * ==================================================================== */
 var state = {
   filter: null,          // all | torrents | usenet | webdl
+  kindFilter: "all",     // all | series | movies | unfinished | watched
   items: [],
   model: null,           // { cards:[], byId:{} }
   loadedAt: 0
@@ -167,20 +168,155 @@ var H = {
   list: function(){ return App.history && App.history.list ? (App.history.list({ unfinished: true }) || []) : []; }
 };
 
+function setWatched(key, info, on){
+  if(!App.history) return;
+  if(!on){ App.history.remove(key); return; }
+  if(!App.history.get(key)){
+    App.history.save({ key: key, pos: 0, dur: 0, updated: Date.now(), title: info.title, subtitle: info.subtitle || "",
+      poster: info.poster || "", watched: true, meta: info.meta || {} });
+  }
+  App.history.markWatched(key);
+}
 function toggleWatched(key, info){
   if(!App.history){ App.hint(App.t("library.noHistory")); return; }
-  if(H.watched(key)){
-    App.history.remove(key);
-    App.ui.toast(App.t("library.markedUnwatched"));
-  } else {
-    if(!App.history.get(key)){
-      App.history.save({ key: key, pos: 0, dur: 0, updated: Date.now(), title: info.title, subtitle: info.subtitle || "",
-        poster: info.poster || "", watched: true, meta: info.meta || {} });
-    }
-    App.history.markWatched(key);
-    App.ui.toast(App.t("library.markedWatched"));
-  }
+  var on = !H.watched(key);
+  setWatched(key, info, on);
+  App.ui.toast(App.t(on ? "library.markedWatched" : "library.markedUnwatched"));
 }
+function epWatchInfo(show, ep){
+  return { title: show.meta ? show.meta.title : show.title, subtitle: ep.season ? epLabel(ep) : ep.fileName,
+    poster: show.meta ? show.meta.poster : "", meta: { source: ep.source, itemId: ep.itemId, fileId: ep.fileId, showId: show.id,
+    season: ep.season, episode: ep.episode, type: "tv" } };
+}
+/* Marcar una lista de episodios (temporada o serie completa) */
+function markEpisodes(show, eps, on){
+  if(!App.history){ App.hint(App.t("library.noHistory")); return; }
+  eps.forEach(function(ep){ setWatched(ep.key, epWatchInfo(show, ep), on); });
+  App.ui.toast(App.t(on ? "library.markedWatched" : "library.markedUnwatched"));
+}
+
+/* ====================================================================
+ * Caducidad (TorBox borra lo que lleva ~30 días sin uso) y refresco
+ * ==================================================================== */
+var DAY = 86400000, EXPIRE_DAYS = 30, WARN_DAYS = 5, REFRESHED_KEY = "libRefreshed";
+var refreshed = App.store.get(REFRESHED_KEY, {}) || {};
+var useMap = null;
+function tsOf(v){ var n = Date.parse(v); return isNaN(n) ? 0 : n; }
+function buildUseMap(){
+  useMap = {};
+  if(!App.history || !App.history.list) return;
+  App.history.list().forEach(function(e){
+    var m = e.meta;
+    if(m && m.source && m.itemId !== undefined){
+      var k = m.source + ":" + m.itemId;
+      if((e.updated || 0) > (useMap[k] || 0)) useMap[k] = e.updated;
+    }
+  });
+}
+function lastUse(item){
+  if(!useMap) buildUseMap();
+  var k = item._source + ":" + item.id;
+  return Math.max(tsOf(item.updated_at), tsOf(item.created_at), useMap[k] || 0, refreshed[k] || 0);
+}
+function daysLeft(item){
+  var lu = lastUse(item);
+  if(!lu) return null;
+  return EXPIRE_DAYS - Math.floor((Date.now() - lu) / DAY);
+}
+function cardItems(card){ return card.kind === "show" ? card.items : [card.item]; }
+function cardDaysLeft(card){
+  var min = null;
+  cardItems(card).forEach(function(it){
+    var d = daysLeft(it);
+    if(d !== null && (min === null || d < min)) min = d;
+  });
+  return min;
+}
+function expText(d){ return d <= 0 ? App.t("library.expiresToday") : App.t("library.expires", { n: d }); }
+function expiringItems(){
+  return (state.items || []).filter(function(it){ var d = daysLeft(it); return d !== null && d <= WARN_DAYS; });
+}
+
+/* Pide un enlace de un archivo del item (uso real en TorBox). Si falla y es torrent en caché, lo vuelve a añadir por hash. */
+function refreshItem(item){
+  var files = item.files || [];
+  var f = files.filter(App.isVideo)[0] || files[0];
+  var p = f ? App.torbox.link(item._source, item.id, f.id) : Promise.reject(new Error(App.t("library.noFiles")));
+  return p.catch(function(e){
+    if(item._source === "torrents" && item.hash){
+      return App.torbox.checkCached([item.hash]).then(function(c){
+        if(!c[String(item.hash).toLowerCase()]) throw e;
+        return App.torbox.addMagnet("magnet:?xt=urn:btih:" + item.hash, item.name);
+      });
+    }
+    throw e;
+  }).then(function(){
+    refreshed[item._source + ":" + item.id] = Date.now();
+    App.store.set(REFRESHED_KEY, refreshed);
+    useMap = null;
+  });
+}
+function refreshItems(items, rerender){
+  if(!items.length) return Promise.resolve();
+  App.ui.toast(App.t("library.refreshing"), 2000);
+  var ok = 0, bad = 0;
+  return items.reduce(function(chain, it){
+    return chain.then(function(){ return refreshItem(it).then(function(){ ok++; }, function(e){ bad++; console.warn("[library] refresh", it.name, e && e.message); }); });
+  }, Promise.resolve()).then(function(){
+    App.ui.toast(bad ? App.t("library.refreshPartial", { ok: ok, bad: bad }) : App.t("library.refreshed", { n: ok }), 4000);
+    if(rerender) rerender();
+  });
+}
+function refreshExpiring(rerender){
+  var list = expiringItems();
+  if(!list.length){ App.ui.toast(App.t("library.noneExpiring")); return; }
+  App.ui.confirm(App.t("library.refreshAllTitle"), App.t("library.refreshAllText", { n: list.length }), App.t("library.refresh"), App.t("ui.cancel"))
+    .then(function(y){ if(y) refreshItems(list, rerender); });
+}
+function removeItems(items, name, after){
+  App.ui.confirm(App.t("library.removeConfirm"), name, App.t("library.remove"), App.t("ui.cancel")).then(function(y){
+    if(!y) return;
+    Promise.all(items.map(function(it){ return App.torbox.control(it._source, it.id, "delete").then(function(){ return true; }, function(){ return false; }); }))
+      .then(function(r){
+        App.torbox.invalidate();
+        App.ui.toast(App.t("library.removed"));
+        if(after) after();
+        lib.load(true);
+      });
+  });
+}
+
+/* Archivo principal de una tarjeta de película (compatible primero, luego el mayor) */
+function pickMain(card){
+  return card.videos.slice().sort(function(a, b){
+    var oa = capsOk(fileName(a)) ? 1 : 0, ob = capsOk(fileName(b)) ? 1 : 0;
+    if(oa !== ob) return ob - oa;
+    return (b.size || 0) - (a.size || 0);
+  })[0];
+}
+
+/* Filtros por tipo/estado */
+var KIND_CHIPS = [["all", "library.fAll"], ["series", "library.fSeries"], ["movies", "library.fMovies"],
+                  ["unfinished", "library.fUnfinished"], ["watched", "library.fWatched"]];
+function matchKind(card){
+  var f = state.kindFilter;
+  if(f === "all") return true;
+  if(f === "series") return card.kind === "show";
+  if(f === "movies") return card.kind === "movie";
+  var prog, watched;
+  if(card.kind === "show"){
+    prog = showProgress(card); watched = prog >= 1;
+    var partial = (card.episodes || []).some(function(e){ var h = H.get(e.key); return h && !h.watched && h.pos > 30; });
+    if(f === "watched") return watched;
+    return !watched && (prog > 0 || partial);
+  }
+  var key = card.videos.length ? keyOf(card.item._source, card.item.id, card.videos[0].id) : "";
+  watched = key ? H.watched(key) : false;
+  prog = key ? H.progress(key) : 0;
+  if(f === "watched") return watched;
+  return !watched && prog > 0.01;
+}
+function visibleCards(){ return state.model ? state.model.cards.filter(matchKind) : []; }
 
 function showProgress(show){
   if(!show.episodes || !show.episodes.length) return 0;
@@ -401,9 +537,11 @@ function cardHtml(card){
   if(card.kind === "show"){ prog = showProgress(card); watched = prog >= 1; }
   else if(card.videos.length){ key = keyOf(card.item._source, card.item.id, card.videos[0].id); prog = H.progress(key); watched = H.watched(key); }
   var m = card.meta;
+  var dl = cardDaysLeft(card);
+  var expire = (dl !== null && dl <= WARN_DAYS) ? '<span class="lib-expire">' + esc(expText(dl)) + '</span>' : "";
   return '<div class="lib-card focusable" data-kind="card" data-id="' + esc(card.id) + '"' + (key ? ' data-key="' + esc(key) + '"' : '') + '>' +
     posterHtml(m ? m.title : card.title, m ? m.poster : "",
-      badge + '<span class="lib-rating"' + (m && m.rating ? '' : ' hidden') + '>★ ' + (m && m.rating ? m.rating.toFixed(1) : '') + '</span>' +
+      badge + expire + '<span class="lib-rating"' + (m && m.rating ? '' : ' hidden') + '>★ ' + (m && m.rating ? m.rating.toFixed(1) : '') + '</span>' +
       '<span class="lib-marks">' + marksHtml(prog, watched) + '</span>') +
     '<div class="lib-card-title">' + esc(m ? m.title : card.title) + '</div>' +
     '<div class="lib-card-sub num">' + esc(cardSub(card)) + '</div>' +
@@ -497,7 +635,7 @@ var lib = {
     this.el = el;
     el.classList.add("lib-screen");
     var self = this;
-    App.bus.on("history:change", function(){ if(App.current() === "library") self.refreshMarks(); });
+    App.bus.on("history:change", function(){ useMap = null; if(App.current() === "library") self.refreshMarks(); });
     App.bus.on("settings:change", function(d){
       if(d && d.key === "tmdbKey"){ state.model && state.model.cards.forEach(function(c){ c.meta = null; c._metaP = null; }); }
       if(d && (d.key === "torboxToken")){ state.items = []; state.model = null; state.loadedAt = 0; }
@@ -542,7 +680,11 @@ var lib = {
     var html = '<div class="scroll lib-scroll">' +
       '<div class="chips lib-chips">' + chips.map(function(c){
         return '<div class="chip focusable' + (state.filter === c[0] ? ' active' : '') + '" data-kind="chip" data-src="' + c[0] + '">' + c[1] + '</div>';
-      }).join("") + '</div>';
+      }).join("") + '</div>' +
+      '<div class="chips lib-chips lib-kinds">' + KIND_CHIPS.map(function(c){
+        return '<div class="chip focusable' + (state.kindFilter === c[0] ? ' active' : '') + '" data-kind="chip" data-f="' + c[0] + '">' + esc(App.t(c[1])) + '</div>';
+      }).join("") + (expiringItems().length ? '<div class="chip lib-expchip focusable" data-kind="refreshAll">⟳ ' +
+        esc(App.t("library.refreshAllChip", { n: expiringItems().length })) + '</div>' : '') + '</div>';
 
     var cont = H.list().filter(function(h){ return h && h.meta && h.meta.source; }).slice(0, 10);
     if(cont.length){
@@ -557,13 +699,16 @@ var lib = {
     }
     this._cont = cont;
 
-    if(!model.cards.length){
+    var cards = visibleCards();
+    if(model.cards.length && !cards.length){
+      html += '<div class="lib-empty"><h2>' + esc(App.t("library.noMatch")) + '</h2></div>';
+    } else if(!model.cards.length){
       html += '<div class="lib-empty"><h2>' + esc(App.t("library.emptyTitle")) + '</h2><p>' +
         App.t("library.emptyText", { where: state.filter !== "all" ?
           App.t("library.emptyWhere", { src: esc(App.torbox.SOURCE_LABEL[state.filter]) }) : "" }) + '</p></div>';
     } else {
-      html += '<div class="section-title">' + esc(App.t("library.yourLibrary")) + ' <span class="muted num">' + esc(App.t("library.titles", { n: model.cards.length })) + '</span></div>' +
-        '<div class="lib-grid">' + model.cards.map(cardHtml).join("") + '</div>';
+      html += '<div class="section-title">' + esc(App.t("library.yourLibrary")) + ' <span class="muted num">' + esc(App.t("library.titles", { n: cards.length })) + '</span></div>' +
+        '<div class="lib-grid">' + cards.map(cardHtml).join("") + '</div>';
     }
     html += '</div>';
 
@@ -581,11 +726,11 @@ var lib = {
     // metadatos perezosos (en orden de aparición; la cola limita la concurrencia)
     if(App.meta && App.meta.hasKey()){
       var gen = this._gen;
-      model.cards.forEach(function(card){
+      cards.forEach(function(card){
         if(card.meta){ return; }
         lookupMeta(card).then(function(){ if(gen === self._gen) applyMetaToCard(self.cardEls[card.id], card); });
       });
-    } else if(!tmdbToastShown && model.cards.length){
+    } else if(!tmdbToastShown && cards.length){
       tmdbToastShown = true;
       App.ui.toast(App.t("library.tmdbToast"), 4500);
     }
@@ -619,6 +764,13 @@ var lib = {
 
   select: function(node){
     var kind = node.dataset.kind;
+    if(kind === "refreshAll"){ var me = this; refreshExpiring(function(){ me.render(true); }); return; }
+    if(kind === "chip" && node.dataset.f){
+      if(state.kindFilter === node.dataset.f) return;
+      state.kindFilter = node.dataset.f;
+      this.render(true);
+      return;
+    }
     if(kind === "chip"){
       if(state.filter === node.dataset.src) return;
       state.filter = node.dataset.src;
@@ -638,6 +790,43 @@ var lib = {
       else if(card.videos.length) App.go("movie", { id: card.id });
       else App.go("files", { id: card.id });
     }
+  },
+
+  actions: function(){
+    var self = this, out = [], node = this.grid && this.grid.current();
+    var card = node && node.dataset.kind === "card" ? state.model.byId[node.dataset.id] : null;
+    if(card){
+      out.push({ label: App.t("library.act.open"), run: function(){ self.select(node); } });
+      if(card.kind === "show"){
+        var nu = nextUp(card);
+        if(nu) out.push({ label: App.t("library.act.playNext"), run: function(){ lookupMeta(card).then(function(){ playEpisode(card, nu.ep, nu.resume || 0); }); } });
+        var all = showProgress(card) >= 1;
+        out.push({ label: App.t(all ? "library.act.unwatchAll" : "library.act.watchAll"), run: function(){ markEpisodes(card, card.episodes, !all); self.render(true); } });
+      } else if(card.videos.length){
+        var main = pickMain(card), key = keyOf(card.item._source, card.item.id, main.id), w = H.watched(key);
+        out.push({ label: App.t("library.act.play"), run: function(){ playFile(card, card.item._source, card.item, main, undefined); } });
+        out.push({ label: App.t(w ? "library.act.unwatch" : "library.act.watch"), run: function(){
+          toggleWatched(key, { title: card.meta ? card.meta.title : card.title, subtitle: card.year ? String(card.year) : "", poster: card.meta ? card.meta.poster : "",
+            meta: { source: card.item._source, itemId: card.item.id, fileId: main.id, cardId: card.id, type: "movie" } });
+          self.render(true); } });
+      }
+      out.push({ label: App.t("library.act.refresh"), run: function(){ refreshItems(cardItems(card), function(){ self.render(true); }); } });
+      out.push({ label: App.t("library.act.remove"), run: function(){ removeItems(cardItems(card), card.meta ? card.meta.title : card.title); } });
+    } else if(node && node.dataset.kind === "cont"){
+      var h = this._cont[+node.dataset.i];
+      if(h){
+        out.push({ label: App.t("library.act.play"), run: function(){ playHistory(h); } });
+        out.push({ label: App.t("library.act.dropContinue"), run: function(){ App.history.remove(h.key); App.ui.toast(App.t("library.droppedContinue")); } });
+      }
+    }
+    if(expiringItems().length) out.push({ label: App.t("library.act.refreshAll", { n: expiringItems().length }), run: function(){ refreshExpiring(function(){ self.render(true); }); } });
+    out.push({ label: App.t("library.act.filter"), run: function(){
+      App.ui.menu(App.t("library.act.filter"), KIND_CHIPS.map(function(c){ return { label: App.t(c[1]), value: c[0], selected: state.kindFilter === c[0] }; })).then(function(v){
+        if(v && v !== state.kindFilter){ state.kindFilter = v; self.render(false); }
+      });
+    } });
+    out.push({ label: App.t("library.act.reload"), run: function(){ self.load(true); App.hint(App.t("library.reloading")); } });
+    return out;
   },
 
   onKey: function(k){
@@ -662,7 +851,7 @@ var showScreen = {
   mount: function(el){
     this.el = el; el.classList.add("lib-screen");
     var self = this;
-    App.bus.on("history:change", function(){ if(App.current() === "show") self.refreshMarks(); });
+    App.bus.on("history:change", function(){ useMap = null; if(App.current() === "show") self.refreshMarks(); });
   },
 
   show: function(params){
@@ -693,9 +882,11 @@ var showScreen = {
     var playLabel = !nu ? "" : (nu.resume ? App.t("library.continueEp", { ep: epLabel(nu.ep), t: App.fmtTime(nu.resume) }) : App.t("library.playEp", { ep: epLabel(nu.ep) }));
     var nSeasons = show.seasonNums.length;
     var extraLine = (nSeasons ? esc(App.t("library.inLibrary", { n: nSeasons })) : "") +
-      (m && m.seasons && m.seasons > nSeasons ? ' <span class="muted">' + esc(App.t("library.ofTotal", { n: m.seasons })) + '</span>' : "");
+      (m && m.seasons && m.seasons > nSeasons ? ' <span class="muted">' + esc(App.t("library.ofTotal", { n: m.seasons })) + '</span>' : "") +
+      expLine(show);
     var actions = (nu ? '<div class="btn primary focusable" data-kind="play">▶ ' + esc(playLabel) + '</div>' : '') +
-      (nu && nu.resume ? '<div class="btn focusable" data-kind="restart">' + esc(App.t("library.fromStart")) + '</div>' : '');
+      (nu && nu.resume ? '<div class="btn focusable" data-kind="restart">' + esc(App.t("library.fromStart")) + '</div>' : '') +
+      refreshBtn(show);
 
     var chips = show.seasonNums.map(function(s){
       return '<div class="chip focusable' + (s === self.season ? ' active' : '') + '" data-kind="season" data-s="' + s + '">' + esc(App.t("library.season", { n: s })) + '</div>';
@@ -801,9 +992,39 @@ var showScreen = {
       var x = show.extras[+node.dataset.i];
       var f = findFile(x.item, x.fileId);
       if(f) playFile({ title: show.title, meta: show.meta, videos: [1, 2] }, x.source, x.item, f, undefined);
+    } else if(kind === "refresh"){
+      var me = this; refreshItems(cardItems(show), function(){ me.render(); me.grid.focus(0, true); });
     } else if(kind === "rec"){
       openRec(node.dataset.title);
     }
+  },
+
+  actions: function(){
+    var self = this, show = this.showObj, out = [], ep = this.focusedEp(), nu = nextUp(show);
+    if(nu){
+      out.push({ label: App.t("library.act.playNext"), run: function(){ playEpisode(show, nu.ep, nu.resume || 0); } });
+      if(nu.resume) out.push({ label: App.t("library.fromStart"), run: function(){ playEpisode(show, nu.ep, 0); } });
+    }
+    if(ep){
+      out.push({ label: App.t("library.act.playThis"), run: function(){
+        var f = findFile(ep.item, ep.fileId);
+        if(ep.season) playEpisode(show, ep, undefined);
+        else if(f) playFile({ title: show.title, meta: show.meta, videos: [1, 2] }, ep.source, ep.item, f, undefined);
+      } });
+      var w = H.watched(ep.key);
+      out.push({ label: App.t(w ? "library.act.unwatch" : "library.act.watch"), run: function(){
+        toggleWatched(ep.key, epWatchInfo(show, ep)); self.refreshMarks(); } });
+    }
+    if(this.season !== "x" && show.seasons[this.season]){
+      var eps = show.episodes.filter(function(e){ return e.season === self.season; });
+      var sw = eps.length && eps.every(function(e){ return H.watched(e.key); });
+      out.push({ label: App.t(sw ? "library.act.unwatchSeason" : "library.act.watchSeason", { n: this.season }), run: function(){ markEpisodes(show, eps, !sw); self.refreshMarks(); } });
+    }
+    var allW = showProgress(show) >= 1;
+    out.push({ label: App.t(allW ? "library.act.unwatchAll" : "library.act.watchAll"), run: function(){ markEpisodes(show, show.episodes, !allW); self.refreshMarks(); } });
+    out.push({ label: App.t("library.act.refresh"), run: function(){ refreshItems(cardItems(show), function(){ self.render(); self.grid.focus(0, true); }); } });
+    out.push({ label: App.t("library.act.remove"), run: function(){ removeItems(cardItems(show), show.meta ? show.meta.title : show.title, function(){ App.back(); }); } });
+    return out;
   },
 
   onKey: function(k){
@@ -827,6 +1048,15 @@ var showScreen = {
 };
 App.screens.register(showScreen);
 
+function expLine(card){
+  var d = cardDaysLeft(card);
+  return (d !== null && d <= WARN_DAYS) ? ' <span class="lib-exp-badge">' + esc(expText(d)) + '</span>' : "";
+}
+function refreshBtn(card){
+  var d = cardDaysLeft(card);
+  return (d !== null && d <= WARN_DAYS) ? '<div class="btn focusable" data-kind="refresh">⟳ ' + esc(App.t("library.refresh")) + '</div>' : "";
+}
+
 function epMarks(key){
   if(H.watched(key)) return '<span class="lib-ep-watched">' + esc(App.t("library.watched")) + '</span>';
   var p = H.progress(key);
@@ -844,7 +1074,7 @@ var movieScreen = {
   mount: function(el){
     this.el = el; el.classList.add("lib-screen");
     var self = this;
-    App.bus.on("history:change", function(){ if(App.current() === "movie" && self.card) self.render(true); });
+    App.bus.on("history:change", function(){ useMap = null; if(App.current() === "movie" && self.card) self.render(true); });
   },
 
   show: function(params){
@@ -881,9 +1111,10 @@ var movieScreen = {
       if(resume) actions += '<div class="btn focusable" data-kind="restart">' + esc(App.t("library.fromStart")) + '</div>';
       actions += '<div class="btn focusable" data-kind="watched">' + esc(H.watched(key) ? App.t("library.watched") : App.t("library.markWatched")) + '</div>';
     }
+    actions += refreshBtn(card);
     var extra = (card.quality ? '<span class="badge">' + esc(card.quality) + '</span>' : '') +
       (main ? ' ' + capsBadge(fileName(main)) : '') +
-      ' <span class="muted num">' + App.fmtSize(itemSize(card.item)) + ' · ' + esc(App.torbox.SOURCE_LABEL[src] || src) + '</span>';
+      ' <span class="muted num">' + App.fmtSize(itemSize(card.item)) + ' · ' + esc(App.torbox.SOURCE_LABEL[src] || src) + '</span>' + expLine(card);
 
     var files = '';
     if(card.videos.length > 1){
@@ -924,10 +1155,31 @@ var movieScreen = {
     if(kind === "play") playFile(card, src, card.item, this.main, this.resume || 0);
     else if(kind === "restart") playFile(card, src, card.item, this.main, 0);
     else if(kind === "watched"){ toggleWatched(this.mainKey, this.watchedInfo(this.mainKey, this.main.id)); this.render(true); }
+    else if(kind === "refresh"){ var me = this; refreshItems([card.item], function(){ me.render(true); }); }
     else if(kind === "file"){
       var f = findFile(card.item, node.dataset.f);
       if(f) playFile(card, src, card.item, f, undefined);
     } else if(kind === "rec") openRec(node.dataset.title);
+  },
+
+  actions: function(){
+    var self = this, card = this.card, src = card.item._source, out = [], node = this.grid && this.grid.current();
+    var file = node && node.dataset.kind === "file" ? findFile(card.item, node.dataset.f) : null;
+    if(file){
+      out.push({ label: App.t("library.act.playThis"), run: function(){ playFile(card, src, card.item, file, undefined); } });
+      var fk = node.dataset.key;
+      out.push({ label: App.t(H.watched(fk) ? "library.act.unwatch" : "library.act.watch"), run: function(){
+        toggleWatched(fk, self.watchedInfo(fk, file.id)); self.render(true); } });
+    }
+    if(this.main){
+      out.push({ label: App.t("library.act.play"), run: function(){ playFile(card, src, card.item, self.main, self.resume || 0); } });
+      if(this.resume) out.push({ label: App.t("library.fromStart"), run: function(){ playFile(card, src, card.item, self.main, 0); } });
+      if(!file) out.push({ label: App.t(H.watched(this.mainKey) ? "library.act.unwatch" : "library.act.watch"), run: function(){
+        toggleWatched(self.mainKey, self.watchedInfo(self.mainKey, self.main.id)); self.render(true); } });
+    }
+    out.push({ label: App.t("library.act.refresh"), run: function(){ refreshItems([card.item], function(){ self.render(true); }); } });
+    out.push({ label: App.t("library.act.remove"), run: function(){ removeItems([card.item], card.meta ? card.meta.title : card.title, function(){ App.back(); }); } });
+    return out;
   },
 
   onKey: function(k){
@@ -992,6 +1244,15 @@ var filesScreen = {
       }
     });
     this.grid.focus(prev, true);
+  },
+  actions: function(){
+    var self = this, out = [], node = this.grid && this.grid.current();
+    var f = node ? this.files[+node.dataset.i] : null;
+    if(f && App.isVideo(f)) out.push({ label: App.t("library.act.playThis"), run: function(){
+      playFile(self.card || { title: parseName(self.item.name).title, videos: self.files.filter(App.isVideo) }, self.src, self.item, f, undefined); } });
+    out.push({ label: App.t("library.act.refresh"), run: function(){ refreshItems([self.item]); } });
+    out.push({ label: App.t("library.act.remove"), run: function(){ removeItems([self.item], self.item.name || "", function(){ App.back(); }); } });
+    return out;
   },
   onKey: function(k){
     if(!this.grid) return false;

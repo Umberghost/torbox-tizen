@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>TorBox</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">Tor<b>Box</b></div>
+    <nav class="tabs" id="nav"></nav>
+    <div class="spacer"></div>
+    <div class="hint" id="hint"></div>
+  </header>
+  <main id="main"></main>
+</div>
+
+<!-- Reproductor (lo gestiona js/player.js) -->
+<div id="player"></div>
+
+<!-- AVPlay: solo existe dentro de Tizen; fuera falla en silencio y se usa <video> -->
+<script src="$WEBAPIS/webapis/webapis.js" onerror="void 0"></script>
+<script src="app.js"></script>
+</body>
+</html>
