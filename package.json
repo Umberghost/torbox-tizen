@@ -1,0 +1,18 @@
+{
+  "name": "torbox-tizen",
+  "version": "1.0.0",
+  "description": "Cliente de TorBox para Samsung Tizen vía TizenBrew: lista tu biblioteca y reproduce el contenido.",
+  "packageType": "app",
+  "appName": "TorBox",
+  "appPath": "app/index.html",
+  "keys": [
+    "MediaPlayPause",
+    "MediaPlay",
+    "MediaPause",
+    "MediaStop",
+    "MediaRewind",
+    "MediaFastForward"
+  ],
+  "author": "",
+  "license": "MIT"
+}

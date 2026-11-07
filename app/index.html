@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>TorBox</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --surface:#141b22;
+    --surface-2:#1b242d;
+    --text:#e8eef3;
+    --muted:#8b9aa8;
+    --accent:#17c964;
+    --accent-dim:rgba(23,201,100,.16);
+    --danger:#ff6b6b;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    font-size:26px;
+    line-height:1.4;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---- App shell ---- */
+  #app{height:100vh;display:flex;flex-direction:column}
+  header{
+    display:flex;align-items:center;gap:28px;
+    padding:28px 56px 20px;
+  }
+  .brand{font-size:40px;font-weight:700;letter-spacing:.3px}
+  .brand b{color:var(--accent)}
+  .tabs{display:flex;gap:10px;margin-left:12px}
+  .tab{
+    padding:8px 22px;border-radius:999px;color:var(--muted);
+    font-size:24px;border:1px solid transparent;transition:color .15s;
+  }
+  .tab.active{color:var(--text);border-color:var(--accent);background:var(--accent-dim)}
+  .spacer{flex:1}
+  .hint{color:var(--muted);font-size:20px}
+
+  main{flex:1;overflow:hidden;position:relative}
+  .scroll{height:100%;overflow-y:auto;padding:8px 56px 56px}
+  .scroll::-webkit-scrollbar{width:0}
+
+  /* ---- Rows ---- */
+  .row{
+    display:flex;align-items:center;gap:24px;
+    padding:20px 26px;margin:8px 0;border-radius:var(--radius);
+    background:var(--surface);
+    transition:transform .14s ease,background .14s ease,box-shadow .14s ease;
+  }
+  .row .title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .meta{color:var(--muted);font-size:21px;white-space:nowrap}
+  .row .badge{
+    font-size:18px;color:var(--accent);border:1px solid var(--accent);
+    padding:2px 12px;border-radius:999px;
+  }
+  .row.focused{
+    background:linear-gradient(90deg,var(--accent-dim),rgba(23,201,100,.03));
+    box-shadow:inset 5px 0 0 var(--accent),0 0 0 1px rgba(23,201,100,.35);
+    transform:translateX(8px);
+  }
+  .row.dim{opacity:.5}
+
+  /* ---- States ---- */
+  .center{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;text-align:center;padding:40px;
+  }
+  .center h2{font-size:34px;font-weight:600}
+  .center p{color:var(--muted);max-width:720px}
+  .center.err h2{color:var(--danger)}
+  .spinner{
+    width:52px;height:52px;border-radius:50%;
+    border:5px solid var(--surface-2);border-top-color:var(--accent);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---- Setup ---- */
+  #setup .box{width:820px;max-width:90vw;background:var(--surface);border-radius:16px;padding:48px}
+  #setup h2{margin-bottom:10px}
+  #setup input{
+    width:100%;margin:24px 0;padding:18px 22px;font-size:26px;
+    background:var(--bg);color:var(--text);border:1px solid var(--surface-2);
+    border-radius:var(--radius);outline:none;
+  }
+  #setup input:focus{border-color:var(--accent)}
+  .btn{
+    display:inline-block;padding:16px 36px;border-radius:var(--radius);
+    background:var(--surface-2);color:var(--text);font-size:24px;border:1px solid transparent;
+  }
+  .btn.focused{background:var(--accent);color:#06130c;font-weight:700}
+
+  /* ---- Player ---- */
+  #player{position:absolute;inset:0;background:#000;display:none;z-index:50}
+  #player.on{display:block}
+  #player video{width:100%;height:100%;background:#000}
+  .osd{
+    position:absolute;left:0;right:0;bottom:0;
+    padding:40px 56px;color:#fff;
+    background:linear-gradient(transparent,rgba(0,0,0,.85));
+    transition:opacity .25s;
+  }
+  .osd.hide{opacity:0}
+  .osd .name{font-size:30px;font-weight:600;margin-bottom:16px}
+  .bar{height:8px;background:rgba(255,255,255,.25);border-radius:4px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:var(--accent)}
+  .osd .time{margin-top:12px;color:#cfd8dd;font-size:22px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">Tor<b>Box</b></div>
+    <div class="tabs" id="tabs">
+      <div class="tab" data-src="torrents">Torrents</div>
+      <div class="tab" data-src="usenet">Usenet</div>
+      <div class="tab" data-src="webdl">Web</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="hint" id="hint">◄ ► cambiar fuente · ▲ ▼ moverse · OK reproducir · Atrás volver</div>
+  </header>
+  <main id="main"></main>
+</div>
+
+<div id="player">
+  <video id="video" preload="auto"></video>
+  <div class="osd" id="osd">
+    <div class="name" id="osdName"></div>
+    <div class="bar"><i id="osdFill"></i></div>
+    <div class="time num" id="osdTime">0:00 / 0:00</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ====================== Config ====================== */
+var API = "https://api.torbox.app/v1/api";
+var SOURCES = ["torrents", "usenet", "webdl"];
+var ID_FIELD = { torrents: "torrent_id", usenet: "usenet_id", webdl: "web_id" };
+
+/* ====================== State ======================= */
+var S = {
+  token: localStorage.getItem("torbox_token") || "",
+  view: "setup",        // setup | library | files | player
+  source: "torrents",
+  items: [],            // downloads for current source
+  rows: [],             // whatever list is on screen (items or files)
+  item: null,           // selected download (files view)
+  focus: 0,
+  setupFocus: 0         // 0 = input, 1 = button
+};
+
+var main = document.getElementById("main");
+var hint = document.getElementById("hint");
+
+/* ====================== Helpers ===================== */
+function fmtSize(b){
+  if(!b && b!==0) return "";
+  var u=["B","KB","MB","GB","TB"],i=0;b=Number(b);
+  while(b>=1024&&i<u.length-1){b/=1024;i++;}
+  return (b>=100||i===0?Math.round(b):b.toFixed(1))+" "+u[i];
+}
+function fmtTime(s){
+  s=Math.floor(s||0);var h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;
+  var mm=(h?String(m).padStart(2,"0"):m)+":"+String(x).padStart(2,"0");
+  return h?h+":"+mm:mm;
+}
+function isVideo(f){
+  var n=(f.short_name||f.name||"").toLowerCase();
+  if(f.mimetype&&/^video\//.test(f.mimetype))return true;
+  return /\.(mp4|mkv|webm|m4v|mov|avi|ts|m2ts|flv)$/.test(n);
+}
+function setTabs(){
+  var t=document.getElementById("tabs").children;
+  for(var i=0;i<t.length;i++)t[i].classList.toggle("active",t[i].dataset.src===S.source);
+}
+
+/* ====================== API ========================= */
+function api(path, opts){
+  opts=opts||{};
+  var headers=opts.headers||{};
+  headers["Authorization"]="Bearer "+S.token;
+  return fetch(API+path,{method:opts.method||"GET",headers:headers})
+    .then(function(r){
+      return r.json().then(function(j){
+        if(!r.ok||j.success===false){
+          throw new Error((j&&(j.detail||j.error))||("HTTP "+r.status));
+        }
+        return j;
+      });
+    });
+}
+
+function loadLibrary(){
+  showLoading("Cargando tu biblioteca…");
+  api("/"+S.source+"/mylist?bypass_cache=false")
+    .then(function(j){
+      var data=j.data||[];
+      if(!Array.isArray(data))data=[data];
+      // keep finished downloads that actually have files
+      S.items=data.filter(function(d){
+        return d&&d.files&&d.files.length&&(d.download_finished!==false);
+      });
+      S.rows=S.items;
+      S.focus=0;
+      renderLibrary();
+    })
+    .catch(function(e){ showError("No se pudo cargar la biblioteca", e.message); });
+}
+
+function requestLink(item, file){
+  showLoading("Preparando reproducción…");
+  var q="/"+S.source+"/requestdl?token="+encodeURIComponent(S.token)+
+        "&"+ID_FIELD[S.source]+"="+item.id+
+        "&file_id="+file.id+"&redirect=false";
+  // requestdl is authed via query token
+  fetch(API+q).then(function(r){return r.json();}).then(function(j){
+    if(j.success===false||!j.data)throw new Error(j.detail||"Sin enlace de descarga");
+    play(file.short_name||file.name, j.data);
+  }).catch(function(e){
+    // return to the list we came from
+    if(S.item)renderFiles(); else renderLibrary();
+    flashHint("Error: "+e.message);
+  });
+}
+
+/* ====================== Render ====================== */
+function clearMain(){ main.innerHTML=""; }
+
+function showLoading(msg){
+  clearMain();
+  main.innerHTML='<div class="center"><div class="spinner"></div><p>'+msg+'</p></div>';
+}
+function showError(title,msg){
+  clearMain();
+  main.innerHTML='<div class="center err"><h2>'+title+'</h2><p>'+(msg||"")+
+    '</p><p class="hint">Pulsa OK para reintentar · Atrás para cambiar token</p></div>';
+  S.view="error";
+}
+function showEmpty(){
+  clearMain();
+  main.innerHTML='<div class="center"><h2>Nada por aquí todavía</h2>'+
+    '<p>No hay descargas terminadas en <b>'+S.source+'</b>. '+
+    'Añade algo desde TorBox o cambia de fuente con ◄ ►.</p></div>';
+}
+
+function renderSetup(){
+  S.view="setup";
+  clearMain();
+  main.innerHTML=
+    '<div class="center"><div class="box" id="setup">'+
+      '<h2>Conecta tu cuenta</h2>'+
+      '<p>Pega tu API key de TorBox (Ajustes → API en torbox.app).</p>'+
+      '<input id="tokenInput" type="text" autocomplete="off" '+
+        'placeholder="API key" value="'+(S.token||"")+'">'+
+      '<div class="btn" id="saveBtn">Guardar y entrar</div>'+
+    '</div></div>';
+  var input=document.getElementById("tokenInput");
+  S.setupFocus=0;
+  input.focus();
+  updateSetupFocus();
+  input.addEventListener("keydown",function(ev){
+    if(ev.keyCode===13){ ev.preventDefault(); saveToken(); }
+  });
+}
+function updateSetupFocus(){
+  document.getElementById("saveBtn").classList.toggle("focused",S.setupFocus===1);
+  if(S.setupFocus===0)document.getElementById("tokenInput").focus();
+  else document.getElementById("tokenInput").blur();
+}
+function saveToken(){
+  var v=document.getElementById("tokenInput").value.trim();
+  if(!v){ flashHint("Introduce una API key"); return; }
+  S.token=v; localStorage.setItem("torbox_token",v);
+  S.view="library"; loadLibrary();
+}
+
+function renderLibrary(){
+  S.view="library"; setTabs();
+  if(!S.items.length){ showEmpty(); return; }
+  var html='<div class="scroll" id="scroll">';
+  S.items.forEach(function(d,i){
+    var files=d.files||[];
+    var badge=files.length>1?'<span class="badge num">'+files.length+' archivos</span>':'';
+    var size=fmtSize(d.size||files.reduce(function(a,f){return a+(f.size||0);},0));
+    html+='<div class="row" data-i="'+i+'">'+
+            '<div class="title">'+esc(d.name||"(sin nombre)")+'</div>'+
+            badge+'<div class="meta num">'+size+'</div></div>';
+  });
+  html+='</div>';
+  clearMain(); main.innerHTML=html;
+  S.rows=S.items; applyFocus();
+}
+
+function renderFiles(){
+  S.view="files";
+  var files=(S.item.files||[]).slice().sort(function(a,b){
+    return (a.name||"").localeCompare(b.name||"");
+  });
+  S.rows=files; S.focus=0;
+  var html='<div class="scroll" id="scroll">';
+  files.forEach(function(f,i){
+    var vid=isVideo(f);
+    html+='<div class="row '+(vid?"":"dim")+'" data-i="'+i+'">'+
+            '<div class="title">'+esc(f.short_name||f.name)+'</div>'+
+            (vid?'':'<span class="meta">no vídeo</span>')+
+            '<div class="meta num">'+fmtSize(f.size)+'</div></div>';
+  });
+  html+='</div>';
+  clearMain(); main.innerHTML=html; applyFocus();
+}
+
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}
+
+function applyFocus(){
+  var rows=main.querySelectorAll(".row");
+  rows.forEach(function(r,i){ r.classList.toggle("focused",i===S.focus); });
+  var el=rows[S.focus];
+  if(el)el.scrollIntoView({block:"center",behavior:"smooth"});
+}
+
+var hintTimer;
+function flashHint(msg){
+  var prev=hint.textContent; hint.textContent=msg;
+  clearTimeout(hintTimer);
+  hintTimer=setTimeout(function(){ hint.textContent=prev; },3000);
+}
+
+/* ====================== Player ====================== */
+var player=document.getElementById("player");
+var video=document.getElementById("video");
+var osd=document.getElementById("osd");
+var osdHideTimer;
+
+function play(name,url){
+  S.view="player";
+  document.getElementById("osdName").textContent=name;
+  video.src=url; player.classList.add("on");
+  var p=video.play();
+  if(p&&p.catch)p.catch(function(){});
+  showOsd();
+}
+function closePlayer(){
+  video.pause(); video.removeAttribute("src"); video.load();
+  player.classList.remove("on");
+  S.view=S.item?"files":"library";
+  applyFocus();
+}
+function showOsd(){
+  osd.classList.remove("hide");
+  clearTimeout(osdHideTimer);
+  osdHideTimer=setTimeout(function(){ osd.classList.add("hide"); },3500);
+}
+video.addEventListener("timeupdate",function(){
+  if(!video.duration)return;
+  document.getElementById("osdFill").style.width=(video.currentTime/video.duration*100)+"%";
+  document.getElementById("osdTime").textContent=fmtTime(video.currentTime)+" / "+fmtTime(video.duration);
+});
+video.addEventListener("ended",closePlayer);
+video.addEventListener("error",function(){
+  flashHint("No se pudo reproducir (formato no soportado por el navegador de la TV)");
+  closePlayer();
+});
+
+/* ====================== Input / D-pad =============== */
+// Register TV media keys if available
+try{
+  if(window.tizen&&tizen.tvinputdevice){
+    ["MediaPlayPause","MediaPlay","MediaPause","MediaStop","MediaRewind","MediaFastForward"]
+      .forEach(function(k){ try{tizen.tvinputdevice.registerKey(k);}catch(e){} });
+  }
+}catch(e){}
+
+var K={LEFT:37,UP:38,RIGHT:39,DOWN:40,OK:13,BACK:10009,BACK2:461,
+       PLAY:415,PAUSE:19,PLAYPAUSE:10252,STOP:413,FF:417,RW:412};
+
+document.addEventListener("keydown",function(e){
+  var k=e.keyCode;
+
+  if(S.view==="player"){
+    showOsd();
+    if(k===K.BACK||k===K.BACK2||k===K.STOP){ e.preventDefault(); closePlayer(); }
+    else if(k===K.OK||k===K.PLAYPAUSE){ video.paused?video.play():video.pause(); }
+    else if(k===K.PLAY){ video.play(); }
+    else if(k===K.PAUSE){ video.pause(); }
+    else if(k===K.RIGHT||k===K.FF){ video.currentTime=Math.min((video.duration||0),video.currentTime+15); }
+    else if(k===K.LEFT||k===K.RW){ video.currentTime=Math.max(0,video.currentTime-15); }
+    return;
+  }
+
+  if(S.view==="setup"){
+    if(k===K.DOWN){ S.setupFocus=1; updateSetupFocus(); e.preventDefault(); }
+    else if(k===K.UP){ S.setupFocus=0; updateSetupFocus(); e.preventDefault(); }
+    else if(k===K.OK&&S.setupFocus===1){ saveToken(); e.preventDefault(); }
+    else if(k===K.BACK||k===K.BACK2){ if(S.token){ S.view="library"; loadLibrary(); } }
+    return;
+  }
+
+  if(S.view==="error"){
+    if(k===K.OK){ loadLibrary(); }
+    else if(k===K.BACK||k===K.BACK2){ renderSetup(); }
+    return;
+  }
+
+  // library / files
+  if(k===K.DOWN){ if(S.focus<S.rows.length-1){S.focus++;applyFocus();} e.preventDefault(); }
+  else if(k===K.UP){ if(S.focus>0){S.focus--;applyFocus();} e.preventDefault(); }
+  else if(k===K.LEFT){ cycleSource(-1); e.preventDefault(); }
+  else if(k===K.RIGHT){ cycleSource(1); e.preventDefault(); }
+  else if(k===K.OK){ onSelect(); e.preventDefault(); }
+  else if(k===K.BACK||k===K.BACK2){ onBack(); e.preventDefault(); }
+});
+
+function cycleSource(dir){
+  if(S.view!=="library")return;           // only switch source at top level
+  var i=SOURCES.indexOf(S.source);
+  S.source=SOURCES[(i+dir+SOURCES.length)%SOURCES.length];
+  loadLibrary();
+}
+function onSelect(){
+  var row=S.rows[S.focus];
+  if(!row)return;
+  if(S.view==="library"){
+    var files=row.files||[];
+    if(files.length===1){ S.item=row; requestLink(row,files[0]); }
+    else { S.item=row; renderFiles(); }
+  } else if(S.view==="files"){
+    if(!isVideo(row)){ flashHint("Ese archivo no parece vídeo"); return; }
+    requestLink(S.item,row);
+  }
+}
+function onBack(){
+  if(S.view==="files"){ S.item=null; renderLibrary(); }
+  // at library root: do nothing (let TizenBrew handle its own exit)
+}
+
+/* ====================== Boot ======================== */
+if(S.token){ S.view="library"; loadLibrary(); }
+else { renderSetup(); }
+</script>
+</body>
+</html>
