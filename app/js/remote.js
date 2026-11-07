@@ -138,6 +138,7 @@ function pushSnapshot(){
     stremioAddons: (s.stremioAddons || []).map(maskUrl),
     liveExtraLists: (s.liveExtraLists || []).map(maskUrl),
     traktClientId: mask(s.traktClientId), traktClientSecret: mask(s.traktClientSecret),
+    rdToken: mask(s.rdToken), debridProvider: s.debridProvider,
     traktLinked: !!(App.trakt && App.trakt.isLinked && App.trakt.isLinked()),
     appVersion: App.version
   };

@@ -379,12 +379,15 @@ function dispatchKey(e){
 App.screens.register({
   id: "setup", label: "Setup", nav: false,
   get hint(){ return App.t("setup.hint"); },
+  /* Foco: 0 = selector de servicio (◄► cambia), 1 = campo de clave, 2 = botón guardar */
   mount: function(el){
     el.innerHTML =
       '<div class="center"><div class="box setup-box">' +
-        '<h2>' + App.esc(App.t("setup.title")) + '</h2>' +
-        '<p>' + App.esc(App.t("setup.text")) + '</p>' +
-        '<input id="tokenInput" class="input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="' + App.esc(App.t("setup.placeholder")) + '">' +
+        '<div class="setup-prov"><span class="muted" id="provLbl"></span>' +
+          '<div class="chip focusable" id="provBtn"></div></div>' +
+        '<h2 id="setupTitle"></h2>' +
+        '<p id="setupText"></p>' +
+        '<input id="tokenInput" class="input focusable" type="text" autocomplete="off" spellcheck="false">' +
         '<div class="btn focusable" id="saveBtn">' + App.esc(App.t("setup.save")) + '</div>' +
         '<div class="setup-lang muted">' + App.esc(App.t("setup.langHint")) + '</div>' +
       '</div></div>';
@@ -392,38 +395,55 @@ App.screens.register({
     input.addEventListener("keydown", function(ev){
       if(ev.keyCode === 13){ ev.preventDefault(); ev.stopPropagation(); save(); }
     });
+    var self = this;
+    el.querySelector("#provBtn").addEventListener("click", function(){ self.toggleProv(); });
     this._el = el;
   },
-  show: function(){
-    var el = this._el;
-    var input = el.querySelector("#tokenInput");
-    input.value = App.settings.get("torboxToken") || "";
-    this._f = 0; this.paint();
+  prov: function(){ return App.settings.get("debridProvider") === "realdebrid" ? "realdebrid" : "torbox"; },
+  toggleProv: function(){
+    var input = this._el.querySelector("#tokenInput");
+    // guardar lo escrito en el servicio actual antes de cambiar
+    App.settings.set(this.prov() === "realdebrid" ? "rdToken" : "torboxToken", input.value.trim());
+    App.settings.set("debridProvider", this.prov() === "realdebrid" ? "torbox" : "realdebrid");
+    this.texts();
   },
+  texts: function(){
+    var el = this._el, rdMode = this.prov() === "realdebrid";
+    el.querySelector("#provLbl").textContent = App.t("setup.provider");
+    el.querySelector("#provBtn").textContent = "◄  " + (rdMode ? "Real-Debrid" : "TorBox") + "  ►";
+    el.querySelector("#setupTitle").textContent = App.t(rdMode ? "setup.rd.title" : "setup.title");
+    el.querySelector("#setupText").textContent = App.t(rdMode ? "setup.rd.text" : "setup.text");
+    var input = el.querySelector("#tokenInput");
+    input.placeholder = App.t(rdMode ? "setup.rd.placeholder" : "setup.placeholder");
+    input.value = App.settings.get(rdMode ? "rdToken" : "torboxToken") || "";
+  },
+  show: function(){ this.texts(); this._f = 1; this.paint(); },
   paint: function(){
-    var el = this._el, input = el.querySelector("#tokenInput"), btn = el.querySelector("#saveBtn");
-    input.classList.toggle("focused", this._f === 0);
-    btn.classList.toggle("focused", this._f === 1);
-    if(this._f === 0) input.focus(); else input.blur();
+    var el = this._el, input = el.querySelector("#tokenInput");
+    el.querySelector("#provBtn").classList.toggle("focused", this._f === 0);
+    input.classList.toggle("focused", this._f === 1);
+    el.querySelector("#saveBtn").classList.toggle("focused", this._f === 2);
+    if(this._f === 1) input.focus(); else input.blur();
   },
   focus: function(){ this.paint(); },
   onKey: function(k){
-    if(k === K.DOWN){ this._f = 1; this.paint(); return true; }
-    if(k === K.UP){ this._f = 0; this.paint(); return true; }
-    if(k === K.OK && this._f === 1){ save(); return true; }
+    if(k === K.DOWN){ this._f = Math.min(2, this._f + 1); this.paint(); return true; }
+    if(k === K.UP){ this._f = Math.max(0, this._f - 1); this.paint(); return true; }
+    if(this._f === 0 && (k === K.LEFT || k === K.RIGHT || k === K.OK)){ this.toggleProv(); return true; }
+    if(k === K.OK && this._f === 2){ save(); return true; }
     if(App.isBack(k)){
-      if(this._f === 0 && k === K.BACKSPACE) return false;
+      if(this._f === 1 && k === K.BACKSPACE) return false;
       if(App.torbox.hasToken()){ App.section(firstSection()); }
       return true;
     }
-    return this._f === 0 && (k === K.LEFT || k === K.RIGHT); // dejar mover el cursor
+    return this._f === 1 && (k === K.LEFT || k === K.RIGHT); // dejar mover el cursor
   }
 });
 
 function save(){
   var v = document.getElementById("tokenInput").value.trim();
   if(!v){ App.hint(App.t("setup.needKey")); return; }
-  App.settings.set("torboxToken", v);
+  App.settings.set(App.settings.get("debridProvider") === "realdebrid" ? "rdToken" : "torboxToken", v);
   App.torbox.invalidate();
   document.getElementById("tokenInput").blur();
   App.section(firstSection());

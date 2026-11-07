@@ -41,6 +41,7 @@ async function latestVersion() {
 
 const ALLOWED_HOSTS = [
   /(^|\.)torbox\.app$/i,
+  /(^|\.)real-debrid\.com$/i,
   /(^|\.)tb-cdn\.[a-z]+$/i,
   /(^|\.)strem\.fun$/i,               // Torrentio
   /(^|\.)strem\.io$/i,                // Cinemeta, OpenSubtitles v3

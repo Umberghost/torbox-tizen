@@ -301,3 +301,7 @@ body.mobile .scroll{padding-bottom:96px}
 
 /* Integración 2.0: el botón Atrás táctil no debe tapar el reproductor */
 body.player-on .touch-back{display:none}
+
+/* Selector de servicio en la configuración inicial */
+.setup-prov{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.setup-prov .chip{font-size:22px;padding:10px 22px}
