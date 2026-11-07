@@ -144,6 +144,7 @@ var DEFAULTS = {
   prefAudio: "es",               // es (castellano) | lat | en | any — idioma preferido en fuentes
   openSubs: true,                // subtítulos de OpenSubtitles (add-on de Stremio) si no hay otros
   notifyReady: true,             // avisar cuando una descarga enviada termine
+  hideUnsupported: true,         // ocultar fuentes/archivos con formato que la TV no reproduce
   traktClientId: "",             // app de Trakt del usuario (trakt.tv/oauth/applications)
   traktClientSecret: "",
   traktAuth: null                // {access_token, refresh_token, expires_at}

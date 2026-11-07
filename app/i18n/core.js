@@ -29,7 +29,12 @@ A.add("en", {
   "remote.addedReport": "{what} added to TorBox{name}. Check Downloads.",
   "remote.addFailed": "Could not add: {msg}",
   "remote.banner": "Set up from your phone or PC",
-  "remote.pin": "PIN"
+  "remote.pin": "PIN",
+  "caps.disc": "Disc image / archive", "caps.dts": "DTS audio (not supported by Samsung)",
+  "caps.truehd": "TrueHD audio (not supported)", "caps.dv": "Dolby Vision without HDR fallback (wrong colours)",
+  "caps.oldFormat": "Format not supported by the TV browser", "caps.learned": "Failed before on this TV",
+  "caps.hidden.one": "{n} hidden (incompatible format)", "caps.hidden.other": "{n} hidden (incompatible format)",
+  "caps.showHidden": "Show hidden", "caps.unsupported": "Incompatible"
 });
 
 A.add("es", {
@@ -58,6 +63,11 @@ A.add("es", {
   "remote.addedReport": "{what} añadido a TorBox{name}. Míralo en Descargas.",
   "remote.addFailed": "No se pudo añadir: {msg}",
   "remote.banner": "Configura desde el móvil o el PC",
-  "remote.pin": "PIN"
+  "remote.pin": "PIN",
+  "caps.disc": "Imagen de disco / comprimido", "caps.dts": "Audio DTS (Samsung no lo soporta)",
+  "caps.truehd": "Audio TrueHD (no soportado)", "caps.dv": "Dolby Vision sin HDR (colores erróneos)",
+  "caps.oldFormat": "Formato no soportado por el navegador de la TV", "caps.learned": "Ya falló antes en esta TV",
+  "caps.hidden.one": "{n} oculta (formato no compatible)", "caps.hidden.other": "{n} ocultas (formato no compatible)",
+  "caps.showHidden": "Mostrar ocultas", "caps.unsupported": "No compatible"
 });
 })();
