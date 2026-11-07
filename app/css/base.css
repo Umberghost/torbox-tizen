@@ -168,3 +168,12 @@ body.zone-header .screen .focused{box-shadow:none!important;transform:none!impor
 .remote-banner .rb-title{color:var(--muted)}
 .remote-banner .rb-url{font-weight:700;color:var(--text)}
 .remote-banner .rb-pin b{color:var(--accent);font-size:30px;letter-spacing:4px;margin-left:6px}
+
+/* ---- Botón Atrás táctil (fuera de la TV) ---- */
+.touch-back{
+  position:fixed;left:24px;bottom:24px;z-index:400;width:84px;height:84px;border-radius:50%;
+  background:var(--surface-3);color:var(--text);font-size:44px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 10px 30px rgba(0,0,0,.5);cursor:pointer;user-select:none;opacity:.85;
+}
+.touch-back:active{background:var(--accent);color:var(--accent-ink)}
+@media (hover:hover){ .focusable{cursor:pointer} }

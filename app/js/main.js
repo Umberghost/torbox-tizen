@@ -117,6 +117,7 @@ App.focusHeader = function(){
   if(def && def.blur){ try{ def.blur(); }catch(e){} }
   syncNav();
 };
+App.focusContent = function(){ focusContent(); };
 function focusContent(){
   zone = "content";
   syncNav();
@@ -281,6 +282,17 @@ function boot(){
   });
   if(App.torbox.hasToken()) App.section(firstSection());
   else App.section("setup");
+  /* Botón Atrás flotante fuera de la TV (móvil / PC con ratón) */
+  if(!App.isTizen()){
+    var bb = document.createElement("div");
+    bb.className = "touch-back";
+    bb.textContent = "←";
+    bb.title = App.t("ui.back");
+    bb.addEventListener("click", function(){
+      onKeyDown({ keyCode: K.ESC, preventDefault: function(){}, stopPropagation: function(){} });
+    });
+    document.body.appendChild(bb);
+  }
   App.bus.emit("app:ready");
 }
 

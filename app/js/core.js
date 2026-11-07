@@ -3,7 +3,7 @@
 "use strict";
 
 var App = window.App = window.App || {};
-App.version = "2.3.0";
+App.version = "2.3.1";
 
 /* ---------------- Registro (log) ----------------
  * Guarda los últimos mensajes de consola y errores para verlos desde la web del
@@ -275,26 +275,48 @@ App.isTizen = function(){ return !!(window.tizen || /Tizen/i.test(navigator.user
  * TizenBrew) levanta un proxy en 127.0.0.1:8095. App.net.fetch lo usa si responde;
  * si no, intenta directo (por si el runtime de la TV no aplica CORS).
  */
-var PROXY = "http://127.0.0.1:8095";
+var TV_PROXY = "http://127.0.0.1:8095";
+var PROXY = TV_PROXY;
 var NEEDS_PROXY = /^https?:\/\/([a-z0-9-]+\.)*(torbox\.app|tb-cdn\.[a-z]+|tb-cdn\.st)(\/|:|$)/i;
 var proxyState = null;      // null = sin comprobar, true/false
 var proxyCheck = null;
+/* Candidatos: si la app la sirve el Cloudflare Worker (u otro host propio), su mismo origen;
+ * en la TV / PC local, el servicio de TizenBrew (127.0.0.1:8095). */
+function proxyCandidates(){
+  var c = [];
+  var h = location.hostname;
+  if(/^https?:$/.test(location.protocol) && h && h !== "127.0.0.1" && h !== "localhost") c.push(location.origin);
+  if(location.protocol !== "https:") c.push(TV_PROXY);
+  return c;
+}
+function ping(base){
+  return new Promise(function(resolve){
+    var done = false;
+    var t = setTimeout(function(){ if(!done){ done = true; resolve(null); } }, 1500);
+    fetch(base + "/ping").then(function(r){ return r.json(); }).then(function(j){
+      if(done) return; done = true; clearTimeout(t);
+      resolve(j && j.ok ? j : null);
+    }).catch(function(){ if(done) return; done = true; clearTimeout(t); resolve(null); });
+  });
+}
 
 App.net = {
   PROXY: PROXY,
+  service: "",               // "torbox-tizen" (TV) | "torbox-worker" (nube) | ""
   checkProxy: function(){
     if(proxyCheck) return proxyCheck;
-    proxyCheck = new Promise(function(resolve){
-      var done = false;
-      var t = setTimeout(function(){ if(!done){ done = true; proxyState = false; resolve(false); } }, 1200);
-      fetch(PROXY + "/ping").then(function(r){ return r.json(); }).then(function(j){
-        if(done) return; done = true; clearTimeout(t);
-        proxyState = !!(j && j.ok); resolve(proxyState);
-      }).catch(function(){
-        if(done) return; done = true; clearTimeout(t);
-        proxyState = false; resolve(false);
+    var cands = proxyCandidates();
+    proxyCheck = (function next(i){
+      if(i >= cands.length){ proxyState = false; return Promise.resolve(false); }
+      return ping(cands[i]).then(function(j){
+        if(!j) return next(i + 1);
+        PROXY = App.net.PROXY = cands[i];
+        App.net.service = j.service || "";
+        proxyState = true;
+        console.info("[net] proxy: " + PROXY + " (" + App.net.service + ")");
+        return true;
       });
-    });
+    })(0);
     return proxyCheck;
   },
   usingProxy: function(){ return proxyState === true; },

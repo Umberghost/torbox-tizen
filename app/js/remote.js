@@ -21,7 +21,7 @@ function mask(v){
 function base(){ return App.net.PROXY; }
 
 function pushSnapshot(){
-  if(!App.net.usingProxy()) return;
+  if(!App.net.usingProxy() || App.net.service !== "torbox-tizen") return;
   var s = App.settings.all();
   var snap = {
     torboxToken: mask(s.torboxToken), tmdbKey: mask(s.tmdbKey),
@@ -138,7 +138,7 @@ function syncBanner(){
 
 function start(){
   App.net.checkProxy().then(function(ok){
-    if(!ok) return;
+    if(!ok || App.net.service !== "torbox-tizen") return;   // en la nube no hay ajustes remotos
     loadInfo().then(pushSnapshot);
     poll();
     timer = setInterval(function(){ poll(); pushLogs(); }, 3000);

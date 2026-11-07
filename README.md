@@ -22,3 +22,9 @@ torbox.app → Ajustes → sección API → copia la key. Es tu credencial perso
 
 ## Arquitectura
 Ver `ARCHITECTURE.md`.
+
+## Usar la app en el móvil, PC o Android TV (Cloudflare Worker)
+1. Crea una cuenta gratis en https://dash.cloudflare.com → **Workers & Pages** → **Create** → **Create Worker** → nombre `torbox` → **Deploy**.
+2. **Edit code** → borra todo, pega el contenido de `cloud/worker.js` → **Deploy**.
+3. Abre `https://torbox.<tu-subdominio>.workers.dev/` en cualquier navegador. La app se sirve siempre desde
+   la rama `master` de este repo (se actualiza sola). Ratón/táctil: clic = OK; botón ← = Atrás.

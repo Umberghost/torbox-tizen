@@ -40,6 +40,25 @@ function FocusGrid(container, opts){
   this.items = [];
   this.index = 0;
   this.refresh();
+  /* Ratón / táctil (PC, móvil, Android TV con puntero): clic = enfocar + OK.
+   * Un solo listener por contenedor; apunta siempre a la última rejilla creada sobre él. */
+  container._fg = this;
+  if(!container._fgClick){
+    container._fgClick = true;
+    container.addEventListener("click", function(ev){
+      var g = container._fg; if(!g) return;
+      var el = ev.target.closest ? ev.target.closest(".focusable") : null;
+      if(!el) return;
+      g.refresh(false);
+      var i = g.items.indexOf(el);
+      if(i < 0) return;
+      ev.preventDefault();
+      if(document.body.classList.contains("zone-header") && App.focusContent) App.focusContent();
+      g.focus(i);
+      if(el.tagName === "INPUT"){ el.focus(); return; }
+      if(g.opts.onSelect) g.opts.onSelect(i, el);
+    });
+  }
 }
 FocusGrid.prototype.refresh = function(keepIndex){
   this.items = Array.prototype.slice.call(this.container.querySelectorAll(".focusable"))
