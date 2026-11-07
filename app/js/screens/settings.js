@@ -1,27 +1,35 @@
-/* screens/settings.js — pantalla de Ajustes. */
+/* screens/settings.js — pantalla de Ajustes (textos en app/i18n/settings.js). */
 (function(){
 "use strict";
 
 var App = window.App;
 var K = App.K;
 var S = App.settings;
+var t = App.t;
 
-var LANGS = [
-  { label: "Español", value: "spa" },
-  { label: "Inglés", value: "eng" },
-  { label: "Original / ninguno", value: "" }
-];
+var PKG_URL = "https://cdn.jsdelivr.net/gh/Umberghost/torbox-tizen/package.json";
+var VER_CACHE_MS = 3600000;
+
 /* Ajustes que se pueden restablecer con ROJO (los valores salen de core.js) */
-var RESETTABLE = ["defaultSource", "autoplayNext", "subLang", "audioLang", "subSize", "uiLang", "liveListUrl"];
+var RESETTABLE = ["defaultSource", "autoplayNext", "subLang", "audioLang", "subSize", "liveListUrl",
+  "uiLanguage", "contentLanguage", "autoPlayBest", "prefQuality", "maxSizeGB", "prefAudio",
+  "hideUnsupported", "openSubs", "notifyReady"];
 var APPS = [
   { id: "tivify", label: "Tivify" },
   { id: "atresplayer", label: "Atresplayer" },
   { id: "mitele", label: "Mitele / Mediaset Infinity" }
 ];
 
+function trackLangs(){
+  return [
+    { label: t("settings.lang.spa"), value: "spa" },
+    { label: t("settings.lang.eng"), value: "eng" },
+    { label: t("settings.lang.none"), value: "" }
+  ];
+}
 function mask(v){
   v = String(v || "");
-  if(!v) return "Sin configurar";
+  if(!v) return t("settings.notSet");
   return v.length <= 8 ? "••••" : v.slice(0, 4) + "••••••" + v.slice(-4);
 }
 function labelOf(list, v){
@@ -35,73 +43,168 @@ function setAppId(id, v){
   S.set("appIds", m);
 }
 
-/* Definición de filas. type: secret | text | menu | bool | action */
+/* ---------- Versión nueva disponible ---------- */
+function cmpVer(a, b){
+  var pa = String(a || "0").split("."), pb = String(b || "0").split(".");
+  for(var i = 0; i < Math.max(pa.length, pb.length); i++){
+    var x = parseInt(pa[i] || "0", 10) || 0, y = parseInt(pb[i] || "0", 10) || 0;
+    if(x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+var verState = { checked: 0, latest: null };
+function checkVersion(){
+  if(Date.now() - verState.checked < VER_CACHE_MS) return;
+  verState.checked = Date.now();
+  App.net.fetch(PKG_URL + "?t=" + Math.floor(Date.now() / VER_CACHE_MS)).then(function(r){ return r.json(); }).then(function(j){
+    if(j && j.version){ verState.latest = String(j.version); if(App.current() === "settings" && s.grid) render(); }
+  }).catch(function(e){ console.warn("[settings] version check failed:", e.message); });
+}
+
+/* ---------- Diagnóstico ---------- */
+function showDiag(){
+  var av = false;
+  try{ av = !!(window.webapis && webapis.avplay); }catch(e){}
+  var url = App.remote && App.remote.url ? App.remote.url() : "";
+  var logs = (App.logs ? App.logs(0) : []).filter(function(e){ return e.l === "warn" || e.l === "error"; }).slice(-15);
+  var rowsHtml = [
+    [t("settings.diag.version"), App.version],
+    [t("settings.diag.engine"), av ? t("settings.diag.avplayYes") : t("settings.diag.avplayNo")],
+    [t("settings.diag.proxy"), App.net.usingProxy() ? t("settings.diag.on") : t("settings.diag.off")],
+    [t("settings.diag.remote"), url || "—"],
+    [t("settings.diag.lang"), App.i18n.lang() + " / " + App.i18n.contentLang()],
+    [t("settings.diag.ua"), navigator.userAgent]
+  ].map(function(r){
+    return '<div class="set-diag-row"><b>' + App.esc(r[0]) + '</b><span>' + App.esc(r[1]) + '</span></div>';
+  }).join("");
+  var logHtml = logs.length ? logs.map(function(e){
+    var d = new Date(e.t);
+    return '<div class="set-diag-log ' + (e.l === "error" ? "e" : "w") + '">' +
+      App.esc(d.toLocaleTimeString() + " " + e.m) + '</div>';
+  }).join("") : '<div class="muted">' + App.esc(t("settings.diag.noLogs")) + '</div>';
+  App.ui.modal({
+    title: t("settings.diag.title"), wide: true,
+    html: '<div class="set-diag">' + rowsHtml + '</div>' +
+      '<div class="set-diag-sub">' + App.esc(t("settings.diag.recent")) + '</div>' +
+      '<div class="set-diag-logs">' + logHtml + '</div>',
+    buttons: [{ label: t("ui.close"), value: true }]
+  });
+}
+
+/* ---------- Trakt ---------- */
+function traktValue(){
+  if(!App.trakt) return t("settings.trakt.unavailable");
+  try{
+    var st = App.trakt.status ? App.trakt.status() : null;
+    if(st && typeof st === "object") return st.linked ? (st.user ? t("settings.trakt.linkedAs", {user: st.user}) : t("settings.trakt.linked")) : t("settings.trakt.notLinked");
+    if(typeof st === "string") return st;
+    return App.trakt.isLinked && App.trakt.isLinked() ? t("settings.trakt.linked") : t("settings.trakt.notLinked");
+  }catch(e){ return "—"; }
+}
+function traktAction(){
+  if(!App.trakt){ App.ui.toast(t("settings.trakt.unavailable")); return; }
+  var linked = App.trakt.isLinked && App.trakt.isLinked();
+  if(linked){
+    return App.ui.confirm(t("settings.trakt.unlinkTitle"), "", t("settings.trakt.unlink"), t("ui.cancel")).then(function(y){
+      if(y && App.trakt.unlink){ var p = App.trakt.unlink(); if(p && p.then) return p; }
+    });
+  }
+  if(App.trakt.link){ var p = App.trakt.link(); if(p && p.then) return p; }
+}
+
+/* Definición de filas. type: secret | text | menu | bool | action | appid */
 function rows(){
+  var langOpts = App.i18n.LANGS.map(function(l){ return { label: l.label, value: l.code }; });
   var r = [
-    { group: "Cuenta" },
-    { id: "torboxToken", type: "secret", label: "API key de TorBox",
-      desc: "torbox.app → Settings → API. Se guarda solo en esta TV.",
+    { group: t("settings.group.account") },
+    { id: "torboxToken", type: "secret", label: t("settings.torboxToken"),
+      desc: t("settings.torboxToken.desc"),
       value: function(){ return mask(S.get("torboxToken")); },
       after: function(){ App.torbox.invalidate(); } },
-    { id: "tmdbKey", type: "secret", label: "Clave de TMDB (carátulas y puntuaciones)",
-      desc: "themoviedb.org → Ajustes → API. Vale la “API Key” (v3) o el “Token de lectura” (v4).",
+    { id: "tmdbKey", type: "secret", label: t("settings.tmdbKey"),
+      desc: t("settings.tmdbKey.desc"),
       value: function(){ return mask(S.get("tmdbKey")); },
       after: function(){ App.bus.emit("meta:keychange"); } },
-    { id: "stremioAddon", type: "text", label: "Add-on de Stremio (Buscar)",
-      desc: "URL del manifest de tu add-on con TorBox (Torrentio, Comet, AIOStreams…). Más cómodo desde la web del móvil.",
-      value: function(){ var v = S.get("stremioAddon") || ""; return v ? v.replace(/^https?:\/\//, "").slice(0, 28) + "…" : "Sin configurar"; } },
 
-    { group: "Biblioteca" },
-    { id: "defaultSource", type: "menu", label: "Fuente por defecto",
-      desc: "Qué descargas se muestran al abrir la biblioteca.",
-      options: [{ label: "Todas", value: "all" }, { label: "Torrents", value: "torrents" },
+    { group: t("settings.group.language") },
+    { id: "uiLanguage", type: "menu", label: t("settings.uiLanguage"), desc: t("settings.uiLanguage.desc"),
+      options: langOpts },
+    { id: "contentLanguage", type: "menu", label: t("settings.contentLanguage"), desc: t("settings.contentLanguage.desc"),
+      options: [{ label: t("settings.contentLanguage.auto"), value: "auto" }].concat(langOpts) },
+
+    { group: t("settings.group.search") },
+    { id: "stremioAddon", type: "text", label: t("settings.stremioAddon"),
+      desc: t("settings.stremioAddon.desc"),
+      value: function(){ var v = S.get("stremioAddon") || ""; return v ? v.replace(/^https?:\/\//, "").slice(0, 28) + "…" : t("settings.notSet"); } },
+    { id: "autoPlayBest", type: "bool", label: t("settings.autoPlayBest"), desc: t("settings.autoPlayBest.desc") },
+    { id: "prefQuality", type: "menu", label: t("settings.prefQuality"), desc: t("settings.prefQuality.desc"),
+      options: [{ label: "4K (2160p)", value: "2160p" }, { label: "1080p", value: "1080p" }, { label: "720p", value: "720p" }] },
+    { id: "maxSizeGB", type: "menu", label: t("settings.maxSizeGB"), desc: t("settings.maxSizeGB.desc"),
+      options: [{ label: t("settings.maxSizeGB.none"), value: 0 }, { label: "2 GB", value: 2 }, { label: "4 GB", value: 4 },
+                { label: "8 GB", value: 8 }, { label: "15 GB", value: 15 }, { label: "30 GB", value: 30 }] },
+    { id: "prefAudio", type: "menu", label: t("settings.prefAudio"), desc: t("settings.prefAudio.desc"),
+      options: [{ label: t("settings.prefAudio.es"), value: "es" }, { label: t("settings.prefAudio.lat"), value: "lat" },
+                { label: t("settings.prefAudio.en"), value: "en" }, { label: t("settings.prefAudio.any"), value: "any" }] },
+    { id: "hideUnsupported", type: "bool", label: t("settings.hideUnsupported"), desc: t("settings.hideUnsupported.desc") },
+    { id: "forgetFormats", type: "action", label: t("settings.forgetFormats"), desc: t("settings.forgetFormats.desc"),
+      run: function(){ if(App.caps && App.caps.forget) App.caps.forget(); App.ui.toast(t("settings.forgetFormats.done")); } },
+
+    { group: t("settings.group.library") },
+    { id: "defaultSource", type: "menu", label: t("settings.defaultSource"),
+      desc: t("settings.defaultSource.desc"),
+      options: [{ label: t("settings.source.all"), value: "all" }, { label: "Torrents", value: "torrents" },
                 { label: "Usenet", value: "usenet" }, { label: "Web", value: "webdl" }] },
-    { id: "uiLang", type: "menu", label: "Idioma de metadatos",
-      desc: "Idioma de títulos, sinopsis y carátulas de TMDB.",
-      options: [{ label: "Español (España)", value: "es-ES" }, { label: "Español (México)", value: "es-MX" },
-                { label: "Inglés", value: "en-US" }] },
 
-    { group: "Reproducción" },
-    { id: "autoplayNext", type: "bool", label: "Reproducir siguiente episodio automáticamente",
-      desc: "Al terminar un episodio, empieza el siguiente de la temporada." },
-    { id: "subLang", type: "menu", label: "Idioma de subtítulos preferido",
-      desc: "Se activa automáticamente si el archivo lo trae.", options: LANGS },
-    { id: "audioLang", type: "menu", label: "Idioma de audio preferido",
-      desc: "Pista de audio elegida al empezar (si hay varias).", options: LANGS },
-    { id: "subSize", type: "menu", label: "Tamaño de subtítulos", desc: "",
-      options: [{ label: "Pequeño", value: "s" }, { label: "Mediano", value: "m" }, { label: "Grande", value: "l" }] },
+    { group: t("settings.group.playback") },
+    { id: "autoplayNext", type: "bool", label: t("settings.autoplayNext"), desc: t("settings.autoplayNext.desc") },
+    { id: "subLang", type: "menu", label: t("settings.subLang"), desc: t("settings.subLang.desc"), options: trackLangs() },
+    { id: "audioLang", type: "menu", label: t("settings.audioLang"), desc: t("settings.audioLang.desc"), options: trackLangs() },
+    { id: "subSize", type: "menu", label: t("settings.subSize"), desc: "",
+      options: [{ label: t("settings.subSize.s"), value: "s" }, { label: t("settings.subSize.m"), value: "m" },
+                { label: t("settings.subSize.l"), value: "l" }] },
+    { id: "openSubs", type: "bool", label: t("settings.openSubs"), desc: t("settings.openSubs.desc") },
+    { id: "notifyReady", type: "bool", label: t("settings.notifyReady"), desc: t("settings.notifyReady.desc") },
 
-    { group: "TV en directo" },
-    { id: "liveListUrl", type: "text", label: "URL de la lista de canales",
-      desc: "Por defecto, la lista JSON de TDTChannels.",
+    { group: "Trakt" },
+    { id: "traktLink", type: "action", label: t("settings.trakt.link"), desc: t("settings.trakt.link.desc"),
+      value: traktValue, run: traktAction },
+    { id: "traktClientId", type: "secret", label: t("settings.traktClientId"), desc: t("settings.traktClientId.desc"),
+      value: function(){ return mask(S.get("traktClientId")); } },
+    { id: "traktClientSecret", type: "secret", label: t("settings.traktClientSecret"), desc: "",
+      value: function(){ return mask(S.get("traktClientSecret")); } },
+
+    { group: t("settings.group.live") },
+    { id: "liveListUrl", type: "text", label: t("settings.liveListUrl"),
+      desc: t("settings.liveListUrl.desc"),
       value: function(){ return S.get("liveListUrl"); },
       after: function(){ App.store.remove("live_cache"); } }
   ];
   APPS.forEach(function(a){
-    r.push({ id: "app:" + a.id, type: "appid", app: a, label: "ID de la app " + a.label,
-      desc: "Para el acceso directo. Vacío = detectar automáticamente.",
-      value: function(){ return appId(a.id) || "Automático"; } });
+    r.push({ id: "app:" + a.id, type: "appid", app: a, label: t("settings.appId", {app: a.label}),
+      desc: t("settings.appId.desc"),
+      value: function(){ return appId(a.id) || t("settings.appId.auto"); } });
   });
   r.push(
-    { group: "Datos" },
-    { id: "clearHistory", type: "action", label: "Borrar historial de “Continuar viendo”",
-      desc: "Olvida las posiciones guardadas y lo marcado como visto.",
+    { group: t("settings.group.data") },
+    { id: "diagnostics", type: "action", label: t("settings.diag.title"), desc: t("settings.diag.desc"), run: showDiag },
+    { id: "clearHistory", type: "action", label: t("settings.clearHistory"),
+      desc: t("settings.clearHistory.desc"),
       run: function(){
-        return App.ui.confirm("¿Borrar el historial?", "Se perderán las posiciones guardadas.", "Borrar", "Cancelar").then(function(y){
+        return App.ui.confirm(t("settings.clearHistory.confirm"), t("settings.clearHistory.confirmText"), t("settings.delete"), t("ui.cancel")).then(function(y){
           if(!y) return;
           if(App.history && App.history.clear) App.history.clear();
           else App.store.remove("history");
           App.bus.emit("history:change");
-          App.ui.toast("Historial borrado");
+          App.ui.toast(t("settings.clearHistory.done"));
         });
       } },
-    { id: "clearMeta", type: "action", label: "Borrar caché de carátulas y metadatos", desc: "",
-      run: function(){ if(App.meta && App.meta.clearCache) App.meta.clearCache(); else App.store.remove("metacache"); App.bus.emit("meta:keychange"); App.ui.toast("Caché de metadatos borrada"); } },
-    { id: "clearLive", type: "action", label: "Borrar caché de canales de TV", desc: "",
-      run: function(){ App.store.remove("live_cache"); App.ui.toast("Caché de canales borrada"); } },
-    { id: "logout", type: "action", label: "Cerrar sesión", desc: "Borra la API key de TorBox de esta TV.", danger: true,
+    { id: "clearMeta", type: "action", label: t("settings.clearMeta"), desc: "",
+      run: function(){ if(App.meta && App.meta.clearCache) App.meta.clearCache(); else App.store.remove("metacache"); App.bus.emit("meta:keychange"); App.ui.toast(t("settings.clearMeta.done")); } },
+    { id: "clearLive", type: "action", label: t("settings.clearLive"), desc: "",
+      run: function(){ App.store.remove("live_cache"); App.ui.toast(t("settings.clearLive.done")); } },
+    { id: "logout", type: "action", label: t("settings.logout"), desc: t("settings.logout.desc"), danger: true,
       run: function(){
-        return App.ui.confirm("¿Cerrar sesión?", "Tendrás que volver a introducir la API key.", "Cerrar sesión", "Cancelar").then(function(y){
+        return App.ui.confirm(t("settings.logout.confirm"), t("settings.logout.confirmText"), t("settings.logout"), t("ui.cancel")).then(function(y){
           if(!y) return;
           S.set("torboxToken", "");
           App.torbox.invalidate();
@@ -114,7 +217,7 @@ function rows(){
 
 function valueText(row){
   if(row.value) return row.value();
-  if(row.type === "bool") return S.get(row.id) ? "Sí" : "No";
+  if(row.type === "bool") return S.get(row.id) ? t("ui.yes") : t("ui.no");
   if(row.type === "menu") return labelOf(row.options, S.get(row.id));
   if(row.type === "action") return "›";
   return String(S.get(row.id) || "");
@@ -137,10 +240,13 @@ function render(){
         : '<div class="set-value">' + App.esc(v) + '</div>') +
     '</div>';
   });
+  var newer = verState.latest && cmpVer(App.version, verState.latest) < 0;
   html += '<div class="set-footer">' +
-    '<div>TorBox para TizenBrew · v' + App.esc(App.version) + '</div>' +
-    '<div class="legend"><span><i class="yellow"></i>Buscar</span><span><i class="blue"></i>Ajustes</span>' +
-      '<span><i class="red"></i>Restablecer ajuste</span></div>' +
+    '<div>' + App.esc(t("settings.footer", {v: App.version})) +
+      (newer ? ' <span class="set-new">' + App.esc(t("settings.newVersion", {v: verState.latest})) + '</span>' : '') + '</div>' +
+    '<div class="legend"><span><i class="yellow"></i>' + App.esc(t("settings.legend.search")) + '</span>' +
+      '<span><i class="blue"></i>' + App.esc(t("settings.legend.settings")) + '</span>' +
+      '<span><i class="red"></i>' + App.esc(t("settings.legend.reset")) + '</span></div>' +
     '</div></div>';
   var sc = s.el.querySelector(".scroll"), top = sc ? sc.scrollTop : 0;
   s.el.innerHTML = html;
@@ -159,7 +265,7 @@ function edit(row){
     App.ui.menu(row.label, row.options.map(function(o){
       return { label: o.label, value: o.value, selected: o.value === cur };
     })).then(function(v){
-      if(v === null) return;
+      if(v === null || v === cur) return;
       S.set(row.id, v); if(row.after) row.after(); render();
     });
     return;
@@ -167,26 +273,26 @@ function edit(row){
   if(row.type === "secret" || row.type === "text"){
     App.ui.keyboard.open({
       title: row.label, value: S.get(row.id) || "", secret: row.type === "secret",
-      placeholder: row.type === "secret" ? "Pega o escribe la clave" : "",
+      placeholder: row.type === "secret" ? t("settings.keyPlaceholder") : "",
       onDone: function(v){
         v = String(v || "").trim();
-        if(row.id === "torboxToken" && !v){ App.ui.toast("La API key no puede quedar vacía"); return; }
+        if(row.id === "torboxToken" && !v){ App.ui.toast(t("settings.keyEmpty")); return; }
         S.set(row.id, v); if(row.after) row.after(); render();
-        App.ui.toast("Guardado");
+        App.ui.toast(t("settings.saved"));
       }
     });
     return;
   }
   if(row.type === "appid"){
     App.ui.menu(row.label, [
-      { label: "Editar ID manualmente", value: "edit" },
-      { label: "Detectar automáticamente", value: "auto" },
-      { label: "Cancelar", value: null }
+      { label: t("settings.appId.edit"), value: "edit" },
+      { label: t("settings.appId.detect"), value: "auto" },
+      { label: t("ui.cancel"), value: null }
     ]).then(function(v){
-      if(v === "auto"){ setAppId(row.app.id, ""); render(); App.ui.toast("Se detectará automáticamente"); }
+      if(v === "auto"){ setAppId(row.app.id, ""); render(); App.ui.toast(t("settings.appId.detectDone")); }
       else if(v === "edit"){
         App.ui.keyboard.open({
-          title: "ID de " + row.app.label, value: appId(row.app.id), placeholder: "p. ej. 3201xxxxxxxx",
+          title: t("settings.appId", {app: row.app.label}), value: appId(row.app.id), placeholder: t("settings.appId.placeholder"),
           onDone: function(val){ setAppId(row.app.id, String(val || "").trim()); render(); }
         });
       }
@@ -202,20 +308,20 @@ function edit(row){
 function onSelect(i, el){ var row = rowAt(el); if(row) edit(row); }
 
 App.screens.register({
-  id: "settings", label: "Ajustes", nav: true, order: 60,
-  hint: "OK cambiar · ROJO restablecer · Atrás volver",
+  id: "settings", label: t("nav.settings"), nav: true, order: 60,
+  get hint(){ return t("settings.hint"); },
   mount: function(el){
     s.el = el;
     App.bus.on("settings:change", function(){ if(App.current() === "settings" && s.grid) render(); });
   },
-  show: function(){ render(); },
+  show: function(){ render(); checkVersion(); },
   focus: function(){ if(s.grid){ s.grid.refresh(); s.grid.focus(s.grid.index, true); } },
   blur: function(){ if(s.grid) s.grid.blur(); },
   onKey: function(k){
     if(k === K.RED){
       var cur = s.grid && s.grid.current(), row = cur && rowAt(cur);
-      if(row && RESETTABLE.indexOf(row.id) >= 0){ S.resetKey(row.id); if(row.after) row.after(); render(); App.ui.toast("Restablecido"); }
-      else if(row && row.type === "appid"){ setAppId(row.app.id, ""); render(); App.ui.toast("Restablecido"); }
+      if(row && RESETTABLE.indexOf(row.id) >= 0){ S.resetKey(row.id); if(row.after) row.after(); render(); App.ui.toast(t("settings.resetDone")); }
+      else if(row && row.type === "appid"){ setAppId(row.app.id, ""); render(); App.ui.toast(t("settings.resetDone")); }
       return true;
     }
     return s.grid ? s.grid.handleKey(k) : false;

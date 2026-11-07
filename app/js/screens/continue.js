@@ -9,14 +9,14 @@ var S = { el: null, grid: null, entries: [], visible: false, busy: false };
 
 function cardHtml(e, i){
   var pct = Math.round(App.history.progress(e.key) * 100);
-  var remain = e.dur > 0 ? "Quedan " + App.fmtTime(Math.max(0, e.dur - e.pos)) : App.fmtTime(e.pos);
+  var remain = e.dur > 0 ? App.t("continue.left", { time: App.fmtTime(Math.max(0, e.dur - e.pos)) }) : App.fmtTime(e.pos);
   var poster = e.poster
     ? '<div class="cw-poster" style="background-image:url(\'' + App.esc(e.poster) + '\')"></div>'
     : '<div class="cw-poster cw-ph" style="' + App.ui.placeholderStyle(e.title) + '"><span>' +
         App.esc(App.ui.initials(e.title)) + '</span></div>';
   return '<div class="cw-card focusable" data-i="' + i + '">' + poster +
     '<div class="cw-bar progress"><i style="width:' + pct + '%"></i></div>' +
-    '<div class="cw-info"><div class="cw-title">' + App.esc(e.title || "(sin título)") + '</div>' +
+    '<div class="cw-info"><div class="cw-title">' + App.esc(e.title || App.t("continue.untitled")) + '</div>' +
     '<div class="cw-sub num">' + App.esc(e.subtitle || "") + (e.subtitle ? " · " : "") + remain + '</div></div>' +
     '</div>';
 }
@@ -27,15 +27,15 @@ function render(keepIndex){
   S.entries = App.history.list({ unfinished: true });
   if(!S.entries.length){
     S.grid = null;
-    App.ui.empty(S.el, "Nada a medias",
-      "Cuando empieces a ver algo y lo dejes sin terminar aparecerá aquí para retomarlo justo donde lo dejaste.");
+    App.ui.empty(S.el, App.t("continue.emptyTitle"), App.esc(App.t("continue.emptyText")));
     return;
   }
   S.el.innerHTML =
-    '<div class="scroll"><div class="section-title">Continuar viendo<span class="muted">' +
-      S.entries.length + (S.entries.length === 1 ? " título" : " títulos") + '</span></div>' +
+    '<div class="scroll"><div class="section-title">' + App.esc(App.t("continue.title")) + '<span class="muted">' +
+      App.esc(App.t("continue.count", { n: S.entries.length })) + '</span></div>' +
     '<div class="cw-grid">' + S.entries.map(cardHtml).join("") + '</div>' +
-    '<div class="legend cw-legend"><span>OK reanudar</span><span><i class="red"></i>Quitar de la lista</span></div></div>';
+    '<div class="legend cw-legend"><span>' + App.esc(App.t("continue.legendOk")) + '</span><span><i class="red"></i>' +
+      App.esc(App.t("continue.legendRemove")) + '</span></div></div>';
   S.grid = new App.ui.FocusGrid(S.el, { onSelect: function(i){ resume(S.entries[i]); } });
   S.grid.index = keepIndex ? Math.min(idx, S.entries.length - 1) : 0;
   if(document.body.classList.contains("zone-header")) S.grid.blur();
@@ -45,12 +45,20 @@ function render(keepIndex){
 function resume(e){
   if(!e || S.busy) return;
   var m = e.meta || {};
+  // Reproducido desde Buscar (add-on de Stremio): volver a pedir la mejor fuente
+  if(m.source === "stremio" && m.imdbId && App.search && App.search.playTitle){
+    App.ui.toast(App.t("continue.preparing"));
+    Promise.resolve(App.search.playTitle({ type: m.type, id: m.imdbId, season: m.season, episode: m.episode,
+                                           name: m.title || e.title, poster: e.poster }))
+      .catch(function(err){ App.hint(App.t("continue.cantResume", { msg: err.message })); });
+    return;
+  }
   if(!m.source || m.itemId === undefined || m.fileId === undefined){
-    App.hint("No se puede reanudar: faltan datos del archivo");
+    App.hint(App.t("continue.noData"));
     return;
   }
   S.busy = true;
-  App.ui.toast("Preparando reproducción…");
+  App.ui.toast(App.t("continue.preparing"));
   App.torbox.link(m.source, m.itemId, m.fileId).then(function(url){
     S.busy = false;
     App.player.play({
@@ -61,7 +69,7 @@ function resume(e){
     });
   }).catch(function(err){
     S.busy = false;
-    App.hint("No se pudo obtener el enlace: " + err.message);
+    App.hint(App.t("continue.cantResume", { msg: err.message }));
   });
 }
 
@@ -69,8 +77,8 @@ function removeFocused(){
   if(!S.grid) return;
   var e = S.entries[S.grid.index];
   if(!e) return;
-  App.ui.confirm("¿Quitar de Continuar viendo?", e.title, "Quitar", "Cancelar").then(function(yes){
-    if(yes) App.history.remove(e.key);
+  App.ui.confirm(App.t("continue.removeTitle"), e.title, App.t("continue.remove"), App.t("ui.cancel")).then(function(yes){
+    if(yes){ App.history.remove(e.key); App.ui.toast(App.t("continue.removed")); }
   });
 }
 
@@ -81,8 +89,8 @@ App.bus.on("history:change", function(){
 App.bus.on("player:close", function(){ if(S.visible && S.dirty){ S.dirty = false; render(true); } });
 
 App.screens.register({
-  id: "continue", label: "Continuar", nav: true, order: 20,
-  hint: "▲▼◄► moverse · OK reanudar · ROJO quitar",
+  id: "continue", label: App.t("nav.continue"), nav: true, order: 20,
+  get hint(){ return App.t("continue.hint"); },
   mount: function(el){ S.el = el; },
   show: function(params){ S.visible = true; S.dirty = false; render(!!(params && params._back)); },
   hide: function(){ S.visible = false; },

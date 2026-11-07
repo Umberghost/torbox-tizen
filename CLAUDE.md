@@ -9,7 +9,17 @@ con **Tizen**. Es una web app que corre en el webview de TizenBrew; navegación 
 para mando a distancia (D-pad). La tele del usuario **no tiene antena** y Tizen es
 sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 
-## Estado actual (v2, 2026-11-07) — LEER ARCHITECTURE.md
+## Estado actual (v2.3, 2026-11-07) — LEER ARCHITECTURE.md
+- **Interfaz en inglés por defecto, multi-idioma (en/es)**: toda cadena visible con `App.t()` y textos en
+  `app/i18n/<modulo>.js`. Idioma de contenido (sinopsis/episodios) separado: `App.i18n.contentLang()`.
+- v2.3: Inicio (catálogos TMDB-addon localizados), Buscar estilo Stremio (Cinemeta/TMDB + add-on Torrentio del
+  usuario, mejor fuente en un clic, packs de temporada, estado de descarga), OpenSubtitles, aviso "ya está listo",
+  Trakt, EPG en TV en directo, formatos no compatibles (App.caps), web del móvil con Ajustes/Añadir/Registro.
+- **Hallazgo en TV real (Tizen 9, Chromium 120):** dentro de TizenBrew NO hay `webapis` (AVPlay) → se usa
+  `<video>` y fallan MKV/HEVC. Plan B pendiente: app empaquetada (launcher wgt) que cargue el código remoto.
+- TorBox cerró su Search API (search-api.torbox.app no existe): por eso Buscar usa add-ons de Stremio.
+
+## Estado v2.0 (histórico)
 - v2 modular en `app/js/` (core, ui, torbox, main + pantallas). Contratos en `ARCHITECTURE.md`.
 - Hecho: biblioteca con carátulas TMDB y series agrupadas, AVPlay + fallback `<video>`/hls.js,
   continuar viendo, subtítulos/pistas, TV en directo (TDTChannels, 378 canales), accesos a

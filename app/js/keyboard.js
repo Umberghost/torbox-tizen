@@ -5,17 +5,27 @@
 var App = window.App;
 var K = App.K;
 
-var LAYOUTS = {
-  lower: ["1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm,.-"],
-  upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÑ", "ZXCVBNM;:_"],
-  sym:   ["1234567890", "@#€$%&*()_", "!?¿¡:;\"'/\\", "+=<>[]{}|~"]
+/* Distribución según el idioma de la interfaz: es con ñ y ¿¡; en sin ñ */
+var LAYOUTS_BY_LANG = {
+  es: {
+    lower: ["1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm,.-"],
+    upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÑ", "ZXCVBNM;:_"],
+    sym:   ["1234567890", "@#€$%&*()_", "!?¿¡:;\"'/\\", "+=<>[]{}|~"]
+  },
+  en: {
+    lower: ["1234567890", "qwertyuiop", "asdfghjkl'", "zxcvbnm,.-"],
+    upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKL\"", "ZXCVBNM;:_"],
+    sym:   ["1234567890", "@#$%&*()_£", "!?:;\"'/\\`^", "+=<>[]{}|~"]
+  }
 };
+function layouts(){ return LAYOUTS_BY_LANG[App.i18n.lang()] || LAYOUTS_BY_LANG.en; }
+var t = App.t;
 
 var st = null;   // estado del teclado abierto
 var el = null;   // overlay
 
 function render(){
-  var rows = LAYOUTS[st.mode];
+  var rows = layouts()[st.mode];
   var html = '<div class="kb-panel">' +
     (st.title ? '<div class="kb-title">' + App.esc(st.title) + '</div>' : '') +
     '<div class="kb-display' + (st.value ? '' : ' empty') + '"><span class="kb-text"></span><i class="kb-caret"></i></div>' +
@@ -29,15 +39,15 @@ function render(){
     html += '</div>';
   });
   html += '<div class="kb-row kb-actions">' +
-    '<div class="kb-key kb-wide focusable" data-a="shift">' + (st.mode === "upper" ? "⇩ minús." : "⇧ Mayús.") + '</div>' +
+    '<div class="kb-key kb-wide focusable" data-a="shift">' + App.esc(st.mode === "upper" ? t("keyboard.lower") : t("keyboard.upper")) + '</div>' +
     '<div class="kb-key kb-wide focusable" data-a="sym">' + (st.mode === "sym" ? "abc" : "#?!") + '</div>' +
-    '<div class="kb-key kb-space focusable" data-a="space">Espacio</div>' +
-    '<div class="kb-key kb-wide focusable" data-a="del">⌫ Borrar</div>' +
-    '<div class="kb-key kb-wide focusable" data-a="clear">Limpiar</div>' +
-    (st.secret ? '<div class="kb-key kb-wide focusable" data-a="reveal">' + (st.reveal ? "Ocultar" : "Ver") + '</div>' : '') +
-    '<div class="kb-key kb-done focusable" data-a="done">✓ Hecho</div>' +
+    '<div class="kb-key kb-space focusable" data-a="space">' + App.esc(t("keyboard.space")) + '</div>' +
+    '<div class="kb-key kb-wide focusable" data-a="del">⌫ ' + App.esc(t("keyboard.delete")) + '</div>' +
+    '<div class="kb-key kb-wide focusable" data-a="clear">' + App.esc(t("keyboard.clear")) + '</div>' +
+    (st.secret ? '<div class="kb-key kb-wide focusable" data-a="reveal">' + App.esc(st.reveal ? t("keyboard.hide") : t("keyboard.show")) + '</div>' : '') +
+    '<div class="kb-key kb-done focusable" data-a="done">✓ ' + App.esc(t("keyboard.done")) + '</div>' +
     '</div></div>' +
-    '<div class="kb-help">OK pulsar tecla · Atrás cancelar · Números del mando y teclado físico escriben directamente</div>' +
+    '<div class="kb-help">' + App.esc(t("keyboard.help")) + '</div>' +
     '</div>';
   el.innerHTML = html;
   st.grid = new App.ui.FocusGrid(el.querySelector(".kb-keys"), {
@@ -49,9 +59,9 @@ function render(){
 }
 
 function paintValue(){
-  var t = el.querySelector(".kb-text");
+  var txt = el.querySelector(".kb-text");
   var shown = st.secret && !st.reveal ? st.value.replace(/./g, "•") : st.value;
-  t.textContent = shown || st.placeholder || "";
+  txt.textContent = shown || st.placeholder || "";
   el.querySelector(".kb-display").classList.toggle("empty", !st.value);
 }
 

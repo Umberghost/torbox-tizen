@@ -49,6 +49,15 @@
 .set-toggle.on{background:var(--accent)}
 .set-toggle.on i{left:38px;background:#fff}
 .set-footer{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:20px;margin:40px 0 10px}
+.set-new{color:var(--accent-ink);background:var(--warn);font-weight:700;padding:2px 12px;border-radius:999px;margin-left:12px}
+.set-diag{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.set-diag-row{display:flex;gap:20px;font-size:21px}
+.set-diag-row b{flex:0 0 300px;color:var(--text);font-weight:600}
+.set-diag-row span{flex:1;word-break:break-all;color:var(--muted)}
+.set-diag-sub{font-size:20px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:8px 0}
+.set-diag-logs{font:16px/1.45 ui-monospace,Consolas,monospace;max-height:36vh;overflow-y:auto;background:#05080b;border-radius:10px;padding:10px 14px}
+.set-diag-log.e{color:var(--danger)}
+.set-diag-log.w{color:var(--warn)}
 
 /* ================= Búsqueda ================= */
 .srch-top{display:flex;align-items:center;gap:26px;margin:6px 0 10px}
@@ -103,3 +112,27 @@
 .dl-src{color:var(--text)}
 .dl-legend{margin:26px 4px 0}
 .srch-dl{background:#f5c451;color:#2a1f00}
+.srch-lang{color:#e8eef3;border-color:#3e63dd;background:rgba(62,99,221,.18)}
+.srch-bad{background:#e5484d;color:#fff}
+.srch-why{color:var(--danger)}
+.srch-incompat .srch-rel{text-decoration:line-through;text-decoration-color:rgba(255,107,107,.6)}
+.srch-hidden-row{background:transparent;border:2px dashed var(--surface-3)}
+.srch-hidden-row .srch-rel{color:var(--muted);font-size:22px}
+.dl-actions{align-items:center;margin:4px 0 12px}
+.dl-check{font-size:24px;vertical-align:-1px}
+.dl-hidden{font-size:20px;margin-left:6px}
+.dl-none{font-size:22px;padding:30px 4px}
+.dl-small{font-size:19px;padding:6px 16px}
+.srch-pack{background:#8e4ec6;color:#fff}
+.srch-lib{background:#30a46c;color:#fff}
+.srch-dling{background:#3e63dd;color:#fff}
+.srch-st:empty{display:none}
+.srch-size small{display:block;color:var(--muted);font-size:16px}
+.srch-progline{display:flex;align-items:center;gap:14px;margin-top:8px}
+.srch-progline .progress{flex:1;max-width:520px}
+.srch-proginfo{color:var(--muted);font-size:17px;white-space:nowrap}
+.srch-prev{color:var(--accent);font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:760px;margin-left:auto;padding-left:16px}
+.srch-prev:empty{display:none}
+.srch-prev-card{display:block;margin:2px 0 0;padding:0;max-width:100%;font-size:17px}
+.srch-packrow .lib-ep-num{color:#b48cf0}
+.srch-packrow .title{color:#d9c8f7}

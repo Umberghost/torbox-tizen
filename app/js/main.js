@@ -171,6 +171,10 @@ function onKeyDown(e){
     if(App.player.onKey(k, e) !== false) e.preventDefault();
     return;
   }
+  // 3b) Aviso "ya está listo" de App.watch (no modal: solo se queda OK/Atrás si lo gestiona)
+  if(App.watch && App.watch.onKey){
+    try{ if(App.watch.onKey(k, e) === true){ e.preventDefault(); return; } }catch(err){ console.error(err); }
+  }
   // 4) Input nativo con foco: dejar escribir, pero no tragarse flechas verticales
   var ae = document.activeElement;
   var typing = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA");

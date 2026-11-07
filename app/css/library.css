@@ -93,3 +93,10 @@
 .lib-ep-watched{color:var(--accent);font-size:20px;font-weight:600;white-space:nowrap}
 .lib-recs-wrap[hidden]{display:none}
 .lib-recs{padding-left:4px}
+
+/* ---- Formatos no compatibles (App.caps) ---- */
+.lib-row-unsup{opacity:.62}
+.lib-row-unsup.focused{opacity:1}
+.badge.lib-unsup{color:#ffb4b4;border-color:#ff6b6b;background:rgba(255,107,107,.12);white-space:nowrap}
+.lib-unsup-why{color:var(--muted);font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}
+.lib-hero-line .lib-unsup-why,.lib-actions .lib-unsup-why{max-width:520px}

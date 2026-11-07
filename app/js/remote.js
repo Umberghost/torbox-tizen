@@ -25,10 +25,13 @@ function pushSnapshot(){
   var s = App.settings.all();
   var snap = {
     torboxToken: mask(s.torboxToken), tmdbKey: mask(s.tmdbKey),
-    defaultSource: s.defaultSource, audioLang: s.audioLang, subLang: s.subLang,
-    subSize: s.subSize, autoplayNext: s.autoplayNext, liveListUrl: s.liveListUrl,
-    stremioAddon: s.stremioAddon ? String(s.stremioAddon).replace(/^(https?:\/\/[^\/]+\/).{12,}(\/manifest\.json)$/, "$1…$2") : ""
+    stremioAddon: s.stremioAddon ? String(s.stremioAddon).replace(/^(https?:\/\/[^\/]+\/).{12,}(\/manifest\.json)$/, "$1…$2") : "",
+    traktClientId: mask(s.traktClientId), traktClientSecret: mask(s.traktClientSecret),
+    traktLinked: !!(App.trakt && App.trakt.isLinked && App.trakt.isLinked())
   };
+  ["defaultSource", "audioLang", "subLang", "subSize", "autoplayNext", "liveListUrl", "uiLanguage", "contentLanguage",
+   "autoPlayBest", "prefQuality", "maxSizeGB", "prefAudio", "hideUnsupported", "openSubs", "notifyReady"]
+    .forEach(function(k){ snap[k] = s[k]; });
   fetch(base() + "/tv/snapshot", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snap)
   }).catch(function(){});

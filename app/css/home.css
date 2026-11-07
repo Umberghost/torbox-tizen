@@ -1,1 +1,48 @@
-/* home.css */
+/* home.css — pantalla Inicio (prefijo .home-) y modal de Trakt (.trakt-). Reutiliza tarjetas .lib-. */
+.home-screen{display:none;flex-direction:column}
+.home-screen.on{display:flex}
+
+/* ---- Hero ---- */
+.home-hero{position:relative;flex:none;height:330px;overflow:hidden}
+.home-hero-bg{
+  position:absolute;inset:0;background-size:cover;background-position:center 25%;
+  opacity:0;transition:opacity .35s ease;
+}
+.home-hero-bg.on{opacity:.55}
+.home-hero-shade{
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,var(--bg) 0%,rgba(11,15,20,.85) 38%,rgba(11,15,20,.2) 75%,rgba(11,15,20,.55) 100%),
+             linear-gradient(0deg,var(--bg) 0%,rgba(11,15,20,0) 45%);
+}
+.home-hero-info{position:absolute;left:var(--gutter);bottom:26px;width:980px;max-width:62%}
+.home-hero-title{
+  font-size:52px;font-weight:700;line-height:1.1;margin-bottom:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.home-hero-meta{color:var(--warn);font-size:22px;margin-bottom:10px;min-height:30px}
+.home-hero-desc{
+  color:#c9d3db;font-size:22px;line-height:1.45;margin:0;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+
+/* ---- Filas ---- */
+.home-scroll{flex:1;height:auto;min-height:0;padding-top:0}
+.home-row{margin-bottom:6px}
+.home-row[hidden]{display:none}
+.home-row .section-title{margin:12px 0 0}
+.home-hscroll{gap:26px;padding:16px 10px 26px}
+.home-card{width:210px}
+.home-card .lib-initials{font-size:52px}
+.home-row-state{
+  display:flex;align-items:center;gap:16px;color:var(--muted);font-size:22px;
+  height:120px;padding-left:6px;
+}
+.home-row-state.err{color:var(--danger)}
+.home-spin{width:34px;height:34px;border-width:4px}
+
+/* ---- Modal de Trakt ---- */
+.trakt-code{
+  font-size:64px;font-weight:800;letter-spacing:10px;color:var(--accent);
+  text-align:center;margin:18px 0;font-variant-numeric:tabular-nums;
+}
+.trakt-wait{text-align:center;color:var(--muted)}

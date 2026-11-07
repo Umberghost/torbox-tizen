@@ -5,9 +5,14 @@
 var App = window.App;
 var K = App.K;
 var tb = App.torbox;
+var t = App.t;
 var REFRESH_MS = 5000;
 
-var s = { el: null, grid: null, items: null, error: "", timer: null, visible: false, busy: false, focusKey: null };
+var HIDE_KEY = "dlHideDone";
+var CLEARED_KEY = "dlCleared";   // completadas quitadas de la lista (siguen en TorBox y en la Biblioteca)
+var s = { el: null, grid: null, items: null, error: "", timer: null, visible: false, busy: false, focusKey: null,
+          hideDone: !!App.store.get(HIDE_KEY, false), cleared: App.store.get(CLEARED_KEY, []) || [] };
+function isCleared(d){ return s.cleared.indexOf(itemKey(d)) >= 0; }
 
 function prog(d){
   var p = Number(d.progress || 0);
@@ -20,32 +25,32 @@ function prog(d){
 function status(d){
   var st = String(d.download_state || d.state || "").toLowerCase();
   if(/error|fail|invalid|missing|stalled.*\(no/.test(st) && !/completed/.test(st)){
-    if(/stalled/.test(st)) return { label: "Sin fuentes", cls: "warn", key: "stalled" };
-    return { label: "Error", cls: "err", key: "error" };
+    if(/stalled/.test(st)) return { label: t("downloads.st.noSources"), cls: "warn", key: "stalled" };
+    return { label: t("downloads.st.error"), cls: "err", key: "error" };
   }
-  if(/paused/.test(st)) return { label: "En pausa", cls: "muted", key: "paused" };
-  if(/cached/.test(st)) return { label: "En caché", cls: "ok", key: "done" };
-  if(/upload|seed/.test(st)) return { label: "Sembrando", cls: "ok", key: "done" };
-  if(/queue|pending|waiting|checking|meta/.test(st)) return { label: "En cola", cls: "muted", key: "queued" };
-  if(tb.isFinished(d) || /completed|finished/.test(st)) return { label: "Completado", cls: "ok", key: "done" };
-  if(/download|stalled/.test(st)) return { label: /stalled/.test(st) ? "Atascado" : "Descargando", cls: "act", key: "downloading" };
-  return { label: st ? st.charAt(0).toUpperCase() + st.slice(1) : "Desconocido", cls: "muted", key: "other" };
+  if(/paused/.test(st)) return { label: t("downloads.st.paused"), cls: "muted", key: "paused" };
+  if(/cached/.test(st)) return { label: t("downloads.st.cached"), cls: "ok", key: "done" };
+  if(/upload|seed/.test(st)) return { label: t("downloads.st.seeding"), cls: "ok", key: "done" };
+  if(/queue|pending|waiting|checking|meta/.test(st)) return { label: t("downloads.st.queued"), cls: "muted", key: "queued" };
+  if(tb.isFinished(d) || /completed|finished/.test(st)) return { label: t("downloads.st.done"), cls: "ok", key: "done" };
+  if(/download|stalled/.test(st)) return { label: /stalled/.test(st) ? t("downloads.st.stalled") : t("downloads.st.downloading"), cls: "act", key: "downloading" };
+  return { label: st ? st.charAt(0).toUpperCase() + st.slice(1) : t("downloads.st.unknown"), cls: "muted", key: "other" };
 }
 
 function fmtSpeed(b){ b = Number(b || 0); return b > 0 ? App.fmtSize(b) + "/s" : ""; }
 function fmtEta(sec){
   sec = Number(sec || 0);
   if(!(sec > 0) || sec > 86400 * 30) return "";
-  if(sec >= 3600) return Math.floor(sec / 3600) + " h " + Math.floor(sec % 3600 / 60) + " min";
-  if(sec >= 60) return Math.floor(sec / 60) + " min";
-  return Math.round(sec) + " s";
+  if(sec >= 3600) return t("downloads.eta.h", {h: Math.floor(sec / 3600), m: Math.floor(sec % 3600 / 60)});
+  if(sec >= 60) return t("downloads.eta.m", {m: Math.floor(sec / 60)});
+  return t("downloads.eta.s", {s: Math.round(sec)});
 }
 function itemKey(d){ return d._source + ":" + d.id; }
 
 function load(silent){
   if(s.busy) return;
   s.busy = true;
-  if(!silent && !s.items) App.ui.loading(s.el, "Cargando descargas…");
+  if(!silent && !s.items) App.ui.loading(s.el, t("downloads.loading"));
   Promise.all(tb.SOURCES.map(function(src){
     return tb.list(src, { all: true, fresh: true }).then(function(l){ return { ok: true, l: l }; })
       .catch(function(e){ return { ok: false, e: e, l: [] }; });
@@ -55,7 +60,17 @@ function load(silent){
     var all = [], errs = res.filter(function(r){ return !r.ok; });
     res.forEach(function(r){ all = all.concat(r.l.filter(Boolean)); });
     if(errs.length === res.length){ s.error = errs[0].e.message; s.items = null; }
-    else { s.error = ""; s.items = sortItems(all); }
+    else {
+      s.error = "";
+      s.items = sortItems(all);
+      // Purgar de dlCleared lo que ya no existe en TorBox (solo si cargaron las 3 fuentes)
+      if(!errs.length && s.cleared.length){
+        var live = {};
+        all.forEach(function(d){ live[itemKey(d)] = true; });
+        var kept = s.cleared.filter(function(k){ return live[k]; });
+        if(kept.length !== s.cleared.length){ s.cleared = kept; App.store.set(CLEARED_KEY, kept); }
+      }
+    }
     render();
   });
 }
@@ -72,40 +87,53 @@ function sortItems(list){
 function render(){
   if(s.grid && s.grid.current()) s.focusKey = s.grid.current().getAttribute("data-k");
   if(s.error && !s.items){
-    s.el.innerHTML = '<div class="center err"><h2>No se pudieron cargar las descargas</h2><p>' + App.esc(s.error) +
-                     '</p><div class="btn focusable" data-k="retry">Reintentar</div></div>';
+    s.el.innerHTML = '<div class="center err"><h2>' + App.esc(t("downloads.loadError")) + '</h2><p>' + App.esc(s.error) +
+                     '</p><div class="btn focusable" data-k="retry">' + App.esc(t("ui.retry")) + '</div></div>';
   } else if(!s.items || !s.items.length){
-    s.el.innerHTML = '<div class="center"><h2>No hay descargas</h2><p>Añade contenido desde <b>Buscar</b> (botón AMARILLO).</p></div>';
+    s.el.innerHTML = '<div class="center"><h2>' + App.esc(t("downloads.empty")) + '</h2><p>' + App.esc(t("downloads.emptyText")) + '</p></div>';
   } else {
-    var active = s.items.filter(function(d){ return status(d).key !== "done"; }).length;
+    var visible = s.items.filter(function(d){ return !isCleared(d); });
+    var active = visible.filter(function(d){ return status(d).key !== "done"; }).length;
+    var doneCount = visible.length - active;
+    var clearedCount = s.items.length - visible.length;
+    var shown = s.hideDone ? visible.filter(function(d){ return status(d).key !== "done"; }) : visible;
     var html = '<div class="scroll dl">' +
-      '<div class="section-title">' + s.items.length + ' descargas<span class="muted">' +
-        (active ? active + ' en curso · se actualiza cada 5 s' : 'todo completado') + '</span></div>';
-    s.items.forEach(function(d){
+      '<div class="section-title">' + App.esc(t("downloads.count", {n: visible.length})) + '<span class="muted">' +
+        App.esc(active ? t("downloads.active", {n: active}) : t("downloads.allDone")) + '</span></div>' +
+      /* Barra de acciones: enfocable con el D-pad (▲ desde la primera descarga) */
+      '<div class="chips dl-actions">' +
+        '<div class="chip dl-toggle focusable' + (s.hideDone ? ' active' : '') + '" data-k="toggleDone">' +
+          '<span class="dl-check">' + (s.hideDone ? '☑' : '☐') + '</span> ' + App.esc(t("downloads.hideDone")) + '</div>' +
+        (doneCount ? '<div class="chip focusable" data-k="clearDone">✓ ' + App.esc(t("downloads.clearDone", {n: doneCount})) + '</div>' : '') +
+        (clearedCount ? '<div class="chip dl-small focusable" data-k="showCleared">' + App.esc(t("downloads.showCleared", {n: clearedCount})) + '</div>' : '') +
+        (s.hideDone && doneCount ? '<span class="dl-hidden muted">' + App.esc(t("downloads.hiddenCount", {n: doneCount})) + '</span>' : '') +
+      '</div>';
+    if(!shown.length) html += '<div class="dl-none muted">' + App.esc(t(visible.length ? "downloads.noneActive" : "downloads.noneVisible")) + '</div>';
+    shown.forEach(function(d){
       var st = status(d), p = prog(d);
       var extra = [];
       if(st.key === "downloading"){
         var sp = fmtSpeed(d.download_speed), eta = fmtEta(d.eta);
         if(sp) extra.push("↓ " + sp);
-        if(eta) extra.push("quedan " + eta);
-        if(d.seeds !== undefined && d._source === "torrents") extra.push(d.seeds + " fuentes");
+        if(eta) extra.push(t("downloads.left", {eta: eta}));
+        if(d.seeds !== undefined && d._source === "torrents") extra.push(t("downloads.seeds", {n: d.seeds}));
       }
       var nFiles = (d.files || []).length;
       html += '<div class="row dl-row focusable" data-k="' + App.esc(itemKey(d)) + '">' +
         '<div class="dl-main">' +
-          '<div class="dl-line"><div class="title">' + App.esc(d.name || "(sin nombre)") + '</div>' +
+          '<div class="dl-line"><div class="title">' + App.esc(d.name || t("downloads.noName")) + '</div>' +
             '<span class="dl-status dl-' + st.cls + '">' + st.label + '</span></div>' +
           '<div class="progress dl-bar"><i style="width:' + (p * 100).toFixed(1) + '%"></i></div>' +
           '<div class="dl-sub num">' +
             '<span class="dl-src">' + App.esc(tb.SOURCE_LABEL[d._source] || d._source) + '</span>' +
             '<span>' + Math.round(p * 100) + ' %</span>' +
             '<span>' + App.fmtSize(d.size) + '</span>' +
-            (nFiles ? '<span>' + nFiles + (nFiles === 1 ? ' archivo' : ' archivos') + '</span>' : '') +
+            (nFiles ? '<span>' + App.esc(t("downloads.files", {n: nFiles})) + '</span>' : '') +
             extra.map(function(x){ return '<span>' + App.esc(x) + '</span>'; }).join("") +
           '</div>' +
         '</div></div>';
     });
-    html += '<div class="legend dl-legend"><span><i class="red"></i>Eliminar</span><span><i class="green"></i>Actualizar</span><span>OK opciones</span></div>';
+    html += '<div class="legend dl-legend"><span><i class="red"></i>' + App.esc(t("downloads.delete")) + '</span><span><i class="green"></i>' + App.esc(t("downloads.refresh")) + '</span><span>' + App.esc(t("downloads.okOptions")) + '</span></div>';
     html += '</div>';
     var scrollTop = 0, sc = s.el.querySelector(".scroll");
     if(sc) scrollTop = sc.scrollTop;
@@ -129,58 +157,78 @@ function findItem(key){
 
 function playItem(d){
   var vids = (d.files || []).filter(App.isVideo);
-  if(!vids.length){ App.ui.toast("No hay archivos de vídeo"); return; }
+  if(!vids.length){ App.ui.toast(t("downloads.noVideo")); return; }
   var choose = vids.length === 1 ? Promise.resolve(vids[0]) :
-    App.ui.menu("Elige archivo", vids.map(function(f){
+    App.ui.menu(t("downloads.chooseFile"), vids.map(function(f){
       return { label: (f.short_name || f.name) + "  ·  " + App.fmtSize(f.size), value: f };
     }));
   choose.then(function(f){
     if(!f) return;
-    App.ui.toast("Preparando reproducción…");
+    App.ui.toast(t("downloads.preparing"));
     tb.link(d._source, d.id, f.id).then(function(url){
-      if(!App.player){ App.ui.toast("Reproductor no disponible"); return; }
+      if(!App.player){ App.ui.toast(t("downloads.noPlayer")); return; }
       App.player.play({
         title: App.baseName(f), subtitle: d.name, url: url,
         key: tb.key(d._source, d.id, f.id),
         meta: { source: d._source, itemId: d.id, fileId: f.id }
       });
-    }).catch(function(e){ App.ui.toast("Error: " + e.message, 5000); });
+    }).catch(function(e){ App.ui.toast(t("downloads.errorMsg", {msg: e.message}), 5000); });
   });
 }
 
 function remove(d){
-  App.ui.confirm("¿Eliminar de TorBox?", d.name, "Eliminar", "Cancelar").then(function(yes){
+  App.ui.confirm(t("downloads.deleteConfirm"), d.name, t("downloads.delete"), t("ui.cancel")).then(function(yes){
     if(!yes) return;
     tb.control(d._source, d.id, "delete").then(function(){
-      App.ui.toast("Eliminado");
+      App.ui.toast(t("downloads.deleted"));
       s.items = s.items.filter(function(x){ return x !== d; });
       render(); load(true);
-    }).catch(function(e){ App.ui.toast("Error al eliminar: " + e.message, 5000); });
+    }).catch(function(e){ App.ui.toast(t("downloads.deleteError", {msg: e.message}), 5000); });
   });
+}
+
+/* "Limpiar completados": SOLO las quita de esta lista (no borra nada de TorBox) */
+function clearDone(){
+  if(!s.items) return;
+  var keys = s.items.filter(function(d){ return status(d).key === "done" && !isCleared(d); }).map(itemKey);
+  if(!keys.length){ App.ui.toast(t("downloads.noneDone")); return; }
+  s.cleared = s.cleared.concat(keys);
+  App.store.set(CLEARED_KEY, s.cleared);
+  App.ui.toast(t("downloads.clearedToast", {n: keys.length}), 3500);
+  render();
+}
+function showCleared(){
+  s.cleared = [];
+  App.store.set(CLEARED_KEY, []);
+  App.ui.toast(t("downloads.shownAgain"));
+  render();
 }
 
 function onSelect(i, el){
   var key = el.getAttribute("data-k");
   if(key === "retry"){ s.items = null; load(); return; }
+  if(key === "toggleDone"){ s.hideDone = !s.hideDone; App.store.set(HIDE_KEY, s.hideDone); render(); return; }
+  if(key === "clearDone"){ clearDone(); return; }
+  if(key === "showCleared"){ showCleared(); return; }
   var d = findItem(key); if(!d) return;
   var st = status(d);
   var opts = [];
-  if(st.key === "done" && (d.files || []).some(App.isVideo)) opts.push({ label: "▶ Reproducir", value: "play" });
+  if(st.key === "done" && (d.files || []).some(App.isVideo)) opts.push({ label: "▶ " + t("downloads.play"), value: "play" });
   if(d._source !== "webdl" && st.key !== "done"){
-    if(st.key === "paused") opts.push({ label: "Reanudar", value: "resume" });
-    else opts.push({ label: "Pausar", value: "pause" });
+    if(st.key === "paused") opts.push({ label: t("downloads.resume"), value: "resume" });
+    else opts.push({ label: t("downloads.pause"), value: "pause" });
   }
-  if(d._source === "torrents" && (st.key === "stalled" || st.key === "downloading")) opts.push({ label: "Volver a anunciar (buscar fuentes)", value: "reannounce" });
-  opts.push({ label: "Eliminar", value: "delete" });
-  opts.push({ label: "Cancelar", value: null });
-  App.ui.menu(d.name || "Descarga", opts).then(function(v){
+  if(d._source === "torrents" && (st.key === "stalled" || st.key === "downloading")) opts.push({ label: t("downloads.reannounce"), value: "reannounce" });
+  opts.push({ label: t("downloads.delete"), value: "delete" });
+  opts.push({ label: t("ui.cancel"), value: null });
+  App.ui.menu(d.name || t("downloads.item"), opts).then(function(v){
     if(!v) return;
     if(v === "play") playItem(d);
     else if(v === "delete") remove(d);
     else tb.control(d._source, d.id, v).then(function(){
-      App.ui.toast(v === "pause" ? "En pausa" : v === "resume" ? "Reanudado" : "Hecho");
+      App.ui.toast(v === "pause" ? t("downloads.paused") : v === "resume" ? t("downloads.resumed") : t("downloads.doneMsg"));
       load(true);
-    }).catch(function(e){ App.ui.toast("Error: " + e.message, 5000); });
+    }).catch(function(e){ App.ui.toast(t("downloads.errorMsg", {msg: e.message}), 5000); });
   });
 }
 
@@ -193,15 +241,15 @@ function startTimer(){
 function stopTimer(){ if(s.timer){ clearInterval(s.timer); s.timer = null; } }
 
 App.screens.register({
-  id: "downloads", label: "Descargas", nav: true, order: 50,
-  hint: "OK opciones · ROJO eliminar · VERDE actualizar",
+  id: "downloads", label: t("nav.downloads"), nav: true, order: 50,
+  get hint(){ return t("downloads.hint"); },
   mount: function(el){ s.el = el; },
   show: function(){ s.visible = true; load(false); startTimer(); },
   hide: function(){ s.visible = false; stopTimer(); },
   focus: function(){ if(s.grid){ s.grid.refresh(); s.grid.focus(s.grid.index, true); } },
   blur: function(){ if(s.grid) s.grid.blur(); },
   onKey: function(k){
-    if(k === K.GREEN){ App.ui.toast("Actualizando…", 1200); load(true); return true; }
+    if(k === K.GREEN){ App.ui.toast(t("downloads.refreshing"), 1200); load(true); return true; }
     if(k === K.RED){
       var cur = s.grid && s.grid.current();
       var d = cur && findItem(cur.getAttribute("data-k"));

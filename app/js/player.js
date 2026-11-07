@@ -9,10 +9,8 @@ var K = App.K;
 /* ================= Utilidades de idioma ================= */
 var LANG2TO3 = { es:"spa", en:"eng", fr:"fre", de:"ger", it:"ita", pt:"por", ca:"cat",
   eu:"baq", gl:"glg", ja:"jpn", ko:"kor", zh:"chi", ru:"rus", nl:"dut", pl:"pol" };
-var LANG_ALIASES = { fra:"fre", deu:"ger", esl:"spa", es:"spa", cas:"spa" };
-var LANG_NAME = { spa:"Español", eng:"Inglés", fre:"Francés", ger:"Alemán", ita:"Italiano",
-  por:"Portugués", cat:"Catalán", baq:"Euskera", glg:"Gallego", jpn:"Japonés", kor:"Coreano",
-  chi:"Chino", rus:"Ruso", dut:"Neerlandés", pol:"Polaco", und:"Desconocido" };
+var LANG_ALIASES = { fra:"fre", deu:"ger", esl:"spa", es:"spa", cas:"spa", spn:"spa", ea:"spa",
+  nld:"dut", zho:"chi", eus:"baq" };
 
 function normLang(l){
   l = String(l || "").toLowerCase().replace(/_/g, "-").split("-")[0];
@@ -21,7 +19,10 @@ function normLang(l){
   if(LANG_ALIASES[l]) return LANG_ALIASES[l];
   return l;
 }
-function langName(l){ var n = normLang(l); return LANG_NAME[n] || n.toUpperCase(); }
+function langName(l){
+  var n = normLang(l), k = "player.lang." + n, t = App.t(k);
+  return t === k ? n.toUpperCase() : t;
+}
 
 function isHls(url){ return /\.m3u8(\?|#|$)/i.test(String(url || "")); }
 
@@ -98,13 +99,14 @@ function build(){
     '<div class="pl-pause" id="plPause"><i></i><i></i></div>' +
     '<div class="pl-seek num" id="plSeek"></div>' +
     '<div class="pl-osd" id="plOsd">' +
-      '<div class="pl-top"><span class="pl-live" id="plLive">EN DIRECTO</span>' +
+      '<div class="pl-top"><span class="pl-live" id="plLive">' + App.esc(App.t("player.live")) + '</span>' +
         '<div class="pl-titles"><div class="pl-title" id="plTitle"></div><div class="pl-subtitle" id="plSubtitle"></div></div>' +
         '<div class="pl-engine" id="plEngine"></div></div>' +
       '<div class="pl-progress" id="plProg"><div class="pl-bar"><i id="plFill"></i><b id="plHead"></b></div>' +
         '<div class="pl-times num"><span id="plCur">0:00</span><span id="plRemain"></span><span id="plDur">0:00</span></div></div>' +
-      '<div class="pl-keys legend"><span><i class="red"></i>Audio</span><span><i class="green"></i>Subtítulos</span>' +
-        '<span>▲ Pistas</span><span id="plNextHint">⏭ Siguiente</span></div>' +
+      '<div class="pl-keys legend"><span><i class="red"></i>' + App.esc(App.t("player.keyAudio")) + '</span>' +
+        '<span><i class="green"></i>' + App.esc(App.t("player.keySubs")) + '</span>' +
+        '<span>' + App.esc(App.t("player.keyTracks")) + '</span><span id="plNextHint">' + App.esc(App.t("player.keyNext")) + '</span></div>' +
     '</div>' +
     '<div class="pl-countdown" id="plCount"></div>' +
     '<div class="pl-error" id="plErr"></div>';
@@ -184,7 +186,9 @@ AvplayEngine.prototype.open = function(url, startAt){
           resolve();
         }catch(e){ reject(e); }
       }, function(err){
-        reject(new Error(avplayErrorText(err)));
+        var e2 = new Error(avplayErrorText(err));
+        e2.code = String(err && err.name ? err.name : err);
+        reject(e2);
       });
     }catch(e){ reject(e); }
   });
@@ -197,7 +201,7 @@ AvplayEngine.prototype.seek = function(sec){
     h.buffering(true, 0);
     this.av.seekTo(Math.max(0, Math.floor(sec * 1000)),
       function(){ h.buffering(false); },
-      function(){ h.buffering(false); App.hint("No se pudo saltar a esa posición"); });
+      function(){ h.buffering(false); App.hint(App.t("player.err.seek")); });
   }catch(e){ h.buffering(false); }
 };
 AvplayEngine.prototype.time = function(){ try{ return this.av.getCurrentTime() / 1000; }catch(e){ return 0; } };
@@ -245,12 +249,12 @@ AvplayEngine.prototype.close = function(){
 
 function avplayErrorText(type){
   var t = String(type || "");
-  if(/NOT_SUPPORTED_FILE|NOT_SUPPORTED_FORMAT|UNSUPPORTED/i.test(t)) return "Formato o códec no soportado por la TV.";
-  if(/CONNECTION|NETWORK|TIMEOUT/i.test(t)) return "Error de red al cargar el vídeo.";
-  if(/INVALID_URI/i.test(t)) return "Enlace de vídeo no válido o caducado.";
-  if(/SEEK/i.test(t)) return "No se pudo saltar a esa posición.";
-  if(/DRM/i.test(t)) return "Contenido protegido con DRM.";
-  return "El reproductor nativo no pudo abrir el vídeo" + (t ? " (" + t + ")" : "") + ".";
+  if(/NOT_SUPPORTED|UNSUPPORTED|CODEC/i.test(t)) return App.t("player.err.unsupported");
+  if(/CONNECTION|NETWORK|TIMEOUT/i.test(t)) return App.t("player.err.network");
+  if(/INVALID_URI/i.test(t)) return App.t("player.err.invalidUri");
+  if(/SEEK/i.test(t)) return App.t("player.err.seek");
+  if(/DRM/i.test(t)) return App.t("player.err.drm");
+  return App.t("player.err.avplay", { code: t ? " (" + t + ")" : "" });
 }
 
 /* ================= Motor <video> ================= */
@@ -273,10 +277,15 @@ VideoEngine.prototype.bind = function(){
     error: function(){
       if(!v.getAttribute("src") && !self.hls) return;
       var c = v.error ? v.error.code : 0;
-      var msg = c === 2 ? "Error de red al cargar el vídeo." :
-                c === 3 ? "Error al decodificar el vídeo (códec no soportado)." :
-                c === 4 ? "Formato no soportado por el navegador de la TV." :
-                "No se pudo reproducir el vídeo.";
+      if(self._openFail && !self._opened){
+        var m0 = c === 2 ? App.t("player.err.network") : c === 3 ? App.t("player.err.decode") :
+                 c === 4 ? App.t("player.err.browserFormat") : App.t("player.err.generic");
+        self._openFail(m0, "MEDIA_ERR_" + c); return;
+      }
+      var msg = c === 2 ? App.t("player.err.network") :
+                c === 3 ? App.t("player.err.decode") :
+                c === 4 ? App.t("player.err.browserFormat") :
+                App.t("player.err.generic");
       self.h.error(msg, "MEDIA_ERR_" + c);
     }
   };
@@ -290,11 +299,12 @@ VideoEngine.prototype.unbind = function(){
 };
 VideoEngine.prototype.open = function(url, startAt){
   var self = this, v = this.v;
+  this._opened = false; this._openFail = null;
   this.bind();
   return new Promise(function(resolve, reject){
     var done = false;
     function ok(){
-      if(done) return; done = true;
+      if(done) return; done = true; self._opened = true;
       v.removeEventListener("loadedmetadata", ok);
       try{ if(startAt > 0) v.currentTime = startAt; }catch(e){}
       var p = v.play();
@@ -303,29 +313,34 @@ VideoEngine.prototype.open = function(url, startAt){
     }
     function fail(e){
       if(done) return; done = true;
-      reject(e instanceof Error ? e : new Error("No se pudo abrir el vídeo."));
+      reject(e instanceof Error ? e : new Error(App.t("player.err.open")));
     }
     v.addEventListener("loadedmetadata", ok);
+    self._openFail = function(msg, code){ var e4 = new Error(msg); e4.code = code; fail(e4); };
     var nativeHls = v.canPlayType("application/vnd.apple.mpegurl");
     if(isHls(url) && !nativeHls && window.Hls && window.Hls.isSupported && window.Hls.isSupported()){
       var hls = self.hls = new window.Hls({ enableWorker: true, lowLatencyMode: false });
       hls.on(window.Hls.Events.ERROR, function(evt, data){
         if(data && data.fatal){
-          if(!done) fail(new Error("Error HLS: " + (data.details || data.type)));
-          else self.h.error("Se cortó la emisión (" + (data.details || data.type) + ").", "HLS");
+          if(!done) fail(new Error(App.t("player.err.hls", { detail: data.details || data.type })));
+          else self.h.error(App.t("player.err.hlsCut", { detail: data.details || data.type }), "HLS");
         }
       });
       hls.loadSource(url);
       hls.attachMedia(v);
     } else {
       if(isHls(url) && !nativeHls && !window.Hls){
-        fail(new Error("Este navegador no reproduce HLS y falta hls.js."));
+        fail(new Error(App.t("player.err.noHls")));
         return;
       }
       v.src = url;
       v.load();
     }
-    setTimeout(function(){ if(!done && v.error) fail(new Error("Formato no soportado por el navegador de la TV.")); }, 8000);
+    setTimeout(function(){
+      if(!done && v.error){
+        var e3 = new Error(App.t("player.err.browserFormat")); e3.code = "MEDIA_ERR_" + v.error.code; fail(e3);
+      }
+    }, 8000);
   });
 };
 VideoEngine.prototype.play = function(){ var p = this.v.play(); if(p && p.catch) p.catch(function(){}); };
@@ -495,6 +510,7 @@ function start(o, startAt, engineName, urlIdx){
   var engine = P.engine;
   // subtítulos externos se cargan en paralelo
   P.sub = { kind: "off", index: -1 }; P.extCues = [];
+  fetchOnlineSubs(o);
 
   var urls = urlList(o);
   engine.open(urls[urlIdx] || o.url, startAt || 0).then(function(){
@@ -502,9 +518,14 @@ function start(o, startAt, engineName, urlIdx){
     P.started = true;
     setBuffering(false);
     P.tick = setInterval(updateUi, 250);
-    P.saveT = setInterval(function(){ if(!P.paused) saveNow(); }, 10000);
+    P.saveT = setInterval(function(){
+      if(P.paused) return;
+      saveNow();
+      if(!o.live) App.bus.emit("player:progress", { key: o.key || null, meta: o.meta || {}, pos: curTime(), dur: P.dur || 0 });
+    }, 10000);
     setTimeout(function(){ if(P.engine === engine) autoSelectTracks(); }, 600);
     if(o.onStart) try{ o.onStart(); }catch(e){}
+    App.bus.emit("player:start", { key: o.key || null, meta: o.meta || {}, title: o.title || "", live: !!o.live });
   }).catch(function(err){
     if(P.engine !== engine) return;
     // URLs alternativas: probar la siguiente antes de mostrar error
@@ -513,13 +534,42 @@ function start(o, startAt, engineName, urlIdx){
       start(o, startAt, engineName, urlIdx + 1);
       return;
     }
-    onEngineError(err && err.message ? err.message : String(err), "OPEN", false);
+    onEngineError(err && err.message ? err.message : String(err), (err && err.code) || "OPEN", false);
   });
+}
+
+function isFormatError(code, msg){
+  return /MEDIA_ERR_(3|4)|NOT_SUPPORTED|UNSUPPORTED|CODEC/i.test(String(code || "")) ||
+         msg === App.t("player.err.unsupported") || msg === App.t("player.err.browserFormat") ||
+         msg === App.t("player.err.decode");
+}
+function fileNameOf(o){
+  if(!o) return "";
+  var m = o.meta || {};
+  if(m.filename) return m.filename;
+  if(m.fileName) return m.fileName;
+  var u = String(o.url || "");
+  var last = decodeURIComponent((u.split("?")[0].split("/").pop() || ""));
+  if(/\.[a-z0-9]{2,4}$/i.test(last)) return last;
+  return (o.subtitle ? o.title + " " + o.subtitle : o.title) || u;
 }
 
 function onEngineError(msg, code, wasPlaying){
   console.warn("[player] error", code, msg);
   App.bus.emit("player:error", { key: P.opts ? P.opts.key : null, message: msg });
+  var learned = false;
+  if(P.opts && !P.opts.live && isFormatError(code, msg) && App.caps && App.caps.learnFail){
+    var fname = fileNameOf(P.opts), failUrl = urlList(P.opts)[P.urlIdx || 0] || P.opts.url;
+    if(/MEDIA_ERR_4/.test(String(code))){
+      // MEDIA_ERR_4 también sale con 404/enlace caducado: solo aprender si el archivo responde
+      App.net.fetch(failUrl, { headers: { Range: "bytes=0-0" } }).then(function(r){
+        try{ if(r.body && r.body.cancel) r.body.cancel(); }catch(e){}
+        if(r.ok || r.status === 206) App.caps.learnFail(fname);
+      }).catch(function(){});
+    } else {
+      try{ App.caps.learnFail(fname); learned = true; }catch(e){}
+    }
+  }
   setBuffering(false);
   if(!P.active) return;
   var o = P.opts;
@@ -527,19 +577,20 @@ function onEngineError(msg, code, wasPlaying){
   if(wasPlaying) saveNow();
   var curEngine = P.engineName;
   var alt = curEngine === "avplay" ? "video" : (hasAvplay() ? "avplay" : null);
-  var altLabel = alt === "video" ? "Probar con reproductor HTML5" : "Probar con AVPlay";
+  var altLabel = alt === "video" ? App.t("player.tryHtml5") : App.t("player.tryAvplay");
   var buttons = [];
-  if(o && o.url){ buttons.push({ label: "Reintentar", value: "retry" }); }
+  if(o && o.url){ buttons.push({ label: App.t("player.retry"), value: "retry" }); }
   if(alt && o){ buttons.push({ label: altLabel, value: "alt" }); }
-  buttons.push({ label: "Cerrar", value: "close" });
+  buttons.push({ label: App.t("ui.close"), value: "close" });
   closeEngine();
   clearTimers();
   els.plErr.textContent = msg;
   els.plErr.classList.add("on");
   App.ui.modal({
-    title: "No se pudo reproducir",
+    title: App.t("player.err.title"),
     html: "<p>" + App.esc(msg) + "</p>" +
-      (curEngine === "video" && !hasAvplay() ? "<p>Fuera de la TV solo se usa el reproductor del navegador, que no abre MKV/HEVC.</p>" : ""),
+      (learned ? "<p>" + App.esc(App.t("player.err.learned")) + "</p>" : "") +
+      (curEngine === "video" && !hasAvplay() && !App.isTizen() ? "<p>" + App.esc(App.t("player.err.browserOnly")) + "</p>" : ""),
     buttons: buttons, cancelValue: "close",
     onClose: function(v){
       if(!P.active) return;
@@ -553,9 +604,10 @@ function onEngineError(msg, code, wasPlaying){
 function onEnded(){
   if(!P.active || P.ended) return;
   var o = P.opts;
-  if(o.live){ onEngineError("La emisión ha terminado o se ha cortado.", "LIVE_END", false); return; }
+  if(o.live){ onEngineError(App.t("player.err.liveEnd"), "LIVE_END", false); return; }
   P.ended = true;
   if(o.key){ saveNow(); App.history.markWatched(o.key); }
+  App.bus.emit("player:ended", { key: o.key || null, meta: o.meta || {} });
   if(o.next && App.settings.get("autoplayNext")){
     startCountdown();
   } else {
@@ -570,7 +622,7 @@ function startCountdown(){
   els.plCount.classList.add("on");
   function paint(){
     els.plCount.innerHTML = '<div class="pl-count-n num">' + P.countdown.n + '</div>' +
-      '<div><b>Siguiente episodio en ' + P.countdown.n + ' s</b><br><span class="muted">OK ya · Atrás cancelar</span></div>';
+      '<div><b>' + App.esc(App.t("player.nextIn", { n: P.countdown.n })) + '</b><br><span class="muted">' + App.esc(App.t("player.nextKeys")) + '</span></div>';
   }
   paint();
   P.countdown.t = setInterval(function(){
@@ -586,23 +638,58 @@ function stopCountdown(){
 
 function goNext(){
   var o = P.opts;
-  if(!o || !o.next){ App.hint("No hay siguiente episodio"); return; }
+  if(!o || !o.next){ App.hint(App.t("player.noNext")); return; }
   saveNow();
   setBuffering(true, 0);
-  App.ui.toast("Cargando siguiente episodio…");
+  App.ui.toast(App.t("player.loadingNext"));
   Promise.resolve().then(function(){ return o.next(); }).then(function(nx){
     if(!P.active) return;
-    if(!nx){ setBuffering(false); App.hint("No hay más episodios"); if(P.ended) stop(); return; }
+    if(!nx){ setBuffering(false); App.hint(App.t("player.noMore")); if(P.ended) stop(); return; }
     play(nx);
   }).catch(function(e){
     setBuffering(false);
-    App.hint("No se pudo cargar el siguiente: " + e.message);
+    App.hint(App.t("player.nextFailed", { msg: e.message }));
     if(P.ended) stop();
   });
 }
 
+/* ================= Subtítulos en internet (OpenSubtitles vía App.subs) ================= */
+function fetchOnlineSubs(o){
+  P.onlineSubsPending = false;
+  if(!o || o.live || o._onlineSubsTried) return;
+  if(o.subtitles && o.subtitles.length) return;
+  var m = o.meta || {};
+  if(!m.imdbId || App.settings.get("openSubs") === false || !App.subs || !App.subs.fetch) return;
+  o._onlineSubsTried = true;
+  P.onlineSubsPending = true;
+  App.subs.fetch({ type: m.type === "movie" ? "movie" : (m.season !== undefined && m.season !== null ? "series" : (m.type || "movie")),
+                   imdbId: m.imdbId, season: m.season, episode: m.episode, filename: m.filename || fileNameOf(o) })
+    .then(function(list){
+      if(P.opts !== o) return;
+      P.onlineSubsPending = false;
+      if(!list || !list.length) return;
+      o.subtitles = (o.subtitles || []).concat(list);
+      App.hint(App.t("player.subsFound", { n: list.length }));
+      // si el reproductor ya arrancó y no hay subtítulos activos, re-evaluar la autoselección
+      if(P.started && P.sub.kind === "off") autoSelectTracks(true);
+    }).catch(function(){ if(P.opts === o) P.onlineSubsPending = false; });
+}
+
+/* Decodifica un subtítulo: UTF-8 y, si sale con muchos '\uFFFD', windows-1252 */
+function decodeSubs(r){
+  if(!r.arrayBuffer || typeof TextDecoder === "undefined") return r.text();
+  return r.arrayBuffer().then(function(buf){
+    var txt = new TextDecoder("utf-8").decode(buf);
+    var bad = (txt.match(/\uFFFD/g) || []).length;
+    if(bad > 3 && bad > txt.length / 2000){
+      try{ txt = new TextDecoder("windows-1252").decode(buf); }catch(e){}
+    }
+    return txt;
+  });
+}
+
 /* ================= Pistas y subtítulos ================= */
-function autoSelectTracks(){
+function autoSelectTracks(lateExt){
   if(!P.engine) return;
   var tr = P.engine.tracks();
   var aPref = normLang(App.settings.get("audioLang")), sPref = normLang(App.settings.get("subLang"));
@@ -621,11 +708,11 @@ function autoSelectTracks(){
   var extIdx = -1;
   exts.forEach(function(s, i){ if(extIdx < 0 && normLang(s.lang) === sPref) extIdx = i; });
   var emb = tr.text.filter(function(t){ return t.lang === sPref; })[0];
-  if(P.engine.name === "avplay") P.engine.selectText(-1);
-  if(!foreign && audioLang) return;
-  if(!audioLang && !exts.length && !emb) return;
-  if(emb && foreign) selectSub("emb", emb.index, true);
-  else if(extIdx >= 0 && (foreign || !audioLang)) selectSub("ext", extIdx, true);
+  if(!lateExt && P.engine.name === "avplay") P.engine.selectText(-1);
+  // Solo autoactivar si sabemos que el audio está en otro idioma
+  if(!foreign) return;
+  if(emb && !lateExt) selectSub("emb", emb.index, true);
+  else if(extIdx >= 0) selectSub("ext", extIdx, true);
 }
 
 function selectSub(kind, index, silent){
@@ -633,12 +720,12 @@ function selectSub(kind, index, silent){
   clearTimeout(P.embTimer);
   showSubText(""); P._lastSub = "";
   P.extCues = [];
-  if(kind === "off"){ P.sub = { kind: "off", index: -1 }; if(!silent) App.hint("Subtítulos desactivados"); return; }
+  if(kind === "off"){ P.sub = { kind: "off", index: -1 }; if(!silent) App.hint(App.t("player.subsOff")); return; }
   if(kind === "emb"){
     if(P.engine && P.engine.selectText(index)){
       P.sub = { kind: "emb", index: index };
-      if(!silent) App.hint("Subtítulos activados");
-    } else App.hint("No se pudo activar esa pista");
+      if(!silent) App.hint(App.t("player.subsOn"));
+    } else App.hint(App.t("player.subsTrackFail"));
     return;
   }
   var s = (P.opts.subtitles || [])[index];
@@ -646,30 +733,30 @@ function selectSub(kind, index, silent){
   P.sub = { kind: "ext", index: index };
   var url = s.url;
   var p = P.extCache[url] ? Promise.resolve(P.extCache[url]) :
-    App.net.fetch(url).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    App.net.fetch(url).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return decodeSubs(r); })
       .then(function(txt){ var c = parseSubs(txt); P.extCache[url] = c; return c; });
   p.then(function(cues){
     if(P.sub.kind !== "ext" || P.sub.index !== index) return;
     P.extCues = cues;
-    if(!cues.length) App.hint("El archivo de subtítulos está vacío o no se entiende");
-    else if(!silent) App.hint("Subtítulos: " + (s.label || langName(s.lang)));
+    if(!cues.length) App.hint(App.t("player.subsEmpty"));
+    else if(!silent) App.hint(App.t("player.subsNamed", { name: s.label || langName(s.lang) }));
   }).catch(function(e){
-    App.hint("No se pudieron cargar los subtítulos: " + e.message);
+    App.hint(App.t("player.subsLoadFail", { msg: e.message }));
     P.sub = { kind: "off", index: -1 };
   });
 }
 
 function subMenu(){
   if(!P.engine) return;
-  var tr = P.engine.tracks(), items = [{ label: "Desactivados", value: "off", selected: P.sub.kind === "off" }];
+  var tr = P.engine.tracks(), items = [{ label: App.t("player.subsDisabled"), value: "off", selected: P.sub.kind === "off" }];
   tr.text.forEach(function(t){
-    items.push({ label: t.label + " (incrustado)", value: "emb:" + t.index, selected: P.sub.kind === "emb" && P.sub.index === t.index });
+    items.push({ label: App.t("player.subsEmbedded", { label: t.label }), value: "emb:" + t.index, selected: P.sub.kind === "emb" && P.sub.index === t.index });
   });
   ((P.opts && P.opts.subtitles) || []).forEach(function(s, i){
-    items.push({ label: (s.label || langName(s.lang)) + " (archivo)", value: "ext:" + i, selected: P.sub.kind === "ext" && P.sub.index === i });
+    items.push({ label: App.t("player.subsFile", { label: s.label || langName(s.lang) }), value: "ext:" + i, selected: P.sub.kind === "ext" && P.sub.index === i });
   });
-  if(items.length === 1) items.push({ label: "(No hay subtítulos disponibles)", value: "off" });
-  App.ui.menu("Subtítulos", items).then(function(v){
+  if(items.length === 1) items.push({ label: P.onlineSubsPending ? App.t("player.subsLoading") : App.t("player.subsNone"), value: "off" });
+  App.ui.menu(App.t("player.subsTitle"), items).then(function(v){
     if(v === null || !P.active) return;
     if(v === "off") return selectSub("off");
     var parts = String(v).split(":");
@@ -680,22 +767,22 @@ function subMenu(){
 function audioMenu(){
   if(!P.engine) return;
   var tr = P.engine.tracks();
-  if(tr.audio.length < 2){ App.hint(tr.audio.length ? "Solo hay una pista de audio" : "Este reproductor no permite cambiar el audio"); return; }
-  App.ui.menu("Audio", tr.audio.map(function(a){
+  if(tr.audio.length < 2){ App.hint(tr.audio.length ? App.t("player.audioOne") : App.t("player.audioNoSwitch")); return; }
+  App.ui.menu(App.t("player.audioTitle"), tr.audio.map(function(a){
     return { label: a.label, value: a.index, selected: !!a.current };
   })).then(function(v){
     if(v === null || !P.active) return;
-    if(P.engine.selectAudio(Number(v))) App.hint("Audio cambiado");
-    else App.hint("No se pudo cambiar la pista de audio");
+    if(P.engine.selectAudio(Number(v))) App.hint(App.t("player.audioChanged"));
+    else App.hint(App.t("player.audioFail"));
   });
 }
 
 function sizeMenu(){
   var cur = App.settings.get("subSize") || "m";
-  App.ui.menu("Tamaño de subtítulos", [
-    { label: "Pequeño", value: "s", selected: cur === "s" },
-    { label: "Mediano", value: "m", selected: cur === "m" },
-    { label: "Grande", value: "l", selected: cur === "l" }
+  App.ui.menu(App.t("player.sizeTitle"), [
+    { label: App.t("player.size.s"), value: "s", selected: cur === "s" },
+    { label: App.t("player.size.m"), value: "m", selected: cur === "m" },
+    { label: App.t("player.size.l"), value: "l", selected: cur === "l" }
   ]).then(function(v){
     if(!v) return;
     App.settings.set("subSize", v);
@@ -707,15 +794,15 @@ function tracksPanel(){
   if(!P.engine) return;
   var tr = P.engine.tracks();
   var curA = tr.audio.filter(function(a){ return a.current; })[0];
-  var subLabel = "Desactivados";
-  if(P.sub.kind === "emb"){ var t = tr.text.filter(function(x){ return x.index === P.sub.index; })[0]; subLabel = t ? t.label : "Incrustados"; }
-  if(P.sub.kind === "ext"){ var s = (P.opts.subtitles || [])[P.sub.index]; subLabel = s ? (s.label || langName(s.lang)) : "Archivo"; }
-  var size = { s: "Pequeño", m: "Mediano", l: "Grande" }[App.settings.get("subSize") || "m"];
-  App.ui.menu("Pistas", [
-    { label: "Audio: " + (curA ? curA.label : (tr.audio.length ? tr.audio[0].label : "Predeterminado")), value: "audio" },
-    { label: "Subtítulos: " + subLabel, value: "subs" },
-    { label: "Tamaño de subtítulos: " + size, value: "size" },
-    { label: "Motor: " + (P.engineName === "avplay" ? "AVPlay (nativo)" : "HTML5"), value: "engine" }
+  var subLabel = App.t("player.subsDisabled");
+  if(P.sub.kind === "emb"){ var t = tr.text.filter(function(x){ return x.index === P.sub.index; })[0]; subLabel = t ? t.label : App.t("player.embedded"); }
+  if(P.sub.kind === "ext"){ var s = (P.opts.subtitles || [])[P.sub.index]; subLabel = s ? (s.label || langName(s.lang)) : App.t("player.file"); }
+  var size = App.t("player.size." + (App.settings.get("subSize") || "m"));
+  App.ui.menu(App.t("player.tracksTitle"), [
+    { label: App.t("player.trackAudio", { v: curA ? curA.label : (tr.audio.length ? tr.audio[0].label : App.t("player.default")) }), value: "audio" },
+    { label: App.t("player.trackSubs", { v: subLabel }), value: "subs" },
+    { label: App.t("player.trackSize", { v: size }), value: "size" },
+    { label: App.t("player.trackEngine", { v: P.engineName === "avplay" ? App.t("player.engineAvplay") : App.t("player.engineHtml5") }), value: "engine" }
   ]).then(function(v){
     if(!P.active) return;
     if(v === "audio") audioMenu();
@@ -727,7 +814,7 @@ function tracksPanel(){
 
 function switchEngine(){
   var alt = P.engineName === "avplay" ? "video" : (hasAvplay() ? "avplay" : null);
-  if(!alt){ App.hint("AVPlay solo está disponible en la TV"); return; }
+  if(!alt){ App.hint(App.t("player.avplayTvOnly")); return; }
   var pos = P.opts.live ? 0 : curTime();
   saveNow();
   start(P.opts, pos, alt);
@@ -762,7 +849,7 @@ function togglePause(){
 /* ================= API pública ================= */
 function play(opts){
   if(opts && !opts.url && opts.urls && opts.urls.length) opts.url = opts.urls[0];
-  if(!opts || !opts.url){ App.hint("No hay enlace de vídeo"); return; }
+  if(!opts || !opts.url){ App.hint(App.t("player.noLink")); return; }
   build();
   var o = opts;
   var resume = null;
@@ -778,9 +865,9 @@ function play(opts){
   // Pausar lo que hubiera mientras se pregunta
   if(P.active && P.engine){ saveNow(); closeEngine(); clearTimers(); }
   App.ui.modal({
-    title: "¿Reanudar desde " + App.fmtTime(resume) + "?",
+    title: App.t("player.resumeTitle", { time: App.fmtTime(resume) }),
     html: "<p>" + App.esc(o.title || "") + (o.subtitle ? " · " + App.esc(o.subtitle) : "") + "</p>",
-    buttons: [{ label: "Reanudar", value: true }, { label: "Desde el principio", value: false }],
+    buttons: [{ label: App.t("player.resume"), value: true }, { label: App.t("player.fromStart"), value: false }],
     cancelValue: null,
     onClose: function(v){
       if(v === null){ if(P.active) stop(); return; }
@@ -792,6 +879,7 @@ function play(opts){
 
 function stop(){
   var o = P.opts;
+  var closePos = (P.active && P.engine && P.started) ? curTime() : 0, closeDur = P.dur || 0;
   if(P.active) saveNow();
   clearTimers();
   closeEngine();
@@ -805,7 +893,7 @@ function stop(){
   document.body.classList.remove("player-on");
   P.opts = null;
   if(o && o.onClose){ try{ o.onClose(); }catch(e){} }
-  App.bus.emit("player:close", { key: o ? o.key : null });
+  App.bus.emit("player:close", { key: o ? o.key : null, meta: o ? (o.meta || {}) : {}, pos: closePos, dur: closeDur });
   // repintar foco de la pantalla de debajo
   try{
     var def = App.screens && App.current() && App.screens.get(App.current());
@@ -844,7 +932,7 @@ function onKey(k){
     case K.FF: seekBy(60); return true;
     case K.UP: tracksPanel(); return true;
     case K.DOWN: case K.INFO: showOsd(); return true;
-    case K.NEXT: if(o.next) goNext(); else App.hint("No hay siguiente episodio"); return true;
+    case K.NEXT: if(o.next) goNext(); else App.hint(App.t("player.noNext")); return true;
     case K.PREV: if(!o.live && P.started){ P.engine.seek(0); showOsd(); } return true;
     case K.GREEN: subMenu(); return true;
     case K.RED: audioMenu(); return true;
@@ -881,7 +969,8 @@ App.player = {
   onKey: onKey,
   engine: function(){ return P.active ? P.engineName : null; },
   hasAvplay: hasAvplay,
-  parseSubs: parseSubs
+  parseSubs: parseSubs,
+  current: function(){ return P.active && P.opts ? { key: P.opts.key, meta: P.opts.meta || {}, title: P.opts.title } : null; }
 };
 
 })();
