@@ -49,7 +49,7 @@ function apply(settings){
     }
   }
   if(keys.indexOf("tmdbKey") >= 0) App.bus.emit("meta:keychange");
-  App.ui.toast("Ajustes recibidos del móvil ✓");
+  App.ui.toast(App.t("remote.received"));
   pushSnapshot();
 }
 
@@ -62,18 +62,18 @@ function report(id, ok, message){
 
 function runAction(a){
   if(!a || a.type !== "add") return;
-  if(!App.torbox.hasToken()){ report(a.id, false, "La TV aún no tiene API key de TorBox."); return; }
+  if(!App.torbox.hasToken()){ report(a.id, false, App.t("remote.noKey")); return; }
   console.info("[remoto] añadir enlace:", String(a.link).slice(0, 80));
   App.torbox.addLink(a.link, a.name).then(function(r){
-    var what = { torrents: "Torrent", usenet: "NZB", webdl: "Descarga web" }[r.kind] || "Enlace";
+    var what = App.t("remote.kind." + r.kind);
     var name = (r.data && (r.data.name || r.data.hash)) || "";
-    App.ui.toast(what + " añadido a TorBox ✓");
-    report(a.id, true, what + " añadido a TorBox" + (name ? ": " + name : "") + ". Míralo en Descargas.");
+    App.ui.toast(App.t("remote.addedToast", {what: what}));
+    report(a.id, true, App.t("remote.addedReport", {what: what, name: name ? ": " + name : ""}));
     App.bus.emit("torbox:added", r);
   }).catch(function(e){
     console.warn("[remoto] error al añadir:", e.message);
-    App.ui.toast("No se pudo añadir: " + e.message);
-    report(a.id, false, "Error: " + e.message);
+    App.ui.toast(App.t("remote.addFailed", {msg: e.message}));
+    report(a.id, false, App.t("remote.addFailed", {msg: e.message}));
   });
 }
 
@@ -122,9 +122,9 @@ function renderBanner(){
   var url = App.remote.url();
   if(!info || !url){ bannerEl.classList.remove("on"); return; }
   bannerEl.innerHTML =
-    '<span class="rb-title">Configura desde el móvil o el PC</span>' +
+    '<span class="rb-title">' + App.esc(App.t("remote.banner")) + '</span>' +
     '<span class="rb-url">' + App.esc(url) + '</span>' +
-    '<span class="rb-pin">PIN <b>' + App.esc(info.pin) + '</b></span>';
+    '<span class="rb-pin">' + App.esc(App.t("remote.pin")) + ' <b>' + App.esc(info.pin) + '</b></span>';
   syncBanner();
 }
 function syncBanner(){

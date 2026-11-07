@@ -30,7 +30,7 @@ function screenEl(id){
 
 function activate(id, params){
   var def = screens[id];
-  if(!def){ App.hint("Pantalla no disponible: " + id); return; }
+  if(!def){ App.hint(App.t("main.noScreen", {id: id})); return; }
   if(current){
     var prev = screens[current.id];
     var prevEl = document.getElementById("screen-" + current.id);
@@ -49,7 +49,7 @@ function activate(id, params){
   if(def.show){
     try{ def.show(params || {}, el); }catch(e){
       console.error("[show " + id + "]", e);
-      App.ui.error(el, "Error en la pantalla", e.message);
+      App.ui.error(el, App.t("main.screenError"), e.message);
     }
   }
   App.setHintDefault(def.hint || DEFAULT_HINT);
@@ -74,7 +74,7 @@ App.section = function(id, params){
 App.current = function(){ return current ? current.id : null; };
 
 /* ================= Barra de secciones ================= */
-var DEFAULT_HINT = "▲▼◄► moverse · OK elegir · Atrás volver";
+var DEFAULT_HINT = "";  // se calcula con App.t al arrancar
 
 function renderNav(){
   if(!navEl) return;
@@ -145,7 +145,7 @@ function headerKey(k){
     return;
   }
   if(App.isBack(k)){
-    App.ui.confirm("¿Salir de TorBox?", "", "Salir", "Cancelar").then(function(yes){
+    App.ui.confirm(App.t("main.exitTitle"), "", App.t("main.exit"), App.t("ui.cancel")).then(function(yes){
       if(!yes) return;
       try{ tizen.application.getCurrentApplication().exit(); }
       catch(e){ try{ window.history.back(); }catch(e2){} }
@@ -201,15 +201,16 @@ function onKeyDown(e){
 
 /* ================= Pantalla de configuración inicial ================= */
 App.screens.register({
-  id: "setup", label: "Configuración", nav: false,
-  hint: "Escribe tu API key · ▼ botón · OK guardar",
+  id: "setup", label: "Setup", nav: false,
+  get hint(){ return App.t("setup.hint"); },
   mount: function(el){
     el.innerHTML =
       '<div class="center"><div class="box setup-box">' +
-        '<h2>Conecta tu cuenta de TorBox</h2>' +
-        '<p>Pega tu API key (torbox.app → Settings → API). Se guarda solo en esta TV.</p>' +
-        '<input id="tokenInput" class="input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="API key">' +
-        '<div class="btn focusable" id="saveBtn">Guardar y entrar</div>' +
+        '<h2>' + App.esc(App.t("setup.title")) + '</h2>' +
+        '<p>' + App.esc(App.t("setup.text")) + '</p>' +
+        '<input id="tokenInput" class="input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="' + App.esc(App.t("setup.placeholder")) + '">' +
+        '<div class="btn focusable" id="saveBtn">' + App.esc(App.t("setup.save")) + '</div>' +
+        '<div class="setup-lang muted">' + App.esc(App.t("setup.langHint")) + '</div>' +
       '</div></div>';
     var input = el.querySelector("#tokenInput");
     input.addEventListener("keydown", function(ev){
@@ -245,7 +246,7 @@ App.screens.register({
 
 function save(){
   var v = document.getElementById("tokenInput").value.trim();
-  if(!v){ App.hint("Introduce una API key"); return; }
+  if(!v){ App.hint(App.t("setup.needKey")); return; }
   App.settings.set("torboxToken", v);
   App.torbox.invalidate();
   document.getElementById("tokenInput").blur();
@@ -261,6 +262,8 @@ function firstSection(){
 
 /* ================= Arranque ================= */
 function boot(){
+  DEFAULT_HINT = App.t("main.hint");
+  document.documentElement.lang = App.i18n.lang();
   mainEl = document.getElementById("main");
   navEl = document.getElementById("nav");
   App.registerKeys();

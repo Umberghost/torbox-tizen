@@ -117,7 +117,7 @@ function closeTop(value){
 ui.modal = function(opts){
   var el = document.createElement("div");
   el.className = "modal-backdrop";
-  var btns = (opts.buttons || [{label:"Aceptar", value:true}]).map(function(b, i){
+  var btns = (opts.buttons || [{label:App.t("ui.ok"), value:true}]).map(function(b, i){
     return '<div class="btn focusable" data-i="'+i+'">'+App.esc(b.label)+'</div>';
   }).join("");
   el.innerHTML =
@@ -154,7 +154,7 @@ ui.confirm = function(title, text, yes, no){
   return new Promise(function(resolve){
     ui.modal({
       title: title, html: text ? '<p>'+App.esc(text)+'</p>' : "",
-      buttons: [{label: yes || "Sí", value: true}, {label: no || "No", value: false}],
+      buttons: [{label: yes || App.t("ui.yes"), value: true}, {label: no || App.t("ui.no"), value: false}],
       cancelValue: false, onClose: function(v){ resolve(!!v); }
     });
   });
@@ -189,7 +189,7 @@ ui.toast = function(msg, ms){
 
 /* ================= Estados de pantalla ================= */
 ui.loading = function(el, msg){
-  el.innerHTML = '<div class="center"><div class="spinner"></div><p>'+App.esc(msg || "Cargando…")+'</p></div>';
+  el.innerHTML = '<div class="center"><div class="spinner"></div><p>'+App.esc(msg || App.t("ui.loading"))+'</p></div>';
 };
 ui.error = function(el, title, msg){
   el.innerHTML = '<div class="center err"><h2>'+App.esc(title)+'</h2><p>'+App.esc(msg || "")+'</p></div>';

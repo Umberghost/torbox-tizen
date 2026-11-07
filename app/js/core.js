@@ -132,7 +132,9 @@ var DEFAULTS = {
   subLang: "spa",                // ISO 639-2 preferido
   audioLang: "spa",
   subSize: "m",                  // s | m | l
-  uiLang: "es-ES",               // idioma para TMDB
+  uiLanguage: "en",              // idioma de la interfaz (en | es)
+  contentLanguage: "auto",       // idioma de sinopsis/episodios: auto (= interfaz) | en | es
+  uiLang: "es-ES",               // OBSOLETO: usar App.i18n.tmdbLang()
   liveListUrl: "https://www.tdtchannels.com/lists/tv.json",
   appIds: {},                    // { tivify: "...", atresplayer: "...", mitele: "..." }
   stremioAddon: "",              // URL del manifest.json de un add-on de Stremio (Torrentio, Comet, AIOStreams…)
@@ -173,6 +175,59 @@ App.settings = {
   },
   reset: function(){ settings = {}; App.store.set("settings", settings); App.bus.emit("settings:change", {}); }
 };
+
+/* ---------------- Idiomas (i18n) ----------------
+ * App.t("modulo.clave", {var}) → texto en el idioma de la interfaz (uiLanguage),
+ * con caída a inglés y luego a la propia clave. Cada módulo registra sus textos
+ * en app/i18n/<modulo>.js con App.i18n.add("en", {...}) y App.i18n.add("es", {...}).
+ * Variables: "Hola {name}" + {name:"Ana"}. Plurales: claves ".one" / ".other" con {n}.
+ */
+var dicts = {};
+App.i18n = {
+  LANGS: [
+    { code: "en", label: "English", tmdb: "en-US", iso3: "eng" },
+    { code: "es", label: "Español", tmdb: "es-ES", iso3: "spa" }
+  ],
+  add: function(lang, table){
+    var d = dicts[lang] = dicts[lang] || {};
+    for(var k in table) d[k] = table[k];
+  },
+  lang: function(){
+    var l = App.settings ? App.settings.get("uiLanguage") : "en";
+    return dicts[l] ? l : "en";
+  },
+  /* Idioma del contenido (sinopsis, episodios): "auto" = el de la interfaz */
+  contentLang: function(){
+    var c = App.settings ? App.settings.get("contentLanguage") : "auto";
+    return (!c || c === "auto") ? App.i18n.lang() : c;
+  },
+  /* Código TMDB (es-ES, en-US…) del idioma de contenido */
+  tmdbLang: function(){
+    var c = App.i18n.contentLang();
+    for(var i = 0; i < App.i18n.LANGS.length; i++) if(App.i18n.LANGS[i].code === c) return App.i18n.LANGS[i].tmdb;
+    return "en-US";
+  },
+  has: function(key){ var d = dicts[App.i18n.lang()]; return !!(d && key in d); }
+};
+App.t = function(key, vars){
+  var l = App.i18n.lang();
+  if(vars && typeof vars.n === "number"){
+    var pk = key + (vars.n === 1 ? ".one" : ".other");
+    if((dicts[l] && pk in dicts[l]) || (dicts.en && pk in dicts.en)) key = pk;
+  }
+  var s = (dicts[l] && dicts[l][key] !== undefined) ? dicts[l][key] :
+          (dicts.en && dicts.en[key] !== undefined) ? dicts.en[key] : key;
+  if(vars) s = String(s).replace(/\{(\w+)\}/g, function(m, k){ return vars[k] !== undefined ? vars[k] : m; });
+  return s;
+};
+
+/* Cambiar el idioma de la interfaz recarga la app (los textos se pintan al montar) */
+App.bus.on("settings:change", function(c){
+  if(c && (c.key === "uiLanguage" || c.key === "contentLanguage")){
+    try{ App.store.remove("metacache"); }catch(e){}
+    setTimeout(function(){ location.reload(); }, 300);
+  }
+});
 
 /* ---------------- Helpers ---------------- */
 App.esc = function(s){
@@ -257,7 +312,7 @@ App.net = {
     return App.net.checkProxy().then(function(ok){
       if(ok) return fetch(PROXY + "/proxy?url=" + encodeURIComponent(url), init);
       return fetch(url, init).catch(function(e){
-        var err = new Error("La TV bloquea la conexión directa con TorBox (CORS) y el servicio proxy no responde. Reinstala el módulo en TizenBrew o reinicia la TV.");
+        var err = new Error(App.t("core.corsBlocked"));
         err.cors = true; err.cause = e;
         throw err;
       });

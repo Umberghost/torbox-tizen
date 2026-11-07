@@ -104,3 +104,19 @@ js/main.js                   router, header nav, despacho de teclas, setup, arra
   traktClientId, traktClientSecret, traktAuth.
 - **Búsqueda: mejor fuente** → `App.search.bestStream(streams) → stream|null` (search.js) y
   `App.search.playTitle({type, id, season, episode}) → Promise` para el siguiente episodio y para la home.
+
+## Idiomas (i18n) — obligatorio en TODO el código visible
+- Interfaz en **inglés por defecto**, multi-idioma (en, es; ampliable en `App.i18n.LANGS`).
+  Ajustes: `uiLanguage` ("en"|"es"), `contentLanguage` ("auto"|"en"|"es"). Cambiar cualquiera recarga la app.
+- **Ninguna cadena visible hardcodeada**: usar `App.t("modulo.clave", {vars})`. Cada agente registra sus
+  textos en SU archivo `app/i18n/<modulo>.js` con `App.i18n.add("en", {...})` y `App.i18n.add("es", {...})`
+  (ambos idiomas completos). Prefijo de claves = módulo (search., player., home., library., live., settings.,
+  downloads., keyboard., continue., watch., subs., trakt.). Plurales: "x.one"/"x.other" con {n}.
+- Labels de pantallas: `label: App.t("nav.home")` etc. (las claves nav.* van en el i18n del módulo dueño).
+- Logs de consola pueden quedar en inglés/español libre (no son UI).
+- **Idioma del contenido**: `App.i18n.contentLang()` ("en"|"es") y `App.i18n.tmdbLang()` ("en-US"|"es-ES").
+  NO usar el ajuste obsoleto `uiLang`.
+- **App.meta.title(type, imdbId) → Promise<meta>** (meta.js, agente Library): ficha localizada con forma Cinemeta
+  `{id, type, name, description, poster, background, releaseInfo, imdbRating, genres, videos:[{id, season, episode, name, overview, thumbnail, released}]}`
+  en el idioma de contenido; si no hay traducción, cae a inglés/Cinemeta campo a campo. Search y Home la usan
+  para fichas y episodios (en lugar de pedir Cinemeta /meta directamente).

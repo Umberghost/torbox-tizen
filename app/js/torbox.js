@@ -99,7 +99,7 @@ tb.link = function(source, itemId, fileId){
           "&" + tb.ID_FIELD[source] + "=" + encodeURIComponent(itemId) +
           "&file_id=" + encodeURIComponent(fileId) + "&redirect=false";
   return App.net.fetch(API + q).then(function(r){ return r.json(); }).then(function(j){
-    if(j.success === false || !j.data) throw new Error(j.detail || "Sin enlace de descarga");
+    if(j.success === false || !j.data) throw new Error(j.detail || App.t("torbox.noLink"));
     return j.data;
   });
 };
@@ -148,7 +148,7 @@ tb.addLink = function(link, name){
   }
   if(kind === "usenet") return tb.addUsenet(link, name).then(function(d){ return { kind: kind, data: d }; });
   if(kind === "webdl") return tb.addWeb(link, name).then(function(d){ return { kind: kind, data: d }; });
-  return Promise.reject(new Error("Enlace no reconocido (usa magnet, hash, NZB o URL)"));
+  return Promise.reject(new Error(App.t("torbox.badLink")));
 };
 
 /* control(source, id, operation): operation ∈ delete | pause | resume | reannounce */
@@ -159,7 +159,7 @@ var CONTROL = {
 };
 tb.control = function(source, id, operation){
   var c = CONTROL[source];
-  if(!c) return Promise.reject(new Error("Fuente desconocida"));
+  if(!c) return Promise.reject(new Error(App.t("torbox.badSource")));
   var body = { operation: operation };
   body[c.field] = id;
   return tb.api(c.path, { method: "POST", body: body }).then(function(j){ tb.invalidate(); return j; });
