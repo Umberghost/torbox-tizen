@@ -218,18 +218,47 @@ function onSelect(i, el){
     if(st.key === "paused") opts.push({ label: t("downloads.resume"), value: "resume" });
     else opts.push({ label: t("downloads.pause"), value: "pause" });
   }
-  if(d._source === "torrents" && (st.key === "stalled" || st.key === "downloading")) opts.push({ label: t("downloads.reannounce"), value: "reannounce" });
+  if(d._source === "torrents" && (st.key === "stalled" || st.key === "downloading")){
+    opts.push({ label: t("downloads.reannounce"), value: "reannounce" });
+    if(d.hash) opts.push({ label: t("downloads.moreTrackers"), value: "trackers" });
+  }
   opts.push({ label: t("downloads.delete"), value: "delete" });
   opts.push({ label: t("ui.cancel"), value: null });
   App.ui.menu(d.name || t("downloads.item"), opts).then(function(v){
     if(!v) return;
     if(v === "play") playItem(d);
+    else if(v === "trackers") retryTrackers(d);
     else if(v === "delete") remove(d);
     else tb.control(d._source, d.id, v).then(function(){
       App.ui.toast(v === "pause" ? t("downloads.paused") : v === "resume" ? t("downloads.resumed") : t("downloads.doneMsg"));
       load(true);
     }).catch(function(e){ App.ui.toast(t("downloads.errorMsg", {msg: e.message}), 5000); });
   });
+}
+
+/* Volver a añadir el torrent atascado con una lista amplia de trackers públicos (ngosang/trackerslist) */
+var TRACKERS_URL = "https://cdn.jsdelivr.net/gh/ngosang/trackerslist@master/trackers_best.txt";
+function retryTrackers(d){
+  App.ui.confirm(t("downloads.moreTrackers"), t("downloads.moreTrackersText"), t("downloads.moreTrackersGo"), t("ui.cancel"))
+    .then(function(ok){
+      if(!ok) return;
+      App.ui.toast(t("downloads.moreTrackersWorking"), 2500);
+      App.net.fetch(TRACKERS_URL).then(function(r){ return r.text(); }).catch(function(){ return ""; }).then(function(txt){
+        var trs = String(txt || "").split(/\s+/).filter(function(x){ return /^(udp|https?|wss?):\/\//i.test(x); }).slice(0, 60);
+        var magnet = "magnet:?xt=urn:btih:" + d.hash + (d.name ? "&dn=" + encodeURIComponent(d.name) : "") +
+          trs.map(function(x){ return "&tr=" + encodeURIComponent(x); }).join("");
+        console.info("[downloads] reintento con " + trs.length + " trackers: " + d.name);
+        return tb.control(d._source, d.id, "delete").then(function(){
+          return tb.addMagnet(magnet, d.name || undefined);
+        });
+      }).then(function(){
+        App.ui.toast(t("downloads.moreTrackersDone"), 5000);
+        load(true);
+      }).catch(function(e){
+        App.ui.toast(t("downloads.errorMsg", {msg: e.message}), 5000);
+        load(true);
+      });
+    });
 }
 
 function startTimer(){
