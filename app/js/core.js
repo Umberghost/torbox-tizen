@@ -135,7 +135,16 @@ var DEFAULTS = {
   uiLang: "es-ES",               // idioma para TMDB
   liveListUrl: "https://www.tdtchannels.com/lists/tv.json",
   appIds: {},                    // { tivify: "...", atresplayer: "...", mitele: "..." }
-  stremioAddon: ""               // URL del manifest.json de un add-on de Stremio (Torrentio, Comet, AIOStreams…)
+  stremioAddon: "",              // URL del manifest.json de un add-on de Stremio (Torrentio, Comet, AIOStreams…)
+  autoPlayBest: true,            // Buscar: OK en episodio/película reproduce la mejor fuente en caché
+  prefQuality: "1080p",          // 2160p | 1080p | 720p — calidad preferida para la mejor fuente
+  maxSizeGB: 0,                  // 0 = sin límite; tamaño máximo para la mejor fuente
+  prefAudio: "es",               // es (castellano) | lat | en | any — idioma preferido en fuentes
+  openSubs: true,                // subtítulos de OpenSubtitles (add-on de Stremio) si no hay otros
+  notifyReady: true,             // avisar cuando una descarga enviada termine
+  traktClientId: "",             // app de Trakt del usuario (trakt.tv/oauth/applications)
+  traktClientSecret: "",
+  traktAuth: null                // {access_token, refresh_token, expires_at}
 };
 var settings = App.store.get("settings", {});
 /* Migración del token de la v1 */

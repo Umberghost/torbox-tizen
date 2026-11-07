@@ -86,3 +86,21 @@ js/main.js                   router, header nav, despacho de teclas, setup, arra
 - `App.ui.loading/error/empty(el, ...)`, `App.ui.placeholderStyle(title)`, `App.ui.initials(title)`.
 - Para probar en PC: `npx http-server . --cors -c-1 -p 8080` y abrir `http://localhost:8080/app/`.
   Atrás = Escape/Backspace. Sin Tizen, AVPlay no existe → usar `<video>` (+ hls.js para m3u8).
+
+## Ronda 3 (v2.3) — contratos nuevos
+- **Eventos del reproductor** (player.js los emite):
+  `player:start {key, meta, title, live}`, `player:progress {key, meta, pos, dur}` (cada 10 s),
+  `player:ended {key, meta}`, `player:close {key, meta, pos, dur}`, `player:error {key, message}`.
+- **App.subs** (subs.js): `fetch({type:'movie'|'series', imdbId, season, episode, filename}) → Promise<[{label, lang, url}]>`
+  usando el add-on de subtítulos de Stremio OpenSubtitles v3 (`https://opensubtitles-v3.strem.io/subtitles/<type>/<id>.json`).
+  El player, si `opts.subtitles` está vacío y `opts.meta.imdbId` existe y `openSubs`, los pide solo.
+- **App.watch** (watch.js): `track({hash, name, title, meta, playOpts?})` vigila una descarga enviada a TorBox y,
+  al terminar, muestra aviso "Ya está listo · OK para ver". Persistente en App.store('watch').
+- **App.trakt** (trakt.js): `isLinked()`, `link()` (device code en pantalla), `unlink()`, `watchlist() → Promise<metas>`,
+  `history()`, scrobble automático escuchando eventos del player (solo si meta.imdbId).
+- **Pantalla home** (screens/home.js, order 5, label "Inicio"): Continuar viendo, Lista de Trakt, catálogos Cinemeta.
+  Abrir un título → `App.go('search', {open:{type, id, name, poster}})` (search.js debe aceptar `params.open`).
+- **Ajustes nuevos** (core.js): autoPlayBest, prefQuality, maxSizeGB, prefAudio, openSubs, notifyReady,
+  traktClientId, traktClientSecret, traktAuth.
+- **Búsqueda: mejor fuente** → `App.search.bestStream(streams) → stream|null` (search.js) y
+  `App.search.playTitle({type, id, season, episode}) → Promise` para el siguiente episodio y para la home.

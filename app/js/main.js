@@ -255,6 +255,7 @@ App.openSetup = function(){ App.section("setup"); };
 
 function firstSection(){
   var list = App.screens.navList();
+  if(screens.home) return "home";
   return screens.library ? "library" : (list[0] ? list[0].id : "setup");
 }
 
