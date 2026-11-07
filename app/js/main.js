@@ -6,22 +6,8 @@ var App = window.App;
 var K = App.K;
 
 /* ================= Registro de pantallas ================= */
-var screens = {};     // id → def
-var order = [];       // ids registrados
-App.screens = {
-  register: function(def){
-    if(!def || !def.id) throw new Error("screen sin id");
-    screens[def.id] = def;
-    if(order.indexOf(def.id) < 0) order.push(def.id);
-    if(booted) renderNav();
-  },
-  get: function(id){ return screens[id]; },
-  navList: function(){
-    return order.map(function(id){ return screens[id]; })
-      .filter(function(s){ return s.nav; })
-      .sort(function(a, b){ return (a.order || 99) - (b.order || 99); });
-  }
-};
+var screens = App.screens.all();   // id → def (registro en core.js)
+App.bus.on("screens:change", function(){ if(booted) renderNav(); });
 
 /* ================= Router ================= */
 var mainEl, navEl;

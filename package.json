@@ -5,6 +5,7 @@
   "packageType": "app",
   "appName": "TorBox",
   "appPath": "app/index.html",
+  "serviceFile": "service.js",
   "keys": [
     "MediaPlayPause",
     "MediaPlay",
@@ -21,7 +22,16 @@
     "ColorF2Yellow",
     "ColorF3Blue",
     "Info",
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
   ],
   "author": "",
   "license": "MIT"

@@ -1,1 +1,127 @@
-/* css/player.css */
+/* player.css — reproductor, OSD, subtítulos, cuenta atrás y tarjetas de "Continuar viendo". */
+
+/* ---- Contenedor (z-index ≤ 150: modales 200 y toasts 300 quedan encima) ---- */
+#player{position:fixed;inset:0;background:#000;display:none;z-index:100;overflow:hidden;color:#fff}
+#player.on{display:block}
+body.player-on #app{visibility:hidden}
+/* AVPlay pinta en un plano por DEBAJO de la web: todo lo de encima debe ser transparente */
+body.avplay-on,body.avplay-on #player{background:transparent!important}
+.pl-av,.pl-video{position:absolute;left:0;top:0;width:100%;height:100%;background:transparent}
+.pl-video{background:#000;object-fit:contain}
+body.avplay-on .pl-video{display:none}
+
+/* ---- Subtítulos ---- */
+.pl-sub{
+  position:absolute;left:8%;right:8%;bottom:90px;text-align:center;pointer-events:none;
+  transition:bottom .25s ease;
+}
+.pl-sub span{
+  display:inline;padding:4px 16px;line-height:1.45;color:#fff;font-weight:600;
+  background:rgba(0,0,0,.55);border-radius:6px;
+  text-shadow:0 0 4px #000,0 2px 3px #000,0 0 1px #000;
+  -webkit-box-decoration-break:clone;box-decoration-break:clone;
+}
+.pl-sub:not(.has) span{display:none}
+.pl-sub.size-s span{font-size:34px}
+.pl-sub.size-m span{font-size:44px}
+.pl-sub.size-l span{font-size:58px}
+/* subir subtítulos cuando el OSD está visible */
+#player.osd-on .pl-sub{bottom:250px}
+
+/* ---- Buffering ---- */
+.pl-spinner{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:none;flex-direction:column;align-items:center;gap:14px;font-size:24px;color:#dfe7ec;
+  text-shadow:0 1px 3px #000;
+}
+.pl-spinner.on{display:flex}
+.pl-spinner .spinner{width:72px;height:72px;border-width:6px;border-color:rgba(255,255,255,.2);border-top-color:var(--accent)}
+
+/* ---- Icono de pausa ---- */
+.pl-pause{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
+  width:140px;height:140px;border-radius:50%;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;gap:22px;
+  opacity:0;transition:opacity .2s,transform .2s;
+}
+.pl-pause i{display:block;width:22px;height:64px;border-radius:4px;background:#fff}
+.pl-pause.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ---- Indicador de salto ---- */
+.pl-seek{
+  position:absolute;top:80px;left:50%;transform:translateX(-50%);
+  padding:14px 34px;border-radius:999px;background:rgba(0,0,0,.72);font-size:34px;font-weight:600;
+  opacity:0;transition:opacity .15s;
+}
+.pl-seek.on{opacity:1}
+
+/* ---- OSD ---- */
+.pl-osd{
+  position:absolute;left:0;right:0;bottom:0;padding:120px 72px 46px;
+  background:linear-gradient(transparent,rgba(0,0,0,.55) 35%,rgba(0,0,0,.9));
+  transition:opacity .3s;
+}
+.pl-osd.hide{opacity:0}
+.pl-top{display:flex;align-items:flex-end;gap:22px;margin-bottom:22px}
+.pl-titles{flex:1;min-width:0}
+.pl-title{font-size:38px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+.pl-subtitle{font-size:26px;color:#cfd8dd;margin-top:2px}
+.pl-subtitle:empty{display:none}
+.pl-engine{font-size:18px;color:#9fb0bc;border:1px solid rgba(255,255,255,.25);padding:3px 12px;border-radius:999px}
+.pl-live{
+  display:none;background:#e5484d;color:#fff;font-weight:800;font-size:20px;letter-spacing:1px;
+  padding:6px 14px;border-radius:6px;align-self:center;
+}
+#player.live .pl-live{display:inline-block}
+#player.live .pl-progress{display:none}
+#player.live #plNextHint{display:none}
+
+.pl-bar{position:relative;height:10px;background:rgba(255,255,255,.22);border-radius:5px}
+.pl-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:5px}
+.pl-bar>b{
+  position:absolute;top:50%;left:0;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+  background:#fff;box-shadow:0 0 0 4px rgba(23,201,100,.5);
+}
+.pl-times{display:flex;justify-content:space-between;margin-top:14px;font-size:24px;color:#cfd8dd}
+.pl-times span:nth-child(2){color:#9fb0bc}
+.pl-keys{margin-top:20px;color:#9fb0bc}
+
+/* ---- Cuenta atrás siguiente episodio ---- */
+.pl-countdown{
+  position:absolute;right:72px;bottom:72px;display:none;align-items:center;gap:26px;
+  padding:26px 36px;border-radius:16px;background:rgba(20,27,34,.94);
+  box-shadow:0 0 0 3px var(--accent),0 20px 50px rgba(0,0,0,.6);font-size:26px;
+}
+.pl-countdown.on{display:flex}
+.pl-count-n{
+  width:84px;height:84px;border-radius:50%;border:5px solid var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:800;color:var(--accent);
+}
+.pl-countdown .muted{font-size:21px}
+
+/* ---- Error (texto bajo el modal) ---- */
+.pl-error{
+  position:absolute;left:50%;top:22%;transform:translateX(-50%);max-width:1200px;
+  display:none;text-align:center;color:var(--danger);font-size:28px;
+}
+.pl-error.on{display:block}
+
+/* =================== Continuar viendo (.cw-) =================== */
+.cw-grid{
+  display:flex;flex-wrap:wrap;gap:34px 30px;padding:20px 6px 10px;
+}
+.cw-card{
+  width:400px;border-radius:14px;background:var(--surface);overflow:hidden;
+  transition:transform .15s ease,box-shadow .15s ease;
+}
+.cw-card.focused{transform:scale(1.06);box-shadow:var(--focus-ring)}
+.cw-poster{
+  width:100%;height:225px;background-size:cover;background-position:center;background-color:var(--surface-2);
+}
+.cw-ph{display:flex;align-items:center;justify-content:center}
+.cw-ph span{font-size:76px;font-weight:800;color:rgba(255,255,255,.82);letter-spacing:2px}
+.cw-bar{border-radius:0;height:7px}
+.cw-info{padding:14px 18px 18px}
+.cw-title{font-size:25px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cw-sub{font-size:20px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cw-legend{margin:30px 6px 0}

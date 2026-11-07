@@ -1,1 +1,136 @@
-/* js/keyboard.js — pendiente (lo implementa un agente) */
+/* keyboard.js — teclado en pantalla navegable con D-pad (App.ui.keyboard). */
+(function(){
+"use strict";
+
+var App = window.App;
+var K = App.K;
+
+var LAYOUTS = {
+  lower: ["1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm,.-"],
+  upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÑ", "ZXCVBNM;:_"],
+  sym:   ["1234567890", "@#€$%&*()_", "!?¿¡:;\"'/\\", "+=<>[]{}|~"]
+};
+
+var st = null;   // estado del teclado abierto
+var el = null;   // overlay
+
+function render(){
+  var rows = LAYOUTS[st.mode];
+  var html = '<div class="kb-panel">' +
+    (st.title ? '<div class="kb-title">' + App.esc(st.title) + '</div>' : '') +
+    '<div class="kb-display' + (st.value ? '' : ' empty') + '"><span class="kb-text"></span><i class="kb-caret"></i></div>' +
+    '<div class="kb-keys">';
+  rows.forEach(function(r){
+    html += '<div class="kb-row">';
+    for(var i = 0; i < r.length; i++){
+      var c = r.charAt(i);
+      html += '<div class="kb-key focusable" data-c="' + App.esc(c) + '">' + App.esc(c) + '</div>';
+    }
+    html += '</div>';
+  });
+  html += '<div class="kb-row kb-actions">' +
+    '<div class="kb-key kb-wide focusable" data-a="shift">' + (st.mode === "upper" ? "⇩ minús." : "⇧ Mayús.") + '</div>' +
+    '<div class="kb-key kb-wide focusable" data-a="sym">' + (st.mode === "sym" ? "abc" : "#?!") + '</div>' +
+    '<div class="kb-key kb-space focusable" data-a="space">Espacio</div>' +
+    '<div class="kb-key kb-wide focusable" data-a="del">⌫ Borrar</div>' +
+    '<div class="kb-key kb-wide focusable" data-a="clear">Limpiar</div>' +
+    (st.secret ? '<div class="kb-key kb-wide focusable" data-a="reveal">' + (st.reveal ? "Ocultar" : "Ver") + '</div>' : '') +
+    '<div class="kb-key kb-done focusable" data-a="done">✓ Hecho</div>' +
+    '</div></div>' +
+    '<div class="kb-help">OK pulsar tecla · Atrás cancelar · Números del mando y teclado físico escriben directamente</div>' +
+    '</div>';
+  el.innerHTML = html;
+  st.grid = new App.ui.FocusGrid(el.querySelector(".kb-keys"), {
+    onEdge: function(){ return true; },
+    onSelect: function(i, keyEl){ press(keyEl); }
+  });
+  st.grid.focus(Math.min(st.focusIndex || 0, st.grid.items.length - 1), true);
+  paintValue();
+}
+
+function paintValue(){
+  var t = el.querySelector(".kb-text");
+  var shown = st.secret && !st.reveal ? st.value.replace(/./g, "•") : st.value;
+  t.textContent = shown || st.placeholder || "";
+  el.querySelector(".kb-display").classList.toggle("empty", !st.value);
+}
+
+function insert(ch){
+  if(st.max && st.value.length >= st.max) return;
+  st.value += ch;
+  if(st.mode === "upper" && st.autoLower){ st.mode = "lower"; st.autoLower = false; rerender(); return; }
+  paintValue();
+}
+function rerender(){
+  st.focusIndex = st.grid ? st.grid.index : 0;
+  render();
+}
+
+function press(keyEl){
+  var c = keyEl.getAttribute("data-c");
+  if(c !== null){ insert(c); return; }
+  var a = keyEl.getAttribute("data-a");
+  if(a === "space") insert(" ");
+  else if(a === "del"){ st.value = st.value.slice(0, -1); paintValue(); }
+  else if(a === "clear"){ st.value = ""; paintValue(); }
+  else if(a === "shift"){ st.mode = st.mode === "upper" ? "lower" : "upper"; st.autoLower = st.mode === "upper"; rerender(); }
+  else if(a === "sym"){ st.mode = st.mode === "sym" ? "lower" : "sym"; st.autoLower = false; rerender(); }
+  else if(a === "reveal"){ st.reveal = !st.reveal; rerender(); }
+  else if(a === "done") finish(true);
+}
+
+function finish(ok){
+  var s = st; st = null;
+  if(el && el.parentNode) el.parentNode.removeChild(el);
+  el = null;
+  try{
+    if(ok){ if(s.onDone) s.onDone(s.value); }
+    else if(s.onCancel) s.onCancel();
+  }catch(e){ console.error("[keyboard]", e); }
+}
+
+App.ui = App.ui || {};
+App.ui.keyboard = {
+  /* opts: {title, value, placeholder, secret, max, onDone(value), onCancel()} */
+  open: function(opts){
+    opts = opts || {};
+    if(st) finish(false);
+    st = {
+      title: opts.title || "", value: String(opts.value || ""), placeholder: opts.placeholder || "",
+      secret: !!opts.secret, reveal: false, max: opts.max || 0,
+      onDone: opts.onDone, onCancel: opts.onCancel, mode: "lower", focusIndex: 0
+    };
+    el = document.createElement("div");
+    el.className = "kb-backdrop";
+    document.body.appendChild(el);
+    render();
+    // empezar en "Hecho" si ya hay texto (editar = confirmar rápido)
+    if(st.value){
+      var done = el.querySelector('[data-a="done"]');
+      st.grid.focus(st.grid.items.indexOf(done), true);
+    }
+  },
+  isOpen: function(){ return !!st; },
+  close: function(){ if(st) finish(false); },
+  onKey: function(k, e){
+    if(!st) return false;
+    // Atrás del mando / Escape → cancelar
+    if(k === K.BACK || k === K.BACK_LG || k === K.ESC){ finish(false); return true; }
+    // Backspace físico → borrar
+    if(k === K.BACKSPACE){ st.value = st.value.slice(0, -1); paintValue(); return true; }
+    if(k === K.UP || k === K.DOWN || k === K.LEFT || k === K.RIGHT || k === K.OK){
+      st.grid.handleKey(k); return true;
+    }
+    // Botones de color: VERDE = hecho, ROJO = borrar
+    if(k === K.GREEN){ finish(true); return true; }
+    if(k === K.RED){ st.value = st.value.slice(0, -1); paintValue(); return true; }
+    // Números del mando / teclado físico
+    var d = App.digit(k);
+    var key = e && e.key;
+    if(key && key.length === 1 && !(e.ctrlKey || e.metaKey || e.altKey)){ insert(key); return true; }
+    if(d >= 0){ insert(String(d)); return true; }
+    return true;
+  }
+};
+
+})();

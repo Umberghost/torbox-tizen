@@ -66,6 +66,26 @@ App.bus = {
   }
 };
 
+/* ---------------- Registro de pantallas ----------------
+ * Vive en core.js para que las pantallas (que cargan antes que main.js) puedan registrarse.
+ */
+var screenDefs = {}, screenOrder = [];
+App.screens = {
+  register: function(def){
+    if(!def || !def.id) throw new Error("screen sin id");
+    screenDefs[def.id] = def;
+    if(screenOrder.indexOf(def.id) < 0) screenOrder.push(def.id);
+    App.bus.emit("screens:change", def.id);
+  },
+  get: function(id){ return screenDefs[id]; },
+  all: function(){ return screenDefs; },
+  navList: function(){
+    return screenOrder.map(function(id){ return screenDefs[id]; })
+      .filter(function(s){ return s.nav; })
+      .sort(function(a, b){ return (a.order || 99) - (b.order || 99); });
+  }
+};
+
 /* ---------------- Ajustes ---------------- */
 var DEFAULTS = {
   torboxToken: "",
@@ -98,6 +118,11 @@ App.settings = {
     for(k in DEFAULTS) o[k] = DEFAULTS[k];
     for(k in settings) o[k] = settings[k];
     return o;
+  },
+  defaults: function(){ var o = {}; for(var k in DEFAULTS) o[k] = DEFAULTS[k]; return o; },
+  resetKey: function(k){
+    delete settings[k]; App.store.set("settings", settings);
+    App.bus.emit("settings:change", {key:k, value:DEFAULTS[k]});
   },
   reset: function(){ settings = {}; App.store.set("settings", settings); App.bus.emit("settings:change", {}); }
 };
@@ -141,6 +166,57 @@ App.debounce = function(fn, ms){
   };
 };
 App.isTizen = function(){ return !!(window.tizen || /Tizen/i.test(navigator.userAgent)); };
+
+/* ---------------- Red: proxy CORS ----------------
+ * La API de TorBox solo admite CORS desde torbox.app. service.js (serviceFile de
+ * TizenBrew) levanta un proxy en 127.0.0.1:8095. App.net.fetch lo usa si responde;
+ * si no, intenta directo (por si el runtime de la TV no aplica CORS).
+ */
+var PROXY = "http://127.0.0.1:8095";
+var NEEDS_PROXY = /^https?:\/\/([a-z0-9-]+\.)*(torbox\.app|tb-cdn\.[a-z]+|tb-cdn\.st)(\/|:|$)/i;
+var proxyState = null;      // null = sin comprobar, true/false
+var proxyCheck = null;
+
+App.net = {
+  PROXY: PROXY,
+  checkProxy: function(){
+    if(proxyCheck) return proxyCheck;
+    proxyCheck = new Promise(function(resolve){
+      var done = false;
+      var t = setTimeout(function(){ if(!done){ done = true; proxyState = false; resolve(false); } }, 1200);
+      fetch(PROXY + "/ping").then(function(r){ return r.json(); }).then(function(j){
+        if(done) return; done = true; clearTimeout(t);
+        proxyState = !!(j && j.ok); resolve(proxyState);
+      }).catch(function(){
+        if(done) return; done = true; clearTimeout(t);
+        proxyState = false; resolve(false);
+      });
+    });
+    return proxyCheck;
+  },
+  usingProxy: function(){ return proxyState === true; },
+  /* Igual que fetch(url, init), pero enruta por el proxy las URLs de TorBox */
+  fetch: function(url, init){
+    if(!NEEDS_PROXY.test(url)){
+      // Otros dominios (p. ej. CDN de descargas para subtítulos): directo y, si CORS
+      // lo bloquea (TypeError), reintento por el proxy si está disponible.
+      return fetch(url, init).catch(function(e){
+        return App.net.checkProxy().then(function(ok){
+          if(!ok) throw e;
+          return fetch(PROXY + "/proxy?url=" + encodeURIComponent(url), init);
+        });
+      });
+    }
+    return App.net.checkProxy().then(function(ok){
+      if(ok) return fetch(PROXY + "/proxy?url=" + encodeURIComponent(url), init);
+      return fetch(url, init).catch(function(e){
+        var err = new Error("La TV bloquea la conexión directa con TorBox (CORS) y el servicio proxy no responde. Reinstala el módulo en TizenBrew o reinicia la TV.");
+        err.cors = true; err.cause = e;
+        throw err;
+      });
+    });
+  }
+};
 
 /* ---------------- Hint de cabecera ---------------- */
 var hintTimer, hintDefault = "";

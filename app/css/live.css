@@ -1,1 +1,58 @@
-/* css/live.css */
+/* live.css — TV en directo y accesos directos. Prefijo .live- */
+.live-scroll{padding-top:0}
+.live-row{display:flex;gap:24px;padding:14px 4px 10px;flex-wrap:wrap}
+.live-grid{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:24px;
+  padding:14px 4px 10px;
+}
+.live-card{
+  border-radius:var(--radius);background:var(--surface);
+  transition:transform .14s ease,box-shadow .14s ease,background .14s ease;
+}
+.live-card.focused{transform:scale(1.06);box-shadow:var(--focus-ring);z-index:2;position:relative}
+
+/* ---- Canal ---- */
+.live-ch{overflow:hidden}
+.live-thumb{
+  position:relative;aspect-ratio:16/9;height:0;padding-top:56.25%;
+  background:rgba(255,255,255,.10);
+}
+@supports (aspect-ratio:16/9){ .live-thumb{height:auto;padding-top:0} }
+.live-logo,.live-initials{
+  position:absolute;left:12%;top:12%;width:76%;height:76%;
+}
+.live-logo{object-fit:contain;border-radius:8px}
+.live-initials{
+  display:flex;align-items:center;justify-content:center;border-radius:8px;
+  font-size:40px;font-weight:700;color:#fff;
+}
+.live-num{
+  position:absolute;left:10px;top:8px;font-size:18px;font-weight:700;
+  background:rgba(0,0,0,.6);color:#fff;padding:1px 10px;border-radius:999px;
+}
+.live-fav{
+  position:absolute;right:10px;top:6px;font-size:24px;color:var(--warn);
+  text-shadow:0 1px 4px rgba(0,0,0,.7);
+}
+.live-name{
+  padding:10px 14px 12px;font-size:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.live-ch.playing .live-name{color:var(--accent);font-weight:600}
+.live-ch.playing .live-name:before{content:"● ";font-size:16px;vertical-align:2px}
+.live-ch.focused .live-name{background:var(--accent);color:var(--accent-ink);font-weight:700}
+
+/* ---- App oficial ---- */
+.live-app{
+  width:420px;padding:26px 30px;min-height:136px;
+  background:linear-gradient(135deg,var(--surface-2),var(--surface));
+  border:2px solid var(--surface-3);
+}
+.live-app-name{font-size:30px;font-weight:700;margin-bottom:6px}
+.live-app-desc{font-size:20px;color:var(--muted);line-height:1.35}
+.live-app.focused{background:var(--accent);border-color:var(--accent)}
+.live-app.focused .live-app-name,.live-app.focused .live-app-desc{color:var(--accent-ink)}
+
+/* ---- Estados ---- */
+.live-note{font-size:19px;margin:28px 0 0}
+.live-error{padding:40px 0;text-align:center}
+.live-error h2{color:var(--danger);font-size:32px;margin-bottom:12px}

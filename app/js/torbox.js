@@ -30,7 +30,7 @@ tb.api = function(path, opts){
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
-  return fetch((opts.base || API) + path, { method: opts.method || "GET", headers: headers, body: body })
+  return App.net.fetch((opts.base || API) + path, { method: opts.method || "GET", headers: headers, body: body })
     .then(function(r){
       return r.text().then(function(txt){
         var j; try{ j = txt ? JSON.parse(txt) : {}; }catch(e){ j = { detail: txt }; }
@@ -92,7 +92,7 @@ tb.link = function(source, itemId, fileId){
   var q = "/" + source + "/requestdl?token=" + encodeURIComponent(token()) +
           "&" + tb.ID_FIELD[source] + "=" + encodeURIComponent(itemId) +
           "&file_id=" + encodeURIComponent(fileId) + "&redirect=false";
-  return fetch(API + q).then(function(r){ return r.json(); }).then(function(j){
+  return App.net.fetch(API + q).then(function(r){ return r.json(); }).then(function(j){
     if(j.success === false || !j.data) throw new Error(j.detail || "Sin enlace de descarga");
     return j.data;
   });
