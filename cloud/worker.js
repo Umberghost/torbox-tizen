@@ -69,7 +69,9 @@ async function serveApp(path) {
   if (!path || path.endsWith("/")) path += "index.html";
   if (path.indexOf("..") >= 0) return new Response("Bad path", { status: 400 });
   const ver = await latestVersion();
-  const res = await fetch(`https://cdn.jsdelivr.net/${REPO}@${ver}/app/${path}`, { cf: { cacheTtl: 3600, cacheEverything: true } });
+  let res = await fetch(`https://cdn.jsdelivr.net/${REPO}@${ver}/app/${path}`, { cf: { cacheTtl: 3600, cacheEverything: true } });
+  // Una etiqueta recién publicada puede tardar unos minutos en existir en jsDelivr
+  if (!res.ok && ver !== "master") res = await fetch(`https://cdn.jsdelivr.net/${REPO}@master/app/${path}`, { cf: { cacheTtl: 300, cacheEverything: true } });
   if (!res.ok) return new Response("Not found", { status: res.status });
   const ext = (path.split(".").pop() || "").toLowerCase();
   const h = new Headers();
