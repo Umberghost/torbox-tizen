@@ -109,11 +109,11 @@ FocusGrid.prototype.move = function(dir){
 FocusGrid.prototype.handleKey = function(k){
   var dir = k === K.UP ? "up" : k === K.DOWN ? "down" : k === K.LEFT ? "left" : k === K.RIGHT ? "right" : null;
   if(dir){
-    if(!this.items.length){ if(dir === "up"){ App.focusHeader(); return true; } return false; }
+    if(!this.items.length){ if(dir === "left"){ App.focusHeader(); return true; } return false; }
     if(this.move(dir)) return true;
     if(this.opts.onEdge){ var r = this.opts.onEdge(dir); if(r !== undefined) return !!r; }
-    if(dir === "up"){ App.focusHeader(); return true; }
-    return true; // tragar flechas en los bordes
+    if(dir === "left"){ App.focusHeader(); return true; }   // borde izquierdo → rail lateral
+    return true; // ▲ y demás bordes: se quedan (no van al rail)
   }
   if(k === K.OK){
     var el = this.items[this.index];

@@ -5,7 +5,8 @@
 var App = window.App;
 var K = App.K;
 
-/* Distribución según el idioma de la interfaz: es con ñ y ¿¡; en sin ñ */
+/* Distribución según el idioma de la interfaz: es/gl/eu con ñ, ca/pt con ç, fr AZERTY; en sin ñ.
+   Los acentos van en la capa de símbolos (#?!). */
 var LAYOUTS_BY_LANG = {
   es: {
     lower: ["1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm,.-"],
@@ -16,6 +17,31 @@ var LAYOUTS_BY_LANG = {
     lower: ["1234567890", "qwertyuiop", "asdfghjkl'", "zxcvbnm,.-"],
     upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKL\"", "ZXCVBNM;:_"],
     sym:   ["1234567890", "@#$%&*()_£", "!?:;\"'/\\`^", "+=<>[]{}|~"]
+  },
+  ca: {
+    lower: ["1234567890", "qwertyuiop", "asdfghjklç", "zxcvbnm,.-"],
+    upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÇ", "ZXCVBNM;:_"],
+    sym:   ["1234567890", "@#€$%&*()_", "àèéíòóúïü·", "!?:;\"'/+=-"]
+  },
+  gl: {
+    lower: ["1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm,.-"],
+    upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÑ", "ZXCVBNM;:_"],
+    sym:   ["1234567890", "@#€$%&*()_", "áéíóúü¿¡:;", "!?\"'/+=-_~"]
+  },
+  eu: {
+    lower: ["1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm,.-"],
+    upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÑ", "ZXCVBNM;:_"],
+    sym:   ["1234567890", "@#€$%&*()_", "áéíóúüç¿¡:", "!?\"'/+=-_~"]
+  },
+  pt: {
+    lower: ["1234567890", "qwertyuiop", "asdfghjklç", "zxcvbnm,.-"],
+    upper: ["1234567890", "QWERTYUIOP", "ASDFGHJKLÇ", "ZXCVBNM;:_"],
+    sym:   ["1234567890", "@#€$%&*()_", "ãõáàâéêíóú", "!?:;\"'/+=-"]
+  },
+  fr: {
+    lower: ["1234567890", "azertyuiop", "qsdfghjklm", "wxcvbn,.-é"],
+    upper: ["1234567890", "AZERTYUIOP", "QSDFGHJKLM", "WXCVBN;:_É"],
+    sym:   ["1234567890", "@#€$%&*()_", "èàçùêâîôûœ", "!?:;\"'/+=-"]
   }
 };
 function layouts(){ return LAYOUTS_BY_LANG[App.i18n.lang()] || LAYOUTS_BY_LANG.en; }

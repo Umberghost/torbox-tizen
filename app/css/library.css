@@ -1,7 +1,7 @@
 /* library.css — biblioteca, tarjetas de póster y detalle de serie/película. Prefijo .lib- */
 
 /* ---- Rejilla ---- */
-.lib-scroll{padding-top:4px}
+.lib-scroll{padding:8px var(--gutter-r,96px) 80px var(--gutter,72px)}
 .lib-grid{
   display:grid;grid-template-columns:repeat(6,1fr);gap:34px 30px;padding:14px 4px 30px;
 }
@@ -30,9 +30,9 @@
 
 .lib-badge{
   position:absolute;top:10px;left:10px;font-size:16px;font-weight:700;letter-spacing:.5px;
-  padding:3px 10px;border-radius:6px;background:rgba(6,19,12,.82);color:var(--accent);
+  padding:3px 10px;border-radius:8px;background:rgba(10,13,18,.78);color:var(--text);border:1px solid #3E4B5B;
 }
-.lib-badge-q{color:#e8eef3}
+.lib-badge-q{color:var(--text)}
 .lib-rating{
   position:absolute;top:10px;right:10px;font-size:18px;font-weight:700;
   padding:3px 10px;border-radius:6px;background:rgba(0,0,0,.72);color:var(--warn);
@@ -53,44 +53,102 @@
 }
 .lib-card-sub{font-size:18px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.lib-card.focused{transform:scale(1.08);z-index:2}
-.lib-card.focused .lib-poster{box-shadow:var(--focus-ring)}
-.lib-card.focused .lib-card-title{color:var(--accent)}
+.lib-card.focused{transform:scale(1.05);z-index:2}
+.lib-card.focused .lib-poster{box-shadow:0 0 0 4px var(--text),0 22px 50px rgba(0,0,0,.6)}
 
-/* ---- Detalle ---- */
+/* ---- Tarjetas 16:9 (Continuar viendo): compartidas con Inicio y continue.js ---- */
+.hm-wide{flex:none;width:380px;background:var(--surface);border-radius:18px;overflow:hidden}
+.hm-wide .lib-poster.hm-still{padding-top:56.25%;border-radius:0;background-color:var(--surface-2)}
+.hm-wide.focused{transform:scale(1.06);transform-origin:left center;box-shadow:0 0 0 4px var(--text),0 22px 50px rgba(0,0,0,.6);background:var(--surface-2)}
+.hm-wide.focused .lib-poster{box-shadow:none}
+.hm-wide-info{padding:14px 18px 16px;display:flex;flex-direction:column;gap:8px}
+.hm-wide-title{font-weight:700;font-size:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-wide-sub{font-size:19px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:26px}
+.hm-bar{height:5px;border-radius:3px;background:rgba(242,245,248,.18);overflow:hidden}
+.hm-bar>i{display:block;height:100%;background:var(--accent)}
+.hm-bar-lg{width:320px;height:6px}
+.hm-wide-grid{display:grid;grid-template-columns:repeat(4,380px);gap:36px 28px;padding:24px 14px 30px}
+.lib-continue{padding-top:22px}
+
+/* ---- Chips de filtro (Biblioteca y temporadas) ---- */
+.lib-screen .chip{background:var(--surface);color:var(--muted);border:2px solid transparent}
+.lib-screen .chip.active{background:rgba(242,245,248,.12);color:var(--text);font-weight:600;border-color:transparent}
+.lib-screen .chip.focused{background:var(--text);color:var(--bg);font-weight:700;box-shadow:0 0 0 3px rgba(242,245,248,.35)}
+
+/* ---- Detalle (ficha de serie / película) ---- */
 .lib-backdrop{
-  position:absolute;inset:0;background-size:cover;background-position:center top;
+  position:absolute;right:0;top:0;width:1240px;height:640px;background-size:cover;background-position:center top;
   opacity:0;transition:opacity .4s;
 }
-.lib-backdrop.on{opacity:.32}
+.lib-backdrop.on{opacity:.6}
 .lib-shade{
   position:absolute;inset:0;
-  background:linear-gradient(90deg,var(--bg) 0%,rgba(11,15,20,.88) 45%,rgba(11,15,20,.55) 100%),
-             linear-gradient(0deg,var(--bg) 0%,rgba(11,15,20,0) 55%);
+  background:linear-gradient(90deg,var(--bg) 30%,rgba(10,13,18,.4) 70%,rgba(10,13,18,.1)),
+             linear-gradient(0deg,var(--bg) 42%,rgba(10,13,18,0) 70%);
 }
-.lib-detail-scroll{position:relative}
-.lib-hero{display:flex;gap:48px;align-items:flex-start;padding:10px 0 24px}
-.lib-hero-poster{flex:none;width:300px}
-.lib-hero-poster .lib-poster{box-shadow:0 18px 50px rgba(0,0,0,.55)}
-.lib-hero-info{flex:1;min-width:0;max-width:1180px}
-.lib-hero-title{font-size:56px;line-height:1.1;font-weight:700;margin-bottom:14px}
-.lib-hero-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px 0;font-size:24px;color:var(--text)}
-.lib-dot{color:var(--muted);margin:0 14px}
-.lib-star{color:var(--warn);font-weight:700}
-.lib-hero-genres{margin-top:8px;color:var(--muted);font-size:22px}
+.lib-detail-scroll{position:relative;padding:48px var(--gutter-r,96px) 90px var(--gutter,72px)}
+.lib-hero{padding:0 0 26px}
+.lib-hero-info{width:780px;max-width:100%}
+.lib-back{color:var(--muted);font-size:22px;margin-bottom:18px}
+.lib-hero-title{
+  font-family:var(--font-display,"Space Grotesk",system-ui,sans-serif);
+  font-size:88px;line-height:1.02;font-weight:700;margin-bottom:18px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.lib-hero-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px 0;font-size:21px;color:#C9D2DB}
+.lib-dot{color:var(--muted);margin:0 12px}
+.lib-star{color:var(--warn);font-weight:600}
 .lib-hero-overview{
-  margin-top:18px;color:#c9d3db;font-size:24px;line-height:1.5;
-  display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;
+  margin-top:18px;color:#C9D2DB;font-size:24px;line-height:1.55;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
 }
-.lib-actions{display:flex;gap:18px;margin-top:28px;flex-wrap:wrap}
+.lib-actions{display:flex;gap:14px;margin-top:26px;flex-wrap:wrap}
+.lib-actions .btn{
+  display:flex;align-items:center;gap:10px;padding:18px 26px;border-radius:16px;border:0;
+  background:rgba(242,245,248,.13);color:var(--text);font-size:22px;font-weight:600;
+}
+.lib-actions .btn.primary{background:var(--text);color:var(--bg);font-weight:700;font-size:24px;padding:18px 32px}
+.lib-actions .btn.lib-more{padding:18px 24px;font-size:26px;font-weight:700}
+.lib-actions .btn.focused{background:var(--text);color:var(--bg);font-weight:700;box-shadow:0 0 0 4px var(--bg),0 0 0 8px var(--text)}
 
-.lib-seasons{margin-top:12px}
-.lib-eps{margin-top:6px;max-width:1500px}
-.lib-ep{gap:22px}
-.lib-ep-num{color:var(--accent);font-weight:700;min-width:62px}
-.lib-ep-marks{display:flex;align-items:center}
+.lib-seasons{margin-top:6px}
+.lib-seasons .chip{padding:10px 24px}
+.lib-seasons .chip.active{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.lib-seasons .chip.focused{background:var(--text);color:var(--bg)}
+
+/* Episodios: tarjetas horizontales 16:9; la enfocada se ensancha y muestra sinopsis y etiquetas */
+.lib-eps{align-items:flex-start;gap:24px;padding:22px 30px 30px 6px;margin-left:-6px}
+.lib-ep-card{
+  flex:none;width:400px;border-radius:18px;overflow:hidden;background:var(--surface);
+  transition:transform .16s ease;transform-origin:left top;
+}
+.lib-ep-still{position:relative;width:100%;height:225px;background-color:var(--surface-2);overflow:hidden}
+.lib-ep-ini{font-size:56px}
+.lib-ep-still.has-img .lib-ep-ini{display:none}
+.lib-ep-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lib-ep-marks{position:absolute;left:14px;top:14px;display:flex;align-items:center}
+.lib-ep-watched{background:rgba(10,13,18,.75);padding:6px 12px;border-radius:8px;font-size:18px;font-weight:600;color:var(--text)}
 .lib-ep-prog{width:120px;display:inline-block}
-.lib-ep-watched{color:var(--accent);font-size:20px;font-weight:600;white-space:nowrap}
+.lib-ep-bar{position:absolute;left:0;right:0;bottom:0;height:6px;background:rgba(0,0,0,.45)}
+.lib-ep-bar>i{display:block;height:100%;background:var(--accent)}
+.lib-ep-body{padding:16px 18px 18px}
+.lib-ep-title{font-size:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-ep-title b{font-weight:700}
+.lib-ep-dur{margin-top:6px;font-size:18px;color:var(--muted)}
+.lib-ep-extra{display:none;margin-top:10px}
+.lib-ep-ov{font-size:18px;line-height:1.4;color:#C9D2DB;margin:0 0 10px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.lib-ep-ov:empty{display:none}
+.lib-ep-tags{display:flex;flex-wrap:wrap;gap:8px;font-size:17px;align-items:center}
+.lib-tag,.lib-ep-inst{border:1px solid #3E4B5B;padding:4px 10px;border-radius:8px}
+.lib-ep-inst{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700}
+.lib-ep-card.focused{
+  width:440px;transform:scale(1.04);background:var(--surface-2);z-index:2;
+  box-shadow:0 0 0 4px var(--text),0 22px 50px rgba(0,0,0,.6);
+}
+.lib-ep-card.focused .lib-ep-still{height:248px}
+.lib-ep-card.focused .lib-ep-extra{display:block}
+.lib-ep-num{color:var(--accent);font-weight:700;min-width:62px}
+.lib-ep-watched{white-space:nowrap}
 .lib-recs-wrap[hidden]{display:none}
 .lib-recs{padding-left:4px}
 
@@ -99,7 +157,7 @@
 .lib-row-unsup.focused{opacity:1}
 .badge.lib-unsup{color:#ffb4b4;border-color:#ff6b6b;background:rgba(255,107,107,.12);white-space:nowrap}
 .lib-unsup-why{color:var(--muted);font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}
-.lib-hero-line .lib-unsup-why,.lib-actions .lib-unsup-why{max-width:520px}
+.lib-hero-line .lib-unsup-why,.lib-actions .lib-unsup-why,.lib-ep-tags .lib-unsup-why{max-width:520px}
 
 /* ---- Filtros y caducidad ---- */
 .lib-kinds{margin-top:-6px}

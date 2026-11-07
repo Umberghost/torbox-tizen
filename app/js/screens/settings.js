@@ -138,6 +138,32 @@ function showAccount(){
   });
 }
 
+/* Tarjeta destacada de cuenta (plan / caducidad / uso) */
+function acctCardHtml(i){
+  var d = acct.data, h = '<div class="row set-acct-card focusable" data-i="' + i + '">';
+  h += '<div class="set-acct-main"><div class="set-acct-eyebrow">' + App.esc(t("settings.v2.acctCard")) + '</div>';
+  if(!App.torbox.hasToken() || !d){
+    h += '<div class="set-acct-plan">' + App.esc(acctValue()) + '</div><div class="set-acct-exp">' + App.esc(t("settings.acct.desc")) + '</div></div>';
+    return h + '</div>';
+  }
+  var exp = acctExpiry(d), badge = "";
+  if(d.premium_expires_at){
+    var ms = Date.parse(d.premium_expires_at), days = isNaN(ms) ? 999 : Math.ceil((ms - Date.now()) / 86400000);
+    badge = '<span class="set-acct-badge' + (days < 0 ? ' bad' : days <= 7 ? ' warn' : '') + '">' + App.esc(days < 0 ? t("settings.acct.expiry") : planName(d.plan)) + '</span>';
+  }
+  h += '<div class="set-acct-plan">' + App.esc(planName(d.plan)) + '</div>' +
+       '<div class="set-acct-exp">' + App.esc(exp || t("settings.acct.desc")) + (badge && exp ? badge : '') + '</div></div>';
+  h += '<div class="set-acct-stats">';
+  if(acct.usage){
+    h += '<div class="set-acct-stat"><b class="num">' + acct.usage.n + '</b><span>' + App.esc(App.fmtSize(acct.usage.size)) + '</span></div>' +
+         '<div class="set-acct-stat"><b class="num">' + acct.usage.active + '</b><span>' + App.esc(t("settings.acct.activeDl")) + '</span></div>';
+  }
+  if(d.additional_concurrent_slots !== undefined){
+    h += '<div class="set-acct-stat"><b class="num">' + App.esc(String(d.additional_concurrent_slots)) + '</b><span>' + App.esc(t("settings.acct.extraSlots")) + '</span></div>';
+  }
+  return h + '</div></div>';
+}
+
 /* ---------- Diagnóstico ---------- */
 function showDiag(){
   var av = false;
@@ -331,6 +357,7 @@ function render(){
   var html = '<div class="scroll set">';
   s.rows.forEach(function(row, i){
     if(row.group){ html += '<div class="section-title set-group">' + App.esc(row.group) + '</div>'; return; }
+    if(row.id === "accountStatus"){ html += acctCardHtml(i); return; }
     var v = valueText(row);
     html += '<div class="row set-row focusable' + (row.danger ? ' set-danger' : '') + '" data-i="' + i + '">' +
       '<div class="set-text"><div class="set-label">' + App.esc(row.label) + '</div>' +
@@ -344,9 +371,6 @@ function render(){
   html += '<div class="set-footer">' +
     '<div>' + App.esc(t("settings.footer", {v: App.version})) +
       (newer ? ' <span class="set-new">' + App.esc(t("settings.newVersion", {v: verState.latest})) + '</span>' : '') + '</div>' +
-    '<div class="legend"><span><i class="yellow"></i>' + App.esc(t("settings.legend.search")) + '</span>' +
-      '<span><i class="blue"></i>' + App.esc(t("settings.legend.settings")) + '</span>' +
-      '<span><i class="red"></i>' + App.esc(t("settings.legend.reset")) + '</span></div>' +
     '</div></div>';
   var sc = s.el.querySelector(".scroll"), top = sc ? sc.scrollTop : 0;
   s.el.innerHTML = html;
@@ -414,7 +438,7 @@ function onSelect(i, el){ var row = rowAt(el); if(row) edit(row); }
 
 App.screens.register({
   id: "settings", label: t("nav.settings"), nav: true, order: 60,
-  get hint(){ return t("settings.hint"); },
+  get hint(){ return t("settings.v2.hint"); },
   mount: function(el){
     s.el = el;
     App.bus.on("settings:change", function(){ if(App.current() === "settings" && s.grid) render(); });

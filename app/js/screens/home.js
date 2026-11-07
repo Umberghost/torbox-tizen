@@ -44,7 +44,8 @@ var s = {
   el: null, grid: null, rows: [], heroTimer: null, cwDirty: true,
   focusKey: null, mounted: false, reqId: 0, heroItem: null,
   filters: App.store.get("homefilters", null) || { genre: "", year: "", lang: "", minRating: 0 },
-  manifest: null, seen: App.store.get("homeSeen", {}) || {}, watched: {}
+  manifest: null, seen: App.store.get("homeSeen", {}) || {}, watched: {},
+  cat: "all", info: {}, autoFocused: false
 };
 var omdbCache = {};
 
@@ -146,8 +147,10 @@ function continueItems(){
     var m = h.meta || {};
     var left = h.dur ? App.t("home.left", { time: App.fmtTime(h.dur - h.pos) }) : "";
     var imdb = m.imdbId || "";
+    var q = (App.parse && m.filename) ? App.parse.name(m.filename).quality : "";
     return {
       kind: "cw", entry: h, type: m.type === "series" || m.type === "tv" ? "series" : "movie",
+      season: m.season, episode: m.episode, quality: q || "", instant: !!(m.source && m.source !== "stremio"),
       id: imdb || h.key, imdb: imdb, name: h.title || m.showTitle || m.title || "",
       sub: h.subtitle || left, poster: h.poster || (imdb ? "https://images.metahub.space/poster/medium/" + imdb + "/img" : ""),
       background: imdb ? "https://images.metahub.space/background/medium/" + imdb + "/img" : (h.poster || ""),
@@ -277,7 +280,8 @@ function loadCalendar(){
       var ep = "S" + e.season + "E" + e.episode;
       return { kind: "title", type: "series", id: e.imdbId, imdb: e.imdbId, name: e.name, poster: e.poster || "",
                background: e.poster ? e.poster.replace("/poster/", "/background/") : "",
-               year: "", rating: "", sub: dayLabel(e.released) + " · " + ep,
+               year: "", rating: "", sub: dayLabel(e.released) + " · " + ep, season: e.season, episode: e.episode,
+               today: dayLabel(e.released) === App.t("home.today"), when: dayLabel(e.released),
                description: ep + (e.title ? " · " + e.title : ""), genres: [], runtimeMin: 0 };
     });
   });
@@ -526,7 +530,12 @@ function refreshWatched(){
   });
 }
 function visible(r, list){
-  if(!App.settings.get("hideWatchedHome") || r.id === "cw" || r.id === "calendar") return list;
+  if(r.id === "cw" || r.id === "calendar") return list;
+  if(s.cat !== "all"){
+    var want = s.cat === "series" ? "series" : "movie";
+    list = list.filter(function(it){ return it.type === want; });
+  }
+  if(!App.settings.get("hideWatchedHome")) return list;
   return list.filter(function(it){ return !(it.imdb && s.watched[it.imdb]); });
 }
 function setItems(r, list){
@@ -535,7 +544,47 @@ function setItems(r, list){
 }
 
 /* ================= Render ================= */
+function epText(it){
+  if(it.season === undefined || it.season === null || it.episode === undefined || it.episode === null) return "";
+  return App.t("v2home.ep", { s: it.season, e: (Number(it.episode) < 10 ? "0" : "") + it.episode });
+}
+
+function stillBlock(it){
+  var src = it.background || it.poster || "";
+  var alt = it.poster && it.poster !== src ? it.poster : "";
+  return '<div class="lib-poster hm-still" style="' + App.ui.placeholderStyle(it.name) + '">' +
+    '<div class="lib-initials">' + esc(App.ui.initials(it.name)) + '</div>' +
+    (src ? '<img class="lib-img" loading="lazy" alt="" data-src="' + esc(src) + '"' + (alt ? ' data-alt="' + esc(alt) + '"' : '') + '>' : '') +
+    '</div>';
+}
+
+/* Tarjeta 16:9 grande (Continuar viendo) */
+function wideCardHtml(r, it, i){
+  var pct = Math.round((it.progress || 0) * 100);
+  return '<div class="lib-card hm-wide focusable" data-key="' + esc(r.id + ":" + i) + '" data-r="' + esc(r.id) + '" data-i="' + i + '">' +
+    stillBlock(it) +
+    '<div class="hm-wide-info">' +
+      '<div class="hm-wide-title">' + esc(it.name) + '</div>' +
+      '<div class="hm-wide-sub num">' + esc(it.sub || "") + '</div>' +
+      (pct ? '<div class="hm-bar"><i style="width:' + pct + '%"></i></div>' : '') +
+    '</div></div>';
+}
+
+/* Tarjeta compacta (nuevos episodios de lo que sigues) */
+function compactCardHtml(r, it, i){
+  var ep = epText(it);
+  return '<div class="hm-compact focusable' + (it.today ? ' ready' : '') + '" data-key="' + esc(r.id + ":" + i) + '" data-r="' + esc(r.id) + '" data-i="' + i + '">' +
+    '<div class="lib-poster hm-mini" style="' + App.ui.placeholderStyle(it.name) + '">' +
+      '<div class="lib-initials">' + esc(App.ui.initials(it.name)) + '</div>' +
+      (it.poster ? '<img class="lib-img" loading="lazy" alt="" data-src="' + esc(it.poster) + '">' : '') +
+    '</div>' +
+    '<div class="hm-compact-txt"><div class="hm-compact-title">' + esc(it.name + (ep ? " · " + ep : "")) + '</div>' +
+      '<div class="hm-compact-when">' + esc(it.today ? App.t("v2home.readyToday") : (it.when || "")) + '</div></div></div>';
+}
+
 function cardHtml(r, it, i){
+  if(r.id === "cw") return wideCardHtml(r, it, i);
+  if(r.id === "calendar") return compactCardHtml(r, it, i);
   var key = r.id + ":" + i;
   var badge = it.kind === "title" ? (it.type === "series" ? App.t("home.series") : "") : "";
   return '<div class="lib-card lib-card-sm home-card focusable" data-key="' + esc(key) + '" data-r="' + esc(r.id) + '" data-i="' + i + '">' +
@@ -545,10 +594,9 @@ function cardHtml(r, it, i){
       (badge ? '<span class="lib-badge">' + esc(badge.toUpperCase()) + '</span>' : '') +
       (it.rating ? '<span class="lib-rating">★ ' + esc(it.rating) + '</span>' : '') +
       (it.rank ? '<span class="home-rank num">' + it.rank + '</span>' : '') +
-      (it.kind === "cw" && it.progress ? '<div class="lib-marks"><div class="lib-prog"><i style="width:' + Math.round(it.progress * 100) + '%"></i></div></div>' : '') +
     '</div>' +
     '<div class="lib-card-title">' + esc(it.name) + '</div>' +
-    '<div class="lib-card-sub num">' + esc(it.kind === "cw" ? it.sub : (it.sub || it.year || "")) + '</div>' +
+    '<div class="lib-card-sub num">' + esc(it.sub || it.year || "") + '</div>' +
   '</div>';
 }
 
@@ -559,42 +607,149 @@ function rowHtml(r){
   else if(r.state === "error") body = '<div class="home-row-state err">' + esc(App.t("home.rowError")) + '</div>';
   else if(!r.items.length) body = '<div class="home-row-state">' + esc(App.t("home.rowEmpty")) + '</div>';
   else body = '<div class="hscroll home-hscroll">' + r.items.map(function(it, i){ return cardHtml(r, it, i); }).join("") + '</div>';
-  return '<div class="home-row" data-row="' + esc(r.id) + '">' +
-    '<div class="section-title">' + esc(r.title || App.t(r.label)) + '</div>' + body + '</div>';
+  var title = r.id === "calendar" ? App.t("v2home.newEpisodes") : (r.title || App.t(r.label));
+  return '<div class="home-row home-row-' + esc(r.id) + '" data-row="' + esc(r.id) + '">' +
+    '<div class="home-row-title">' + esc(title) + '</div>' + body + '</div>';
+}
+
+/* ---------- Hero ---------- */
+function followed(it){ return !!(App.follow && it.imdb && App.follow.isFollowing(it.imdb)); }
+
+/* Datos de la ficha enriquecidos (Cinemeta/TMDB localizados) para el título enfocado */
+function facts(it){
+  var inf = (it.imdb && s.info[it.imdb]) || {};
+  return {
+    year: it.year || inf.year || "", rating: it.rating || inf.rating || "",
+    genres: (it.genres && it.genres.length) ? it.genres : (inf.genres || []),
+    description: it.description && it.kind !== "cw" ? it.description : (inf.description || it.description || ""),
+    seasons: inf.seasons || 0
+  };
+}
+
+function loadInfo(it){
+  if(!it.imdb || s.info[it.imdb] !== undefined || !App.meta || !App.meta.title) return;
+  s.info[it.imdb] = null;
+  App.meta.title(it.type === "series" ? "series" : "movie", it.imdb).then(function(m){
+    if(!m) return;
+    var seasons = {};
+    (m.videos || []).forEach(function(v){ if(v.season > 0) seasons[v.season] = 1; });
+    s.info[it.imdb] = {
+      year: m.releaseInfo ? String(m.releaseInfo).slice(0, 4) : "", rating: /^\d/.test(String(m.imdbRating || "")) ? String(m.imdbRating) : "",
+      genres: m.genres || [], description: m.description || "", seasons: Object.keys(seasons).length
+    };
+    if(s.heroItem === it) renderHeroInfo();
+  }).catch(function(){ delete s.info[it.imdb]; });
+}
+
+function heroButtons(it){
+  var primaryLabel, playIcon = '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+  var showSheet = false;
+  if(it.kind === "cw"){
+    var ep = epText(it);
+    primaryLabel = ep ? App.t("v2home.resume", { ep: ep }) : App.t("v2home.resumeBare");
+    showSheet = !!it.imdb;
+  } else if(it.type === "movie"){
+    primaryLabel = App.t("v2home.play"); showSheet = true;
+  } else primaryLabel = App.t("v2home.viewSheet");
+  var canFollow = !!(App.follow && it.type === "series" && it.imdb);
+  var tags = "";
+  if(it.kind === "cw"){
+    if(it.quality) tags += '<span class="hm-tag">' + esc(it.quality) + '</span>';
+    if(it.instant) tags += '<span class="hm-instant">● ' + esc(App.t("v2home.instant")) + '</span>';
+  }
+  return '<div class="hm-btns">' +
+    '<div class="hm-btn hm-btn-main focusable" data-act="hplay" data-key="hero:play">' + playIcon + '<span>' + esc(primaryLabel) + '</span></div>' +
+    (showSheet ? '<div class="hm-btn focusable" data-act="hsheet" data-key="hero:sheet">' + esc(App.t("v2home.sheet")) + '</div>' : '') +
+    (canFollow ? '<div class="hm-btn focusable' + (followed(it) ? ' on' : '') + '" data-act="hfollow" data-key="hero:follow">' +
+      esc(followed(it) ? App.t("v2home.following") : "+ " + App.t("v2home.follow")) + '</div>' : '') +
+    (tags ? '<span class="hm-tags">' + tags + '</span>' : '') +
+  '</div>';
+}
+
+function heroInfoHtml(it){
+  if(!it){
+    return '<div class="hm-title" id="homeHeroTitle">' + esc(App.t("home.welcomeTitle")) + '</div>' +
+      '<p class="hm-desc">' + esc(App.t("home.welcomeText")) + '</p>';
+  }
+  var f = facts(it), bits = [];
+  if(f.year) bits.push(f.year);
+  if(it.type === "series" && f.seasons) bits.push(App.t("v2home.seasonsN", { n: f.seasons }));
+  if(f.genres.length) bits.push(f.genres.slice(0, 3).join(", "));
+  if(it.sub && it.kind !== "cw") bits.push(it.sub);
+  if(it.type === "movie" && it.runtimeMin && it.kind !== "cw"){
+    bits.push(fmtDur(it.runtimeMin));
+    bits.push(App.t("home.endsAt", { time: endsAt(it.runtimeMin) }));
+  }
+  var ox = it.imdb && omdbCache[it.imdb];
+  var html = '<div class="hm-meta num"><span class="hm-type">' + esc(it.type === "series" ? App.t("home.series") : App.t("home.movie")) + '</span>' +
+    '<span>' + esc(bits.join(" · ")) + '</span>' +
+    (f.rating ? '<span class="hm-star">★ ' + esc(f.rating) + '</span>' : '') +
+    (ox ? '<span>' + esc(ox) + '</span>' : '') + '</div>' +
+    '<div class="hm-title" id="homeHeroTitle">' + esc(it.name) + '</div>' +
+    '<p class="hm-desc">' + esc(f.description) + '</p>' +
+    heroButtons(it);
+  if(it.kind === "cw" && it.progress){
+    var min = it.runtimeMin || 0;
+    html += '<div class="hm-prog"><div class="hm-bar hm-bar-lg"><i style="width:' + Math.round(it.progress * 100) + '%"></i></div>' +
+      (min ? '<span class="num">' + esc(App.t("v2home.leftEnds", { time: fmtDur(min), end: endsAt(min) })) + '</span>' : '') + '</div>';
+  }
+  return html;
 }
 
 function heroHtml(){
-  return '<div class="home-hero">' +
-    '<div class="home-hero-bg" id="homeHeroBg"></div><div class="home-hero-shade"></div>' +
-    '<div class="home-hero-info">' +
-      '<div class="home-hero-title" id="homeHeroTitle">' + esc(App.t("home.welcomeTitle")) + '</div>' +
-      '<div class="home-hero-meta num" id="homeHeroMeta"></div>' +
-      '<p class="home-hero-desc" id="homeHeroDesc">' + esc(App.t("home.welcomeText")) + '</p>' +
-    '</div></div>';
+  return '<div class="home-hero-bg" id="homeHeroBg"></div><div class="home-hero-shade"></div>';
 }
 
 function chipsHtml(){
   var fl = filtersActive();
-  return '<div class="home-chips">' +
-    '<div class="home-chip focusable' + (fl ? ' on' : '') + '" data-act="filters" data-key="chip:filters">' + esc(App.t(fl ? "home.chipFiltersOn" : "home.chipFilters")) + '</div>' +
-    '<div class="home-chip focusable" data-act="surprise" data-key="chip:surprise">' + esc(App.t("home.chipSurprise")) + '</div>' +
-    '<div class="home-chip focusable" data-act="reload" data-key="chip:reload">' + esc(App.t("home.chipReload")) + '</div>' +
+  function chip(cat, label){
+    return '<div class="hm-chip focusable' + (s.cat === cat ? ' on' : '') + '" data-act="cat" data-cat="' + cat + '" data-key="chip:' + cat + '">' + esc(App.t(label)) + '</div>';
+  }
+  return '<div class="home-chips">' + chip("all", "v2home.chipForYou") + chip("series", "v2home.chipSeries") + chip("movies", "v2home.chipMovies") +
+    '<div class="hm-chip focusable' + (fl ? ' on' : '') + '" data-act="filters" data-key="chip:filters">' + esc(App.t(fl ? "home.chipFiltersOn" : "home.chipFilters")) + '</div>' +
   '</div>';
 }
 
 function render(){
   s.el.innerHTML = heroHtml() + '<div class="scroll home-scroll" id="homeScroll">' + chipsHtml() +
+    '<div class="hm-hero-info" id="homeHeroInfo">' + heroInfoHtml(s.heroItem) + '</div>' +
     s.rows.map(rowHtml).join("") + '</div>';
   hookImages(s.el);
   mountGrid();
+  if(s.heroItem) loadInfo(s.heroItem);
+}
+
+/* Repinta solo el bloque de información del hero conservando el foco por clave (sin desplazar) */
+function renderHeroInfo(){
+  if(!s.el) return;
+  var box = s.el.querySelector("#homeHeroInfo");
+  if(!box) return;
+  box.innerHTML = heroInfoHtml(s.heroItem);
+  syncGrid();
+}
+function syncGrid(){
+  if(!s.grid) return;
+  var cur = s.focusKey;
+  s.grid.refresh(false);
+  var idx = -1;
+  for(var i = 0; i < s.grid.items.length; i++){
+    if(s.grid.items[i].getAttribute("data-key") === cur){ idx = i; break; }
+  }
+  if(idx < 0) idx = Math.min(s.grid.index, s.grid.items.length - 1);
+  s.grid.index = Math.max(0, idx);
+  if(document.body.classList.contains("zone-header") || App.current() !== "home") s.grid.blur(); else s.grid.paint();
 }
 
 function hookImages(root){
   Array.prototype.forEach.call(root.querySelectorAll("img.lib-img[data-src]"), function(img){
     var src = img.getAttribute("data-src");
+    var alt = img.getAttribute("data-alt");
     img.removeAttribute("data-src");
     img.onload = function(){ if(img.parentNode) img.parentNode.classList.add("has-img"); };
-    img.onerror = function(){ if(img.parentNode) img.parentNode.removeChild(img); };
+    img.onerror = function(){
+      if(alt){ var a = alt; alt = ""; img.src = a; return; }
+      if(img.parentNode) img.parentNode.removeChild(img);
+    };
     img.src = src;
   });
 }
@@ -641,11 +796,26 @@ function mountGrid(){
     onFocus: function(i, el){ s.focusKey = el.getAttribute("data-key"); scheduleHero(el); },
     onSelect: function(i, el){
       var act = el.getAttribute("data-act");
-      if(act) return chipAction(act);
+      if(act) return chipAction(act, el);
       open(el);
     }
   });
-  restoreFocus(s.focusKey, false);
+  restoreFocus(s.focusKey || "hero:play", false);
+}
+
+/* Al llegar el primer hero, el foco inicial pasa del chip al botón principal */
+function focusHeroPlay(){
+  if(s.autoFocused || !s.grid) return;
+  if(s.focusKey && s.focusKey.indexOf("chip:") !== 0) return;
+  for(var i = 0; i < s.grid.items.length; i++){
+    if(s.grid.items[i].getAttribute("data-key") === "hero:play"){
+      s.autoFocused = true;
+      s.focusKey = "hero:play";
+      if(!document.body.classList.contains("zone-header") && App.current() === "home") s.grid.focus(i, true);
+      else s.grid.index = i;
+      return;
+    }
+  }
 }
 
 /* ================= Hero ================= */
@@ -656,6 +826,7 @@ function itemOf(el){
 }
 function scheduleHero(el){
   clearTimeout(s.heroTimer);
+  if(!el || !el.getAttribute("data-r")) return;
   s.heroTimer = setTimeout(function(){ paintHero(itemOf(el)); }, 250);
 }
 function fmtDur(min){
@@ -686,47 +857,69 @@ function omdbRatings(imdb){
 function paintHero(it){
   if(!it || !s.el) return;
   s.heroItem = it;
+  renderHeroInfo();
+  loadInfo(it);
+  if(it.imdb && omdbCache[it.imdb] === undefined) omdbRatings(it.imdb).then(function(txt){
+    if(txt && s.heroItem === it) renderHeroInfo();
+  });
   var bg = s.el.querySelector("#homeHeroBg");
-  var t = s.el.querySelector("#homeHeroTitle");
-  var meta = s.el.querySelector("#homeHeroMeta");
-  var d = s.el.querySelector("#homeHeroDesc");
-  if(t) t.textContent = it.name;
-  if(meta){
-    var parts = [];
-    if(it.year) parts.push(it.year);
-    parts.push(it.type === "series" ? App.t("home.series") : App.t("home.movie"));
-    if(it.rating) parts.push("★ " + it.rating);
-    if(it.sub) parts.push(it.sub);
-    if(it.runtimeMin){
-      parts.push(fmtDur(it.runtimeMin));
-      parts.push(App.t("home.endsAt", { time: endsAt(it.runtimeMin) }));
-    }
-    var base = parts.join(" · ");
-    meta.textContent = base;
-    if(it.imdb) omdbRatings(it.imdb).then(function(txt){
-      if(txt && s.heroItem === it && meta) meta.textContent = base + " · " + txt;
-    });
-  }
-  if(d) d.textContent = it.description || "";
   if(bg){
     var url = it.background || it.poster || "";
     if(!url){ bg.classList.remove("on"); return; }
     var img = new Image();
     img.onload = function(){
-      if(!s.el) return;
+      if(!s.el || s.heroItem !== it) return;
       bg.style.backgroundImage = "url('" + url.replace(/'/g, "%27") + "')";
       bg.classList.add("on");
     };
-    img.onerror = function(){ bg.classList.remove("on"); };
+    img.onerror = function(){
+      if(it.poster && it.poster !== url){
+        var i2 = new Image();
+        i2.onload = function(){ if(s.heroItem === it){ bg.style.backgroundImage = "url('" + it.poster.replace(/'/g, "%27") + "')"; bg.classList.add("on"); } };
+        i2.onerror = function(){ bg.classList.remove("on"); };
+        i2.src = it.poster;
+      } else bg.classList.remove("on");
+    };
     img.src = url;
   }
 }
 
 /* ================= Acciones ================= */
-function chipAction(act){
+function chipAction(act, el){
   if(act === "filters") openFilters();
   else if(act === "surprise") surprise();
   else if(act === "reload") reloadAll();
+  else if(act === "cat") setCategory(el.getAttribute("data-cat"));
+  else if(act === "hplay") heroPlay(s.heroItem);
+  else if(act === "hsheet" && s.heroItem) openSheet(s.heroItem);
+  else if(act === "hfollow" && s.heroItem){
+    var it = s.heroItem;
+    App.follow.toggle({ imdbId: it.imdb, name: it.name, poster: it.poster });
+    renderHeroInfo();
+  }
+}
+
+/* Chips de categoría: Para ti / Series / Películas (filtra las filas de catálogo) */
+function setCategory(cat){
+  if(cat === s.cat) return;
+  s.cat = cat;
+  Array.prototype.forEach.call(s.el.querySelectorAll(".hm-chip[data-act='cat']"), function(c){
+    c.classList.toggle("on", c.getAttribute("data-cat") === cat);
+  });
+  s.rows.forEach(function(r){ if(r.raw){ r.items = visible(r, r.raw); updateRow(r); } });
+}
+
+function heroPlay(it){
+  if(!it) return;
+  if(it.kind === "cw"){ resume(it.entry); return; }
+  if(it.type === "movie" && App.search && App.search.playTitle){
+    resolveImdb(it).then(function(imdb){
+      if(!imdb) throw new Error("sin imdb");
+      return App.search.playTitle({ type: "movie", id: imdb, name: it.name, poster: it.poster });
+    }).catch(function(e){ console.warn("[home] reproducir:", e && e.message); App.ui.toast(App.t("home.resolveFail")); });
+    return;
+  }
+  openSheet(it);
 }
 
 function reloadAll(){
@@ -778,6 +971,7 @@ function markSeen(it){
 function actionsList(){
   var el = s.grid && s.grid.current ? s.grid.current() : null;
   var it = el ? itemOf(el) : null;
+  if(!it && el && String(el.getAttribute("data-key") || "").indexOf("hero:") === 0) it = s.heroItem;
   var list = [];
   if(it){
     list.push({ label: App.t("home.actOpen"), run: function(){ openItem(it); } });
@@ -807,6 +1001,10 @@ function open(el){
 
 function openItem(it){
   if(it.kind === "cw") return resume(it.entry);
+  openSheet(it);
+}
+
+function openSheet(it){
   resolveImdb(it).then(function(imdb){
     if(!imdb) throw new Error("sin imdb");
     if(!App.screens.get("search")){ App.hint(App.t("home.noSearch")); return; }
@@ -876,7 +1074,7 @@ function loadAll(){
         }).catch(function(e){ console.warn("[home] because:", e.message); });
       } else if(r.id === "top10"){
         loadTop10().then(function(list){
-          if(ok(r, list) && !s.focusKey && list.length && App.current() === "home") paintHero(list[0]);
+          if(ok(r, list) && !s.heroItem && list.length && App.current() === "home"){ paintHero(list[0]); focusHeroPlay(); }
         }).catch(function(e){ fail(r, "top10", e); });
       } else if(r.id === "cinema"){
         loadCinema().then(function(list){ ok(r, list); }).catch(function(e){ console.warn("[home] cine:", e.message); });
@@ -884,7 +1082,7 @@ function loadAll(){
         loadFiltered(r.filt).then(function(list){ ok(r, list); }).catch(function(e){ fail(r, "filtro " + r.filt, e); });
       } else if(r.cat){
         loadCatalog(r.cat).then(function(list){
-          if(ok(r, list) && !s.focusKey && list.length && App.current() === "home") paintHero(list[0]);
+          if(ok(r, list) && !s.heroItem && list.length && App.current() === "home"){ paintHero(list[0]); focusHeroPlay(); }
         }).catch(function(e){ fail(r, "fila " + r.id, e); });
       }
     });
@@ -940,13 +1138,16 @@ if(App.settingsUI){
 App.screens.register({
   id: "home", nav: true, order: 5,
   get label(){ return App.t("nav.home"); },
-  get hint(){ return App.t("home.hint"); },
+  get hint(){ return App.t("v2home.hint"); },
   actions: actionsList,
   mount: function(el){
     s.el = el;
     el.classList.add("home-screen");
     s.rows = buildRows();
+    var cw0 = rowById("cw");
+    if(cw0 && cw0.items.length) s.heroItem = cw0.items[0];
     render();
+    if(s.heroItem) paintHero(s.heroItem);
     loadAll();
     s.mounted = true;
     App.bus.on("history:change", function(){
@@ -956,6 +1157,7 @@ App.screens.register({
       s.rows = buildRows(); render(); loadAll();
     });
     App.bus.on("follow:change", function(){
+      renderHeroInfo();
       var r = rowById("calendar");
       if(!r) return;
       loadCalendar().then(function(list){ setItems(r, list); updateRow(r); }).catch(function(){});

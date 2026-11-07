@@ -26,7 +26,7 @@ body.avplay-on .pl-video{display:none}
 .pl-sub.size-m span{font-size:44px}
 .pl-sub.size-l span{font-size:58px}
 /* subir subtítulos cuando el OSD está visible */
-#player.osd-on .pl-sub{bottom:250px}
+#player.osd-on .pl-sub{bottom:440px}
 
 /* ---- Buffering ---- */
 .pl-spinner{
@@ -55,49 +55,81 @@ body.avplay-on .pl-video{display:none}
 }
 .pl-seek.on{opacity:1}
 
-/* ---- OSD ---- */
+/* ---- OSD (rediseño 2.0: degradado inferior, título, barra y controles siempre juntos) ---- */
 .pl-osd{
-  position:absolute;left:0;right:0;bottom:0;padding:120px 72px 46px;
-  background:linear-gradient(transparent,rgba(0,0,0,.55) 35%,rgba(0,0,0,.9));
-  transition:opacity .3s;
+  position:absolute;left:0;right:0;bottom:0;padding:200px 96px 56px;
+  background:linear-gradient(0deg,rgba(5,7,10,.96) 30%,rgba(5,7,10,0));
+  display:flex;flex-direction:column;gap:26px;transition:opacity .3s;
+  font-family:Inter,system-ui,sans-serif;
 }
-.pl-osd.hide{opacity:0}
-.pl-top{display:flex;align-items:flex-end;gap:22px;margin-bottom:22px}
-.pl-titles{flex:1;min-width:0}
-.pl-title{font-size:38px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 6px rgba(0,0,0,.6)}
-.pl-subtitle{font-size:26px;color:#cfd8dd;margin-top:2px}
-.pl-subtitle:empty{display:none}
-.pl-engine{font-size:18px;color:#9fb0bc;border:1px solid rgba(255,255,255,.25);padding:3px 12px;border-radius:999px}
+.pl-osd.hide{opacity:0;pointer-events:none}
+.pl-top{display:flex;justify-content:space-between;align-items:flex-end;gap:32px}
+.pl-titles{min-width:0;flex:1}
+.pl-eyebrow{display:flex;align-items:center;gap:14px;font-size:22px;color:var(--muted,#A3AFBC);min-height:28px}
+.pl-eyebrow:empty{display:none}
+.pl-title{
+  margin:6px 0 0;font-family:"Space Grotesk",Inter,system-ui,sans-serif;font-size:56px;font-weight:700;line-height:1.1;
+  color:var(--text,#F2F5F8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 8px rgba(0,0,0,.5);
+}
+.pl-line{font-size:24px;color:#C9D2DB;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-tags{display:flex;gap:10px;flex:none;font-size:19px;color:#C9D2DB}
+.pl-tags span{border:1px solid #3E4B5B;padding:5px 12px;border-radius:8px;white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis}
+.pl-engine{display:none}
 .pl-live{
-  display:none;background:#e5484d;color:#fff;font-weight:800;font-size:20px;letter-spacing:1px;
-  padding:6px 14px;border-radius:6px;align-self:center;
+  display:none;background:var(--danger,#FF6B6B);color:#0A0D12;font-weight:800;font-size:19px;letter-spacing:1px;
+  padding:4px 12px;border-radius:8px;
 }
 #player.live .pl-live{display:inline-block}
 #player.live .pl-progress{display:none}
-#player.live #plNextHint{display:none}
 
-.pl-bar{position:relative;height:10px;background:rgba(255,255,255,.22);border-radius:5px}
+/* Barra de progreso */
+.pl-progress{display:flex;align-items:center;gap:22px}
+.pl-t{font-size:22px;font-variant-numeric:tabular-nums;width:110px;color:var(--text,#F2F5F8)}
+.pl-t-r{text-align:right;color:var(--muted,#A3AFBC)}
+.pl-bar{position:relative;flex:1;height:10px;border-radius:5px;background:rgba(242,245,248,.2)}
 .pl-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:5px}
+.pl-segs{position:absolute;left:0;right:0;top:0;height:10px}
+.pl-segs i{position:absolute;top:0;height:10px;background:rgba(242,184,75,.75);border-radius:5px}
 .pl-bar>b{
-  position:absolute;top:50%;left:0;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
-  background:#fff;box-shadow:0 0 0 4px rgba(23,201,100,.5);
+  position:absolute;top:-7px;left:0;width:24px;height:24px;margin-left:-12px;border-radius:50%;
+  background:#F2F5F8;box-shadow:0 2px 8px rgba(0,0,0,.5);
 }
-.pl-times{display:flex;justify-content:space-between;margin-top:14px;font-size:24px;color:#cfd8dd}
-.pl-times span:nth-child(2){color:#9fb0bc}
-.pl-keys{margin-top:20px;color:#9fb0bc}
+
+/* Barra de controles */
+.pl-bar-ctl{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.pl-grp{display:flex;align-items:center;gap:14px}
+.pl-grp:last-child{gap:12px}
+.pl-b{
+  box-sizing:border-box;border:0;margin:0;height:64px;padding:0 22px;border-radius:18px;cursor:default;
+  background:rgba(242,245,248,.12);color:#F2F5F8;font:600 21px Inter,system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;gap:12px;white-space:nowrap;
+  transition:transform .12s;outline:0;
+}
+.pl-b .pl-bi{display:flex}
+.pl-b .pl-bi svg{width:32px;height:32px}
+.pl-grp:first-child .pl-b{height:76px;min-width:76px;border-radius:20px}
+.pl-grp:first-child .pl-b.ictxt{padding:0 26px;font-size:22px}
+.pl-grp:first-child .pl-b.ictxt .pl-bi svg{width:28px;height:28px}
+.pl-b.main{width:92px;background:rgba(242,245,248,.22)}
+.pl-b.main .pl-bi svg{width:34px;height:34px}
+.pl-b.sq{width:64px;padding:0;font-size:24px;font-weight:700}
+.pl-bt{font-size:24px;font-weight:700;line-height:1}
+.pl-b.focused{background:#F2F5F8;color:#0A0D12;box-shadow:0 0 0 4px #05070A,0 0 0 8px #F2F5F8;transform:scale(1.04)}
 
 /* ---- Cuenta atrás siguiente episodio ---- */
 .pl-countdown{
-  position:absolute;right:72px;bottom:72px;display:none;align-items:center;gap:26px;
-  padding:26px 36px;border-radius:16px;background:rgba(20,27,34,.94);
-  box-shadow:0 0 0 3px var(--accent),0 20px 50px rgba(0,0,0,.6);font-size:26px;
+  position:absolute;right:96px;bottom:96px;z-index:3;display:none;align-items:center;gap:26px;
+  padding:26px 34px;border-radius:20px;background:var(--surface-2,#1C2430);
+  border:1px solid #3E4B5B;box-shadow:0 20px 50px rgba(0,0,0,.6);font-size:26px;
 }
 .pl-countdown.on{display:flex}
 .pl-count-n{
   width:84px;height:84px;border-radius:50%;border:5px solid var(--accent);
-  display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:800;color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-family:"Space Grotesk",Inter,sans-serif;
+  font-size:40px;font-weight:700;color:var(--accent);
 }
-.pl-countdown .muted{font-size:21px}
+.pl-countdown b{display:block;font-family:"Space Grotesk",Inter,sans-serif;font-size:28px}
+.pl-countdown .muted{display:block;font-size:21px;margin-top:6px;color:var(--muted,#A3AFBC)}
 
 /* ---- Error (texto bajo el modal) ---- */
 .pl-error{
@@ -139,47 +171,34 @@ body.avplay-on .pl-video{display:none}
 .watch-title{font-size:28px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:600px}
 .watch-keys{font-size:21px;color:var(--muted);margin-top:4px}
 
-/* ---- Panel de controles con iconos (A1) ---- */
-.pl-panel{display:none;gap:14px;margin-top:14px;flex-wrap:nowrap;overflow:hidden}
-.pl-panel.on{display:flex}
-#player.panel-on .pl-keys{display:none}
-.pl-ic{
-  flex:1 1 0;min-width:0;max-width:130px;padding:12px 4px 10px;border-radius:14px;text-align:center;
-  background:rgba(255,255,255,.08);border:3px solid transparent;transition:transform .12s;
-}
-.pl-ic b{display:block;font-size:34px;line-height:44px;font-weight:700;color:#fff;white-space:nowrap}
-.pl-ic span{display:block;font-size:17px;color:#cfd8dd;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pl-ic.focused{background:rgba(255,255,255,.2);border-color:var(--accent);transform:scale(1.08);box-shadow:var(--focus-ring)}
-
 /* ---- Miniatura al buscar ---- */
 .pl-seek{display:flex;flex-direction:column;align-items:center;gap:10px;border-radius:20px}
 .pl-thumb{display:none;width:320px;height:180px;border-radius:10px;background-size:cover;background-position:center;background-color:#222}
 
-/* ---- Saltar intro / siguiente ---- */
+/* ---- Saltar intro / siguiente (flotante arriba a la derecha) ---- */
 .pl-skip{
-  position:absolute;right:72px;bottom:90px;display:none;padding:18px 34px;border-radius:12px;
-  background:rgba(20,27,34,.92);border:3px solid var(--accent);font-size:30px;font-weight:700;
+  position:absolute;top:48px;right:64px;display:none;align-items:center;gap:14px;padding:14px 22px;border-radius:16px;
+  background:rgba(10,13,18,.82);font-size:22px;font-weight:500;color:var(--text,#F2F5F8);
 }
-.pl-skip.on{display:block}
-#player.osd-on .pl-skip{bottom:330px}
-.pl-skip-ok{margin-left:14px;padding:2px 14px;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-size:24px}
+.pl-skip.on{display:flex}
+.pl-skip-ok{padding:6px 14px;border-radius:10px;background:#F2F5F8;color:#0A0D12;font-size:20px;font-weight:700}
 
 /* ---- Temporizador de apagado ---- */
 .pl-sleep{
-  position:absolute;top:60px;right:72px;display:none;padding:14px 26px;border-radius:999px;
-  background:rgba(0,0,0,.75);font-size:26px;color:#ffd166;
+  position:absolute;top:48px;left:64px;display:none;padding:14px 24px;border-radius:16px;
+  background:rgba(10,13,18,.82);font-size:22px;color:var(--warn,#F2B84B);
 }
 .pl-sleep.on{display:block}
 
 /* ---- Resumen de la temporada anterior ---- */
 .pl-recap{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:1100px;max-width:86%;display:none;
-  padding:40px 52px;border-radius:20px;background:rgba(10,14,18,.94);box-shadow:0 0 0 3px var(--accent),0 24px 70px rgba(0,0,0,.7);
+  position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:1100px;max-width:86%;display:none;
+  padding:40px 52px;border-radius:20px;background:rgba(10,13,18,.92);border:1px solid #3E4B5B;box-shadow:0 24px 70px rgba(0,0,0,.7);
 }
 .pl-recap.on{display:block}
-.pl-recap-h{font-size:34px;font-weight:800;color:var(--accent);margin-bottom:18px}
-.pl-recap-t{font-size:30px;line-height:1.45;color:#e8eef2}
-.pl-recap-k{margin-top:22px;font-size:22px;color:#9fb0bc}
+.pl-recap-h{font-family:"Space Grotesk",Inter,sans-serif;font-size:34px;font-weight:700;color:var(--text,#F2F5F8);margin-bottom:18px}
+.pl-recap-t{font-size:28px;line-height:1.5;color:#C9D2DB}
+.pl-recap-k{margin-top:22px;font-size:21px;color:var(--muted,#A3AFBC)}
 
 /* ---- Info técnica ---- */
 .pl-info{border-collapse:collapse;font-size:26px;width:100%}

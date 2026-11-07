@@ -15,9 +15,9 @@ var EPG_TTL = 6 * 3600 * 1000;
 var HIDDEN_KEY = "live_hidden";       // [{id, n}]
 var ORDER_KEY = "live_order";         // [id, ...] orden propio (todos los canales)
 var REM_KEY = "live_reminders";       // [{id, ch, t, hi}]
-var GUIDE_SPAN = 4 * 3600;            // ventana visible de la rejilla (s)
+var GUIDE_SPAN = 3 * 3600;            // ventana visible de la rejilla (s): 6 franjas de 30 min
 var GUIDE_RANGE = 6 * 3600;           // ahora -> +6 h
-var GUIDE_ROWS = 7;                   // filas pintadas a la vez (virtualizado)
+var GUIDE_ROWS = 5;                   // filas pintadas a la vez (virtualizado)
 
 App.settings.define("liveExtraLists", []);
 
@@ -61,7 +61,9 @@ var S = {
   forceExtra: false,
   allOrder: [],      // todos los canales (visibles y ocultos) en orden propio
   grab: null,        // id del canal "agarrado" en modo mover
-  guide: null,       // estado de la guía en rejilla (null = cerrada)
+  guide: null,       // estado de la guía en rejilla (null = vista de tarjetas)
+  view: "guide",     // vista principal: "guide" (rejilla) | "cards" (tarjetas)
+  favOnly: false,    // la guía solo muestra favoritos
   pending: null      // canal a reproducir cuando cargue la lista (recordatorio)
 };
 
@@ -493,7 +495,8 @@ function render(){
   S.el.innerHTML = html;
   makeGrid();
   restoreFocus(prevKey);
-  if(S.guide) renderGuide();
+  if(S.guide){ S.guide.epgT = -1; renderGuide(); }
+  else if(S.view === "guide" && S.channels.length) openGuide();
 }
 
 function renderError(msg){
@@ -589,9 +592,9 @@ function onImgError(ev){
   var img = ev.target;
   if(!img || img.tagName !== "IMG" || !img.classList.contains("live-logo")) return;
   var card = img.closest ? img.closest(".live-card") : null;
-  var name = card ? (card.querySelector(".live-name") || {}).textContent : "";
+  var name = img.getAttribute("data-name") || (card ? (card.querySelector(".live-name") || {}).textContent : "");
   var span = document.createElement("span");
-  span.className = "live-initials";
+  span.className = "live-initials" + (img.classList.contains("lg-logo") ? " lg-logo" : "");
   span.setAttribute("style", App.ui.placeholderStyle(name));
   span.textContent = App.ui.initials(name);
   img.parentNode.replaceChild(span, img);
@@ -890,23 +893,21 @@ function checkReminders(){
 }
 setInterval(checkReminders, 15000);
 
-/* ================= Guía en rejilla (#61) =================
- * Canales en filas, franjas de 30 min en columnas (ventana de 4 h dentro de ahora → +6 h).
+/* ================= Guía en rejilla (vista principal) =================
+ * Arriba: vista destacada del canal enfocado. Debajo: fila de chips (Canales, Favoritos, apps oficiales)
+ * y la rejilla (canales en filas, franjas de 30 min en columnas, ventana de 3 h dentro de ahora → +6 h).
  * Solo se pintan las filas visibles (GUIDE_ROWS) y los programas que tocan la ventana. */
 function floor30(ts){ return Math.floor(ts / 1800) * 1800; }
 
 function buildGuideRows(){
   var G = S.guide, now = Date.now() / 1000, end = G.t0 + GUIDE_RANGE;
-  var rows = [], seen = {};
-  function add(ch){
-    if(!ch || seen[ch.id] || !ch.epg || !S.epg) return;
-    var all = S.epg.byName[ch.epg];
-    if(!all) return;
-    var evs = all.filter(function(e){ return e.hf > now && e.hi < end; });
-    if(evs.length){ seen[ch.id] = true; rows.push({ ch: ch, evs: evs }); }
-  }
-  S.favs.forEach(function(id){ add(S.byId[id]); });
-  S.channels.forEach(add);
+  var rows = [];
+  S.channels.forEach(function(ch){
+    if(S.favOnly && S.favs.indexOf(ch.id) < 0) return;
+    var all = (S.epg && ch.epg) ? S.epg.byName[ch.epg] : null;
+    var evs = all ? all.filter(function(e){ return e.hf > now && e.hi < end; }) : [];
+    rows.push({ ch: ch, evs: evs });
+  });
   G.rows = rows;
   G.epgT = S.epg ? S.epg.t : 0;
 }
@@ -917,10 +918,18 @@ function pickEv(evs, tm){
   return evs.length - 1;
 }
 
+function guideBarItems(){
+  var out = [{ k: "cards", label: t("live.v2.channels") }, { k: "fav", label: "★ " + t("live.v2.favOnly"), on: !!S.favOnly }];
+  APPS.forEach(function(a){ out.push({ k: "app", key: a.key, label: a.name }); });
+  return out;
+}
+
 function openGuide(){
   if(!S.channels.length){ App.ui.toast(t("live.epg.loading")); return; }
   var now = Date.now() / 1000, t0 = floor30(now);
-  S.guide = { t0: t0, ws: t0, row: 0, top: 0, ev: 0, cursor: now, rows: [], epgT: -1 };
+  S.view = "guide";
+  S.guide = { t0: t0, ws: t0, row: 0, top: 0, ev: 0, cursor: now, rows: [], epgT: -1, zone: "grid", bi: 0, heroKey: "",
+              blurred: document.body.classList.contains("zone-header") };
   if(!S.epg) loadEpg(false);
   buildGuideRows();
   var G = S.guide;
@@ -932,6 +941,7 @@ function openGuide(){
 }
 function closeGuide(){
   S.guide = null;
+  S.view = "cards";
   var el = S.el && S.el.querySelector(".live-guide");
   if(el && el.parentNode) el.parentNode.removeChild(el);
   if(S.grid){ S.grid.refresh(false); S.grid.focus(S.grid.index, true); }
@@ -952,12 +962,48 @@ function guideEnsureVisible(){
   else G.ws = Math.min(maxStart, Math.max(G.t0, floor30(ev.hi) - 3600));
 }
 
+function dayLabel(ws){
+  var d = new Date(ws * 1000);
+  var lab = "";
+  try{ lab = d.toLocaleDateString(App.i18n.lang() === "es" ? "es-ES" : "en-GB", { weekday: "short", day: "numeric" }); }catch(e){}
+  return (new Date().toDateString() === d.toDateString() ? t("live.v2.today") + (lab ? " · " : "") : "") + lab;
+}
+
+function logoHtml(ch, cls){
+  return ch.logo
+    ? '<img class="' + cls + ' live-logo" data-name="' + App.esc(ch.name) + '" src="' + App.esc(ch.logo) + '" alt="">'
+    : '<span class="' + cls + ' live-initials" style="' + App.ui.placeholderStyle(ch.name) + '">' + App.esc(App.ui.initials(ch.name)) + '</span>';
+}
+
+/* Vista destacada del canal */
+function heroHtml(ch, now){
+  if(!ch) return "";
+  var e = epgFor(ch), cur = e && e.now, nx = e && e.next;
+  var h = '<div class="lg-preview">' + logoHtml(ch, "lg-logo") + '</div><div class="lg-info">';
+  h += '<div class="lg-meta"><span class="lg-tag">' + App.esc(t("live.v2.liveTag")) + '</span><span class="num">' +
+       ch.num + ' · ' + App.esc(ch.name) + '</span></div>';
+  if(cur){
+    var p = Math.max(0, Math.min(1, (now - cur.hi) / Math.max(1, cur.hf - cur.hi)));
+    h += '<h1 class="lg-now-title">' + App.esc(cur.t || ch.name) + '</h1>' +
+         '<div class="lg-sched num">' + hhmm(cur.hi) + ' – ' + hhmm(cur.hf) + '</div>' +
+         '<div class="lg-prog"><i style="width:' + (p * 100).toFixed(0) + '%"></i></div>';
+  } else {
+    h += '<h1 class="lg-now-title">' + App.esc(ch.name) + '</h1>' +
+         '<div class="lg-sched">' + App.esc(S.epg || !S.epgLoading ? t("live.epg.none") : t("live.epg.loading")) + '</div>';
+  }
+  if(nx) h += '<div class="lg-next">' + App.esc(t("live.v2.upNext")) + ' <b>' + App.esc(nx.t) + '</b> <span class="num">· ' + hhmm(nx.hi) + '</span></div>';
+  return h + '</div>';
+}
+
 function renderGuide(){
   var G = S.guide;
   if(!G || !S.el) return;
   if(G.epgT !== (S.epg ? S.epg.t : 0)){
+    var keepId = G.rows[G.row] ? G.rows[G.row].ch.id : null;
     buildGuideRows();
-    G.row = Math.min(G.row, Math.max(0, G.rows.length - 1));
+    var ni = -1;
+    for(var q = 0; q < G.rows.length; q++) if(G.rows[q].ch.id === keepId){ ni = q; break; }
+    G.row = ni >= 0 ? ni : Math.min(G.row, Math.max(0, G.rows.length - 1));
     if(G.rows[G.row]) G.ev = pickEv(G.rows[G.row].evs, G.cursor);
     guideEnsureVisible();
   }
@@ -965,70 +1011,131 @@ function renderGuide(){
   if(!el){
     el = document.createElement("div");
     el.className = "live-guide";
+    el.innerHTML = '<div class="lg-hero"></div><div class="lg-bar"></div><div class="lg-main"></div>';
     S.el.appendChild(el);
+    G.heroKey = "";
   }
   var now = Date.now() / 1000, ws = G.ws, we = ws + GUIDE_SPAN;
-  var h = '<div class="lg-head"><span class="lg-title">' + App.esc(t("live.guide")) + '</span>' +
-          '<span class="muted">' + App.esc(t("live.guideHelp")) + '</span></div>';
-  h += '<div class="lg-times"><div class="lg-corner"></div><div class="lg-axis">';
+  var cur = G.rows[G.row];
+
+  /* --- vista destacada (solo se repinta si cambia el canal / la guía / el minuto) --- */
+  var hk = (cur ? cur.ch.id : "") + "|" + G.epgT + "|" + Math.floor(now / 30) + "|" + (S.epgLoading ? 1 : 0);
+  if(hk !== G.heroKey){
+    G.heroKey = hk;
+    el.querySelector(".lg-hero").innerHTML = heroHtml(cur ? cur.ch : null, now);
+  }
+
+  /* --- chips: Canales, Favoritos, apps oficiales --- */
+  var h = '<span class="lg-bar-label">' + App.esc(t("live.v2.view")) + '</span>';
+  guideBarItems().forEach(function(it, i){
+    if(i === 2) h += '<span class="lg-bar-sep"></span><span class="lg-bar-label">' + App.esc(t("live.v2.apps")) + '</span>';
+    h += '<span class="lg-chip' + (it.on ? ' on' : '') + (G.zone === "bar" && G.bi === i && !G.blurred ? ' fcs' : '') + '">' + App.esc(it.label) + '</span>';
+  });
+  el.querySelector(".lg-bar").innerHTML = h;
+
+  /* --- rejilla --- */
+  h = '<div class="lg-times"><div class="lg-corner">' + App.esc(dayLabel(ws)) + '</div><div class="lg-axis">';
   for(var s = 0; s < GUIDE_SPAN / 1800; s++){
     h += '<span class="lg-slot num" style="left:' + (s * 1800 / GUIDE_SPAN * 100) + '%">' + hhmm(ws + s * 1800) + '</span>';
   }
   if(now >= ws && now < we) h += '<i class="lg-now" style="left:' + ((now - ws) / GUIDE_SPAN * 100) + '%"></i>';
   h += '</div></div>';
   if(!G.rows.length){
-    h += '<div class="lg-empty muted">' + App.esc(S.epg ? t("live.guideEmpty") : t("live.epg.loading")) + '</div>';
+    h += '<div class="lg-empty muted">' + App.esc(S.favOnly ? t("live.v2.noFavs") : t("live.guideEmpty")) + '</div>';
   }
   var rem = {};
   remList().forEach(function(r){ rem[remKey(r.id, r.hi)] = true; });
+  var gridFocus = G.zone === "grid" && !G.blurred;
   for(var i = G.top; i < Math.min(G.rows.length, G.top + GUIDE_ROWS); i++){
-    var row = G.rows[i];
-    h += '<div class="lg-row' + (i === G.row ? ' cur' : '') + '"><div class="lg-ch"><b class="num">' + row.ch.num + '</b> ' +
-         '<span>' + App.esc(row.ch.name) + '</span></div><div class="lg-line">';
+    var row = G.rows[i], isCur = i === G.row;
+    var fav = S.favs.indexOf(row.ch.id) >= 0;
+    h += '<div class="lg-row' + (isCur ? ' cur' : '') + '"><div class="lg-ch"><b class="num">' + row.ch.num + '</b>' +
+         '<span>' + App.esc(row.ch.name) + '</span>' + (fav ? '<i class="lg-star">★</i>' : '') + '</div><div class="lg-line">';
+    if(!row.evs.length){
+      h += '<div class="lg-ev lg-none' + (isCur && gridFocus ? ' sel' : '') + '" style="left:0;width:100%"><span>' +
+           App.esc(S.epg || !S.epgLoading ? t("live.v2.noGuide") : t("live.epg.loading")) + '</span></div>';
+    }
     for(var j = 0; j < row.evs.length; j++){
       var e = row.evs[j];
       if(e.hf <= ws || e.hi >= we) continue;
       var a = Math.max(e.hi, ws), b = Math.min(e.hf, we);
-      var cls = 'lg-ev' + (e.hi <= now && e.hf > now ? ' on' : '') + (i === G.row && j === G.ev ? ' sel' : '') +
-                (rem[remKey(row.ch.id, e.hi)] ? ' rem' : '') + (e.hi < ws ? ' cl' : '') + (e.hf > we ? ' cr' : '');
+      var onAir = e.hi <= now && e.hf > now, hasRem = !!rem[remKey(row.ch.id, e.hi)];
+      var cls = 'lg-ev' + (onAir ? ' on' : '') + (isCur && gridFocus && j === G.ev ? ' sel' : '') +
+                (hasRem ? ' rem' : '') + (e.hi < ws ? ' cl' : '') + (e.hf > we ? ' cr' : '');
       h += '<div class="' + cls + '" style="left:' + ((a - ws) / GUIDE_SPAN * 100) + '%;width:' + ((b - a) / GUIDE_SPAN * 100) + '%">' +
-           '<span>' + App.esc(e.t) + '</span></div>';
+           '<span class="lg-ev-t">' + App.esc(e.t) + '</span>' +
+           '<span class="lg-ev-s num">' + hhmm(e.hi) + (onAir ? ' · ' + App.esc(t("live.v2.onAir")) : '') + '</span>' +
+           (hasRem ? '<em class="lg-rem">' + App.esc(t("live.v2.reminder")) + '</em>' : '') + '</div>';
     }
     h += '</div></div>';
   }
-  var cur = G.rows[G.row], cev = cur && cur.evs[G.ev];
+  var cev = cur && cur.evs[G.ev];
   if(cev){
-    var onAir = cev.hi <= now && cev.hf > now;
-    h += '<div class="lg-info"><b>' + App.esc(cev.t) + '</b> <span class="muted num">' + hhmm(cev.hi) + '–' + hhmm(cev.hf) + ' · ' +
-         App.esc(cur.ch.name) + '</span><span class="lg-act">' +
-         App.esc(onAir ? t("live.guide.okWatch") : (hasReminder(cur.ch.id, cev.hi) ? t("live.guide.okUnremind") : t("live.guide.okRemind"))) + '</span></div>';
+    var air = cev.hi <= now && cev.hf > now;
+    h += '<div class="lg-sel"><b>' + App.esc(cev.t) + '</b> <span class="muted num">' + hhmm(cev.hi) + '–' + hhmm(cev.hf) + '</span>' +
+         '<span class="lg-act">' + App.esc(air ? t("live.guide.okWatch") : (hasReminder(cur.ch.id, cev.hi) ? t("live.guide.okUnremind") : t("live.guide.okRemind"))) + '</span></div>';
   }
-  el.innerHTML = h;
+  el.querySelector(".lg-main").innerHTML = h;
 }
 
 function guideSelect(){
   var G = S.guide, r = G && G.rows[G.row], ev = r && r.evs[G.ev];
-  if(!ev) return;
+  if(!r) return;
   var now = Date.now() / 1000;
-  if(ev.hi <= now){ var ch = r.ch; closeGuide(); playChannel(ch); }
+  if(!ev || ev.hi <= now){ playChannel(r.ch); }
   else { toggleReminder(r.ch, ev); renderGuide(); }
+}
+
+function guideBarSelect(){
+  var it = guideBarItems()[S.guide.bi];
+  if(!it) return;
+  if(it.k === "cards") closeGuide();
+  else if(it.k === "fav") toggleFavOnly();
+  else launchApp(it.key);
+}
+function toggleFavOnly(){
+  S.favOnly = !S.favOnly;
+  if(S.guide){ S.guide.epgT = -1; S.guide.row = 0; S.guide.top = 0; renderGuide(); }
 }
 
 function guideKey(k){
   var G = S.guide;
-  if(App.isBack(k)){ closeGuide(); return true; }
+  if(App.isBack(k)) return false;                  // la guía es la vista principal: Atrás sale de la pantalla
+  var d = App.digit(k);
+  if(d >= 0){ pushDigit(d); return true; }
+  G.blurred = false;
+  if(G.zone === "bar"){
+    var n = guideBarItems().length;
+    if(k === K.OK){ guideBarSelect(); return true; }
+    if(k === K.LEFT){ if(G.bi > 0) G.bi--; else { G.blurred = true; renderGuide(); App.focusHeader(); return true; } }
+    else if(k === K.RIGHT){ if(G.bi < n - 1) G.bi++; }
+    else if(k === K.DOWN){ G.zone = "grid"; }
+    else if(k === K.UP){ renderGuide(); return true; }
+    else return true;
+    renderGuide();
+    return true;
+  }
   var r = G.rows[G.row];
   if(k === K.OK){ guideSelect(); return true; }
   if(k === K.RED){ G.ws = G.t0; G.cursor = Date.now() / 1000; if(r) G.ev = pickEv(r.evs, G.cursor); renderGuide(); return true; }
-  if(!r) return true;
+  if(k === K.GREEN){ if(r){ toggleFavId(r.ch.id); renderGuide(); } return true; }
+  if(k === K.INFO){ closeGuide(); return true; }
+  if(!r){
+    if(k === K.UP){ G.zone = "bar"; renderGuide(); }
+    return true;
+  }
   if(k === K.LEFT){
     if(G.ev > 0){ G.ev--; G.cursor = Math.max(r.evs[G.ev].hi, G.ws); }
+    else { G.blurred = true; renderGuide(); App.focusHeader(); return true; }
   } else if(k === K.RIGHT){
     if(G.ev < r.evs.length - 1){ G.ev++; G.cursor = r.evs[G.ev].hi; }
   } else if(k === K.UP || k === K.DOWN || k === K.CHUP || k === K.CHDOWN){
     var step = (k === K.CHUP || k === K.CHDOWN) ? GUIDE_ROWS : 1;
     var nr = G.row + ((k === K.DOWN || k === K.CHDOWN) ? step : -step);
-    if(nr < 0){ if(G.row === 0 && k === K.UP){ closeGuide(); App.focusHeader(); return true; } nr = 0; }
+    if(nr < 0){
+      if(k === K.UP && G.row === 0){ G.zone = "bar"; renderGuide(); return true; }
+      nr = 0;
+    }
     nr = Math.min(nr, G.rows.length - 1);
     G.row = nr; G.ev = pickEv(G.rows[nr].evs, G.cursor);
   } else return true;
@@ -1042,16 +1149,24 @@ function actions(){
   var out = [], G = S.guide;
   if(G){
     var r = G.rows[G.row], ev = r && r.evs[G.ev], now = Date.now() / 1000;
-    if(ev){
-      out.push({ label: t("live.act.watch"), run: function(){ var ch = r.ch; closeGuide(); playChannel(ch); } });
-      if(ev.hi > now) out.push({
+    if(G.zone === "bar"){
+      out.push({ label: t("live.act.open"), run: guideBarSelect });
+    } else if(r){
+      out.push({ label: t("live.act.watch"), run: function(){ playChannel(r.ch); } });
+      if(ev && ev.hi > now) out.push({
         label: hasReminder(r.ch.id, ev.hi) ? t("live.guide.okUnremind") : t("live.guide.okRemind"),
         run: function(){ toggleReminder(r.ch, ev); renderGuide(); }
       });
-      out.push({ label: t("live.act.fav"), run: function(){ toggleFavId(r.ch.id); } });
+      out.push({ label: S.favs.indexOf(r.ch.id) >= 0 ? t("live.act.unfav") : t("live.act.fav"), run: function(){ toggleFavId(r.ch.id); renderGuide(); } });
+      out.push({ label: t("live.act.hide"), run: function(){ hideChannel(r.ch); } });
     }
     out.push({ label: t("live.act.now"), run: function(){ G.ws = G.t0; G.cursor = now; if(r) G.ev = pickEv(r.evs, now); renderGuide(); } });
-    out.push({ label: t("live.act.closeGuide"), run: closeGuide });
+    out.push({ label: t(S.favOnly ? "live.v2.act.allChannels" : "live.v2.act.favOnly"), run: toggleFavOnly });
+    out.push({ label: t("live.v2.act.cards"), run: closeGuide });
+    var nhg = hiddenList().length;
+    if(nhg) out.push({ label: t("live.act.hidden", {n: nhg}), run: manageHidden });
+    out.push({ label: t("live.act.goto"), run: gotoChannel });
+    out.push({ label: t("live.act.reload"), run: function(){ S.forceExtra = true; load(true); loadEpg(true); } });
     return out;
   }
   var el = S.grid && S.grid.current();
@@ -1131,24 +1246,30 @@ App.settingsUI.add("settings.group.live", {
 /* ================= Pantalla ================= */
 App.screens.register({
   id: "live", label: t("nav.live"), nav: true, order: 30,
-  get hint(){ return t("live.hint"); },
+  get hint(){ return t("live.v2.hint"); },
   mount: function(el){
     S.el = el;
     el.addEventListener("error", onImgError, true);
     window.addEventListener("resize", function(){ S.geo = null; });
   },
   show: function(params){
+    if(S.guide){
+      S.guide.blurred = document.body.classList.contains("zone-header");
+      S.guide.heroKey = ""; S.guide.epgT = -1;
+      renderGuide(); loadEpg(false);
+      return;
+    }
     if(params && params._back && S.grid){ restoreFocus(currentKey()); return; }
     if(!S.channels.length && !S.loading) load(false);
     else if(S.grid){ S.geo = null; restoreFocus(currentKey()); loadEpg(false); }
   },
   hide: function(){
     if(S.grab) endGrab();
-    if(S.guide) closeGuide();
     clearTimeout(S.digitTimer); S.digitBuf = "";
     clearTimeout(S.epgTimer);
   },
   focus: function(){
+    if(S.guide){ S.guide.blurred = false; renderGuide(); return; }
     if(!S.grid) return;
     S.grid.refresh(false);
     S.geo = null;
@@ -1156,6 +1277,7 @@ App.screens.register({
     scheduleEpgBar();
   },
   blur: function(){
+    if(S.guide){ S.guide.blurred = true; renderGuide(); }
     if(S.grid) S.grid.blur();
     var bar = S.el && S.el.querySelector(".live-epg");
     if(bar) bar.classList.remove("on");
@@ -1169,6 +1291,7 @@ App.screens.register({
       if(k === K.OK || App.isBack(k)){ endGrab(); return true; }
       return true;
     }
+    if(App.isBack(k) && S.channels.length){ openGuide(); return true; }   // tarjetas → guía
     if(k === K.RED){ S.forceExtra = true; load(true); loadEpg(true); return true; }
     if(k === K.GREEN){ toggleFav(); return true; }
     if(k === K.INFO){ openGuide(); return true; }

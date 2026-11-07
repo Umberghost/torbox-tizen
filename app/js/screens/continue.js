@@ -10,15 +10,17 @@ var S = { el: null, grid: null, entries: [], visible: false, busy: false };
 function cardHtml(e, i){
   var pct = Math.round(App.history.progress(e.key) * 100);
   var remain = e.dur > 0 ? App.t("continue.left", { time: App.fmtTime(Math.max(0, e.dur - e.pos)) }) : App.fmtTime(e.pos);
-  var poster = e.poster
-    ? '<div class="cw-poster" style="background-image:url(\'' + App.esc(e.poster) + '\')"></div>'
-    : '<div class="cw-poster cw-ph" style="' + App.ui.placeholderStyle(e.title) + '"><span>' +
-        App.esc(App.ui.initials(e.title)) + '</span></div>';
-  return '<div class="cw-card focusable" data-i="' + i + '">' + poster +
-    '<div class="cw-bar progress"><i style="width:' + pct + '%"></i></div>' +
-    '<div class="cw-info"><div class="cw-title">' + App.esc(e.title || App.t("continue.untitled")) + '</div>' +
-    '<div class="cw-sub num">' + App.esc(e.subtitle || "") + (e.subtitle ? " · " : "") + remain + '</div></div>' +
-    '</div>';
+  var m = e.meta || {};
+  var still = m.imdbId ? "https://images.metahub.space/background/medium/" + m.imdbId + "/img" : (e.poster || "");
+  var alt = e.poster && e.poster !== still ? e.poster : "";
+  var img = still ? '<img class="lib-img" alt="" src="' + App.esc(still) + '"' + (alt ? ' data-alt="' + App.esc(alt) + '"' : '') +
+    " onload=\"this.parentNode.classList.add('has-img')\" onerror=\"var a=this.getAttribute('data-alt');if(a){this.removeAttribute('data-alt');this.src=a}else{this.parentNode.removeChild(this)}\">" : "";
+  return '<div class="lib-card hm-wide focusable" data-i="' + i + '">' +
+    '<div class="lib-poster hm-still" style="' + App.ui.placeholderStyle(e.title) + '"><span class="lib-initials">' +
+      App.esc(App.ui.initials(e.title)) + '</span>' + img + '</div>' +
+    '<div class="hm-wide-info"><div class="hm-wide-title">' + App.esc(e.title || App.t("continue.untitled")) + '</div>' +
+    '<div class="hm-wide-sub num">' + App.esc(e.subtitle || "") + (e.subtitle ? " · " : "") + remain + '</div>' +
+    (pct ? '<div class="hm-bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div></div>';
 }
 
 function render(keepIndex){
@@ -33,9 +35,7 @@ function render(keepIndex){
   S.el.innerHTML =
     '<div class="scroll"><div class="section-title">' + App.esc(App.t("continue.title")) + '<span class="muted">' +
       App.esc(App.t("continue.count", { n: S.entries.length })) + '</span></div>' +
-    '<div class="cw-grid">' + S.entries.map(cardHtml).join("") + '</div>' +
-    '<div class="legend cw-legend"><span>' + App.esc(App.t("continue.legendOk")) + '</span><span><i class="red"></i>' +
-      App.esc(App.t("continue.legendRemove")) + '</span></div></div>';
+    '<div class="hm-wide-grid">' + S.entries.map(cardHtml).join("") + '</div></div>';
   S.grid = new App.ui.FocusGrid(S.el, { onSelect: function(i){ resume(S.entries[i]); } });
   S.grid.index = keepIndex ? Math.min(idx, S.entries.length - 1) : 0;
   if(document.body.classList.contains("zone-header")) S.grid.blur();
@@ -102,7 +102,7 @@ App.bus.on("player:close", function(){ if(S.visible && S.dirty){ S.dirty = false
 
 App.screens.register({
   id: "continue", label: App.t("nav.continue"), nav: true, order: 20,
-  get hint(){ return App.t("continue.hint"); },
+  get hint(){ return App.t("v2lib.continueHint"); },
   mount: function(el){ S.el = el; },
   show: function(params){ S.visible = true; S.dirty = false; render(!!(params && params._back)); },
   hide: function(){ S.visible = false; },
@@ -112,7 +112,6 @@ App.screens.register({
   onKey: function(k){
     if(k === K.RED){ removeFocused(); return true; }
     if(S.grid) return S.grid.handleKey(k);
-    if(k === K.UP){ App.focusHeader(); return true; }
     return false;
   }
 });

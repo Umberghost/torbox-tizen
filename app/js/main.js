@@ -10,7 +10,7 @@ var screens = App.screens.all();   // id → def (registro en core.js)
 App.bus.on("screens:change", function(){ if(booted) renderNav(); });
 
 /* ================= Router ================= */
-var mainEl, navEl;
+var mainEl;
 var current = null;       // {id, params}
 var stack = [];           // historial dentro de una sección
 var zone = "content";     // "content" | "header"
@@ -74,22 +74,64 @@ App.section = function(id, params){
 };
 App.current = function(){ return current ? current.id : null; };
 
-/* ================= Barra de secciones ================= */
+/* ================= Rail lateral (rediseño 2.0) =================
+ * Rail vertical con un icono SVG por sección. "zone header" = el foco está en el rail
+ * (se mantiene el nombre por compatibilidad: body.zone-header, App.focusHeader()). */
 var DEFAULT_HINT = "";  // se calcula con App.t al arrancar
+var railEl, headerEl, hintbarEl, statusEl, clockEl;
+var RAIL_ORDER = ["home", "search", "library", "live", "downloads"];
+var RAIL_HIDDEN = ["continue", "settings"];   // 'continue' sale del rail; settings va abajo
+function ico(p, w){ return '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
+var ICONS = {
+  home: ico('<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', 2.2),
+  search: ico('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>'),
+  library: ico('<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="16" rx="1"/><path d="M17.5 5l3.5 14"/>'),
+  live: ico('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 2l4 4 4-4"/>'),
+  downloads: ico('<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'),
+  settings: ico('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+  other: ico('<circle cx="12" cy="12" r="8"/>')
+};
 
+/* Entradas del rail: [{id, label, icon}] en orden de navegación (arriba→abajo; ajustes al final) */
+function railEntries(){
+  var list = App.screens.navList().filter(function(s){ return RAIL_HIDDEN.indexOf(s.id) < 0; });
+  list.sort(function(a, b){
+    var ia = RAIL_ORDER.indexOf(a.id), ib = RAIL_ORDER.indexOf(b.id);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  var out = list.map(function(s){ return { id: s.id, label: s.label || s.id, icon: ICONS[s.id] || ICONS.other }; });
+  if(screens.settings && screens.settings.nav){
+    out.push({ id: "settings", label: screens.settings.label || "settings", icon: ICONS.settings, bottom: true });
+  }
+  return out;
+}
+function profileInitial(){
+  try{
+    if(!App.profile) return "";
+    var cur = App.profile.current(), l = App.profile.list(), name = "";
+    l.forEach(function(p){ if(p.id === cur) name = p.name; });
+    return (name || "?").charAt(0).toUpperCase();
+  }catch(e){ return ""; }
+}
+var railList = [];
 function renderNav(){
-  if(!navEl) return;
-  var list = App.screens.navList();
-  navEl.innerHTML = list.map(function(s){
-    return '<div class="tab" data-id="' + App.esc(s.id) + '">' + App.esc(s.label || s.id) + '</div>';
-  }).join("");
+  if(!railEl) return;
+  railList = railEntries();
+  var html = '<div class="rail-brand">T<b>B</b></div>';
+  var bottomDone = false;
+  railList.forEach(function(s){
+    if(s.bottom && !bottomDone){ html += '<div class="rail-spacer"></div>'; bottomDone = true; }
+    html += '<div class="rail-item" data-id="' + App.esc(s.id) + '" aria-label="' + App.esc(s.label) + '">' + s.icon +
+      '<span class="rail-tip">' + App.esc(s.label) + '</span></div>';
+  });
+  if(!bottomDone) html += '<div class="rail-spacer"></div>';
+  var ini = profileInitial();
+  if(ini) html += '<div class="rail-avatar" aria-hidden="true">' + App.esc(ini) + '</div>';
+  railEl.innerHTML = html;
   syncNav();
 }
-function syncNav(){
-  if(!navEl) return;
-  var tabs = navEl.children;
+function activeSectionId(){
   var activeId = current ? current.id : null;
-  // si estamos en una subpantalla, se marca la sección de la que venimos
   var sectionId = activeId;
   if(activeId && screens[activeId] && !screens[activeId].nav){
     for(var i = stack.length - 1; i >= 0; i--){
@@ -97,25 +139,27 @@ function syncNav(){
     }
     if(screens[activeId].section) sectionId = screens[activeId].section;
   }
-  for(var j = 0; j < tabs.length; j++){
-    var t = tabs[j];
-    t.classList.toggle("active", t.dataset.id === sectionId);
+  if(sectionId === "continue") sectionId = "home";   // 'continue' vive en Inicio
+  return sectionId;
+}
+function syncNav(){
+  if(!railEl) return;
+  var items = railEl.querySelectorAll(".rail-item");
+  var sectionId = activeSectionId();
+  for(var j = 0; j < items.length; j++){
+    var t = items[j];
+    t.classList.toggle("active", t.getAttribute("data-id") === sectionId);
     t.classList.toggle("focused", zone === "header" && j === navIndex);
-    if((t.classList.contains("active") && zone !== "header") || (zone === "header" && j === navIndex)){
-      if(App.ui.scrollIntoView) App.ui.scrollIntoView(t);
-    }
   }
   document.body.classList.toggle("zone-header", zone === "header");
 }
 
 App.focusHeader = function(){
-  var list = App.screens.navList();
-  var cur = current ? current.id : null;
+  if(!railEl) return;
+  if(!railList.length) railList = railEntries();
+  var sec = activeSectionId();
   navIndex = 0;
-  list.forEach(function(s, i){ if(s.id === cur) navIndex = i; });
-  // si estamos en subpantalla, apunta a la sección marcada
-  var act = navEl.querySelector(".tab.active");
-  if(act){ for(var i = 0; i < navEl.children.length; i++) if(navEl.children[i] === act) navIndex = i; }
+  railList.forEach(function(s, i){ if(s.id === sec) navIndex = i; });
   zone = "header";
   var def = current && screens[current.id];
   if(def && def.blur){ try{ def.blur(); }catch(e){} }
@@ -129,23 +173,30 @@ function focusContent(){
   if(def && def.focus){ try{ def.focus(); }catch(e){ console.error(e); } }
 }
 
-function headerKey(k){
-  var list = App.screens.navList();
-  if(k === K.LEFT || k === K.RIGHT){
-    navIndex = (navIndex + (k === K.RIGHT ? 1 : -1) + list.length) % list.length;
-    var target = list[navIndex];
-    if(target && (!current || target.id !== current.id)){
-      App.section(target.id);
-      zone = "header";
-      var def = screens[target.id];
-      if(def && def.blur){ try{ def.blur(); }catch(e){} }
-    }
+/* Mover por el rail cambia de sección con un pequeño retardo (vista previa) */
+var railTimer = null;
+function railApply(){
+  clearTimeout(railTimer); railTimer = null;
+  var t = railList[navIndex];
+  if(t && t.id !== activeSectionId()){
+    App.section(t.id);
+    zone = "header";
+    var def = screens[t.id];
+    if(def && def.blur){ try{ def.blur(); }catch(e){} }
     syncNav();
+  }
+}
+function headerKey(k){
+  if(k === K.UP || k === K.DOWN){
+    if(!railList.length) return;
+    navIndex = Math.max(0, Math.min(railList.length - 1, navIndex + (k === K.DOWN ? 1 : -1)));
+    syncNav();
+    clearTimeout(railTimer);
+    railTimer = setTimeout(railApply, 250);
     return;
   }
-  if(k === K.DOWN || k === K.OK){
-    var t = list[navIndex];
-    if(t && (!current || t.id !== current.id)) App.section(t.id);
+  if(k === K.RIGHT || k === K.OK){
+    railApply();
     focusContent();
     return;
   }
@@ -157,6 +208,49 @@ function headerKey(k){
     });
   }
 }
+
+/* ================= Cabecera mínima + barra de pista ================= */
+function pad2(n){ return n < 10 ? "0" + n : "" + n; }
+function updateStatus(){
+  if(!statusEl) return;
+  var ok = false;
+  try{ ok = !!(App.torbox && App.torbox.hasToken && App.torbox.hasToken()); }catch(e){}
+  statusEl.className = "hdr-status" + (ok ? " ok" : "");
+  statusEl.innerHTML = '<i></i><span>' + App.esc(App.t(ok ? "shell.connected" : "shell.disconnected")) + '</span>';
+  if(clockEl){ var d = new Date(); clockEl.textContent = pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
+}
+function buildShell(){
+  var app = document.getElementById("app");
+  headerEl = app.querySelector("header");
+  var hintEl = document.getElementById("hint");
+  headerEl.innerHTML = '<div id="headerLeft"></div><div class="spacer"></div>' +
+    '<div class="hdr-status" id="hdrStatus"></div><div class="hdr-clock num" id="hdrClock"></div>';
+  statusEl = document.getElementById("hdrStatus");
+  clockEl = document.getElementById("hdrClock");
+  railEl = document.createElement("nav");
+  railEl.id = "rail";
+  railEl.setAttribute("aria-label", "Sections");
+  app.insertBefore(railEl, app.firstChild);
+  hintbarEl = document.createElement("div");
+  hintbarEl.id = "hintbar";
+  if(!hintEl){ hintEl = document.createElement("div"); hintEl.id = "hint"; hintEl.className = "hint"; }
+  hintbarEl.appendChild(hintEl);
+  var pill = document.createElement("div");
+  pill.className = "hint-pill";
+  pill.innerHTML = '<b>' + App.esc(App.t("shell.holdOk")) + '</b><span>' + App.esc(App.t("shell.moreOptions")) + '</span>';
+  hintbarEl.appendChild(pill);
+  app.appendChild(hintbarEl);
+  updateStatus();
+  setInterval(updateStatus, 30000);
+  App.bus.on("settings:change", function(c){ if(!c || !c.key || c.key === "torboxToken") updateStatus(); });
+}
+/* La píldora "Mantén OK" ya está en la barra: se quita del texto del hint */
+(function(){
+  var orig = App.setHintDefault;
+  App.setHintDefault = function(msg){
+    orig(String(msg || "").replace(/\s*[·•]\s*(Hold OK|Mantén OK)[^·•]*$/i, ""));
+  };
+})();
 
 /* ================= Menú contextual (A1) =================
  * Se abre con OK mantenido (>= 600 ms), la tecla TOOLS (10135) o Menu (10133 / tecla de contexto en PC).
@@ -274,7 +368,8 @@ function dispatchKey(e){
     if(!App.back()) App.focusHeader();
     return;
   }
-  if(k === K.UP){ e.preventDefault(); App.focusHeader(); return; }
+  if(k === K.LEFT){ e.preventDefault(); App.focusHeader(); return; }   // borde izquierdo → rail
+  if(k === K.UP || k === K.DOWN || k === K.RIGHT){ e.preventDefault(); return; }
   // Atajos de color globales
   if(k === K.BLUE && screens.settings){ e.preventDefault(); App.section("settings"); return; }
   if(k === K.YELLOW && screens.search){ e.preventDefault(); App.section("search"); return; }
@@ -410,7 +505,7 @@ function boot(){
   DEFAULT_HINT = App.t("main.hint");
   document.documentElement.lang = App.i18n.lang();
   mainEl = document.getElementById("main");
-  navEl = document.getElementById("nav");
+  buildShell();
   App.registerKeys();
   booted = true;
   renderNav();
@@ -418,9 +513,9 @@ function boot(){
   document.addEventListener("keyup", onKeyUp, true);
   initMobile();
   // Clic de ratón (útil al probar en PC): seleccionar pestaña
-  navEl.addEventListener("click", function(ev){
-    var t = ev.target.closest ? ev.target.closest(".tab") : null;
-    if(t) App.section(t.dataset.id);
+  railEl.addEventListener("click", function(ev){
+    var t = ev.target.closest ? ev.target.closest(".rail-item") : null;
+    if(t){ App.section(t.getAttribute("data-id")); zone = "content"; syncNav(); }
   });
   if(App.profile.needsSelect()) App.section("profiles");
   else startApp();

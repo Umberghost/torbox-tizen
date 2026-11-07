@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TorBox TV — Guía de TV en directo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0D12}
+a{color:#19D46B}a:hover{color:#5BE597}
+</style>
+</helmet>
+<div style="width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #0A0D12; color: #F2F5F8; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <section style="display: flex; gap: 40px; padding: 48px 96px 28px; align-items: stretch">
+    <div style="width: 560px; height: 316px; flex: none; border-radius: 20px; background: #24364A; display: flex; align-items: center; justify-content: center; color: #6E8297; font-size: 22px">[Vista previa del canal]</div>
+    <div style="display: flex; flex-direction: column; gap: 14px; justify-content: center">
+      <div style="display: flex; align-items: center; gap: 14px; font-size: 22px; color: #A3AFBC">
+        <span style="background: #FF6B6B; color: #1A0505; font-weight: 700; padding: 4px 10px; border-radius: 6px; font-size: 18px">EN DIRECTO</span>
+        <span>1 · La 1</span>
+      </div>
+      <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 60px; line-height: 1.05">Telediario 2</h1>
+      <div style="font-size: 22px; color: #C9D2DB">21:00 – 21:55 · Informativos</div>
+      <div style="width: 520px; height: 8px; border-radius: 4px; background: rgba(242,245,248,.18)"><div style="width: 70%; height: 8px; border-radius: 4px; background: {{accent}}"></div></div>
+      <div style="font-size: 21px; color: #A3AFBC">A continuación: <span style="color: #F2F5F8">La Revuelta</span> · 21:55</div>
+    </div>
+  </section>
+
+  <section aria-label="Guía" style="flex: 1; padding: 0 96px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: grid; grid-template-columns: 280px repeat(6, minmax(0, 1fr)); gap: 8px; color: #8494A5; font-size: 19px; padding-bottom: 6px">
+      <span>Hoy · vie 7</span><span>21:00</span><span>21:30</span><span>22:00</span><span>22:30</span><span>23:00</span><span>23:30</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 280px repeat(6, minmax(0, 1fr)); gap: 8px; height: 76px">
+      <div style="display: flex; align-items: center; gap: 14px; background: #141A22; border-radius: 12px; padding: 0 18px"><span style="color: #8494A5; width: 28px">1</span><span style="font-weight: 600; font-size: 22px">La 1</span><span style="margin-left: auto; color: #F2B84B">★</span></div>
+      <div style="grid-column: span 2; border-radius: 12px; background: #1C2430; padding: 12px 18px; box-shadow: 0 0 0 4px #F2F5F8; display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 700; font-size: 21px">Telediario 2</span><span style="font-size: 17px; color: #A3AFBC">21:00 · en emisión</span></div>
+      <div style="grid-column: span 3; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 21px">La Revuelta</span><span style="font-size: 17px; color: #A3AFBC">21:55</span></div>
+      <div style="border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; align-items: center; font-size: 19px; color: #A3AFBC">Cine</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 280px repeat(6, minmax(0, 1fr)); gap: 8px; height: 76px">
+      <div style="display: flex; align-items: center; gap: 14px; background: #141A22; border-radius: 12px; padding: 0 18px"><span style="color: #8494A5; width: 28px">2</span><span style="font-weight: 600; font-size: 22px">La 2</span></div>
+      <div style="grid-column: span 3; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 21px">Documental: El mundo salvaje</span><span style="font-size: 17px; color: #A3AFBC">20:45</span></div>
+      <div style="grid-column: span 3; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 21px">Versión española</span><span style="font-size: 17px; color: #A3AFBC">22:30</span></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 280px repeat(6, minmax(0, 1fr)); gap: 8px; height: 76px">
+      <div style="display: flex; align-items: center; gap: 14px; background: #141A22; border-radius: 12px; padding: 0 18px"><span style="color: #8494A5; width: 28px">6</span><span style="font-weight: 600; font-size: 22px">24h</span></div>
+      <div style="grid-column: span 6; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 21px">La noche en 24h</span><span style="font-size: 17px; color: #A3AFBC">21:00 – 00:00</span></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 280px repeat(6, minmax(0, 1fr)); gap: 8px; height: 76px">
+      <div style="display: flex; align-items: center; gap: 14px; background: #141A22; border-radius: 12px; padding: 0 18px"><span style="color: #8494A5; width: 28px">26</span><span style="font-weight: 600; font-size: 22px">Canal Sur</span><span style="margin-left: auto; color: #F2B84B">★</span></div>
+      <div style="grid-column: span 2; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 21px">Noticias Andalucía</span><span style="font-size: 17px; color: #A3AFBC">20:30</span></div>
+      <div style="grid-column: span 4; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between"><span style="display: flex; flex-direction: column"><span style="font-weight: 600; font-size: 21px">Tierra de talento</span><span style="font-size: 17px; color: #A3AFBC">22:00</span></span><span style="font-size: 17px; color: #04120A; background: #F2B84B; padding: 4px 10px; border-radius: 8px; font-weight: 700">Recordatorio</span></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 280px repeat(6, minmax(0, 1fr)); gap: 8px; height: 76px">
+      <div style="display: flex; align-items: center; gap: 14px; background: #141A22; border-radius: 12px; padding: 0 18px"><span style="color: #8494A5; width: 28px">29</span><span style="font-weight: 600; font-size: 22px">7TV Sevilla</span></div>
+      <div style="grid-column: span 6; border-radius: 12px; background: #141A22; padding: 12px 18px; display: flex; align-items: center; color: #8494A5; font-size: 19px">Sin guía disponible</div>
+    </div>
+  </section>
+
+  <footer style="display: flex; justify-content: space-between; padding: 20px 96px 30px; color: #8494A5; font-size: 20px">
+    <span>OK ver / recordar · ▲▼ canales · ◄► horas · CH± salto de página</span>
+    <span style="display: flex; align-items: center; gap: 10px"><span style="border: 1px solid #3E4B5B; border-radius: 8px; padding: 4px 10px; color: #C9D2DB">Mantén OK</span> favorito, ocultar, reordenar</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#19D46B","options":["#19D46B","#4C8DFF","#F2B84B","#E25C8C"]},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#19D46B' };
+  }
+}
+</script>
+</body>
+</html>

@@ -135,11 +135,11 @@ function render(){
       '<div class="section-title">' + App.esc(t("downloads.count", {n: visible.length})) + '<span class="muted">' +
         App.esc(active ? t("downloads.active", {n: active}) : t("downloads.allDone")) + '</span></div>' +
       /* Barra de acciones: enfocable con el D-pad (▲ desde la primera descarga) */
-      '<div class="chips dl-actions">' +
-        '<div class="chip dl-toggle focusable' + (s.hideDone ? ' active' : '') + '" data-k="toggleDone">' +
+      '<div class="dl-actions">' +
+        '<div class="dl-chip dl-toggle focusable' + (s.hideDone ? ' active' : '') + '" data-k="toggleDone">' +
           '<span class="dl-check">' + (s.hideDone ? '☑' : '☐') + '</span> ' + App.esc(t("downloads.hideDone")) + '</div>' +
-        (doneCount ? '<div class="chip focusable" data-k="clearDone">✓ ' + App.esc(t("downloads.clearDone", {n: doneCount})) + '</div>' : '') +
-        (clearedCount ? '<div class="chip dl-small focusable" data-k="showCleared">' + App.esc(t("downloads.showCleared", {n: clearedCount})) + '</div>' : '') +
+        (doneCount ? '<div class="dl-chip focusable" data-k="clearDone">✓ ' + App.esc(t("downloads.clearDone", {n: doneCount})) + '</div>' : '') +
+        (clearedCount ? '<div class="dl-chip dl-small focusable" data-k="showCleared">' + App.esc(t("downloads.showCleared", {n: clearedCount})) + '</div>' : '') +
         (s.hideDone && doneCount ? '<span class="dl-hidden muted">' + App.esc(t("downloads.hiddenCount", {n: doneCount})) + '</span>' : '') +
       '</div>';
     if(!shown.length) html += '<div class="dl-none muted">' + App.esc(t(visible.length ? "downloads.noneActive" : "downloads.noneVisible")) + '</div>';
@@ -148,13 +148,12 @@ function render(){
       var extra = [];
       if(st.key === "downloading"){
         var sp = fmtSpeed(d.download_speed), eta = fmtEta(d.eta);
-        if(sp) extra.push("↓ " + sp);
-        if(eta) extra.push(t("downloads.left", {eta: eta}));
+        if(sp || eta) extra.push((sp ? "↓ " + sp : "") + (sp && eta ? " · " : "") + (eta ? t("downloads.left", {eta: eta}) : ""));
         if(d.seeds !== undefined && d._source === "torrents") extra.push(t("downloads.seeds", {n: d.seeds}));
       }
       var nFiles = (d.files || []).length;
       var pretty = prettyTitle(d);
-      html += '<div class="row dl-row focusable" data-k="' + App.esc(itemKey(d)) + '">' +
+      html += '<div class="row dl-row focusable st-' + st.key + '" data-k="' + App.esc(itemKey(d)) + '">' +
         '<div class="dl-main">' +
           '<div class="dl-line"><div class="title dl-title">' + App.esc(pretty || d.name || t("downloads.noName")) + '</div>' +
             '<span class="dl-status dl-' + st.cls + '">' + st.label + '</span></div>' +
@@ -169,7 +168,6 @@ function render(){
           '</div>' +
         '</div></div>';
     });
-    html += '<div class="legend dl-legend"><span><i class="red"></i>' + App.esc(t("downloads.delete")) + '</span><span><i class="green"></i>' + App.esc(t("downloads.refresh")) + '</span><span>' + App.esc(t("downloads.okOptions")) + '</span></div>';
     html += '</div>';
     setTimeout(function(){ lookupPretty(shown); }, 0);
     var scrollTop = 0, sc = s.el.querySelector(".scroll");
@@ -326,7 +324,7 @@ function stopTimer(){ if(s.timer){ clearInterval(s.timer); s.timer = null; } }
 
 App.screens.register({
   id: "downloads", label: t("nav.downloads"), nav: true, order: 50,
-  get hint(){ return t("downloads.hint"); },
+  get hint(){ return t("downloads.v2.hint"); },
   mount: function(el){ s.el = el; },
   show: function(){ s.visible = true; load(false); startTimer(); },
   hide: function(){ s.visible = false; stopTimer(); },

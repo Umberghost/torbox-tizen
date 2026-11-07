@@ -85,7 +85,7 @@ var metaCache = {};   // type:id → Promise<meta normalizada>
 function normVideos(list){
   return (list || []).map(function(v){
     return { season: Number(v.season), episode: Number(v.episode !== undefined && v.episode !== null && v.episode !== "" ? v.episode : v.number),
-             name: v.name || v.title || "", released: v.released || v.firstAired || "",
+             runtime: Number(v.runtime) || 0, name: v.name || v.title || "", released: v.released || v.firstAired || "",
              thumbnail: v.thumbnail || "", overview: v.overview || v.description || "" };
   }).filter(function(v){ return !isNaN(v.season) && !isNaN(v.episode); });
 }
@@ -614,15 +614,15 @@ function fmtEta(sec){
 }
 function statusBadge(st){
   if(!st) return "";
-  if(st.kind === "library") return '<span class="srch-cached srch-lib">' + App.esc(t("search.status.library")) + '</span>';
-  return '<span class="srch-cached srch-dling">' + App.esc(t("search.status.downloading", { pct: st.pct })) + '</span>';
+  if(st.kind === "library") return '<span class="srch-tag ok">' + App.esc(t("search.status.library")) + '</span>';
+  return '<span class="srch-tag warn">' + App.esc(t("search.status.downloading", { pct: st.pct })) + '</span>';
 }
 function statusExtra(st){
   if(!st || st.kind !== "downloading") return "";
   var info = [];
   if(st.speed) info.push(App.fmtSize(st.speed) + "/s");
   if(st.eta) info.push(t("search.status.eta", { eta: fmtEta(st.eta) }));
-  return '<div class="srch-progline"><div class="progress"><i style="width:' + st.pct + '%"></i></div>' +
+  return '<div class="srch-progline"><div class="srch-bar"><i style="width:' + st.pct + '%"></i></div>' +
          (info.length ? '<span class="srch-proginfo">' + App.esc(info.join(" · ")) + '</span>' : '') + '</div>';
 }
 
@@ -636,7 +636,7 @@ function updateStatusDom(){
     el.innerHTML = statusExtra(statusOf({ hash: el.getAttribute("data-stx") }));
   });
   Array.prototype.forEach.call(s.el.querySelectorAll("[data-pid]"), function(el){
-    el.textContent = previewText(el.getAttribute("data-pid"));
+    el.innerHTML = previewHtml(el.getAttribute("data-pid"));
   });
 }
 
@@ -671,26 +671,29 @@ function queuePreview(k){
   if(pv.res[k.key]) return;
   if(pv.inflight){ if(pv.inflight.key !== k.key) pv.pending = k; return; }
   pv.inflight = k;
-  setPreviewDom(k.key, t("search.prev.loading"));
+  setPreviewDom(k.key, '<span class="srch-pv-tags"><span class="srch-pv-note">' + App.esc(t("search.prev.loading")) + '</span></span>');
   fetchStreams(k.type, k.id).then(function(r){ pv.res[k.key] = r; })
     .catch(function(){ pv.res[k.key] = { visible: [], hidden: [], err: true }; })
     .then(function(){
       pv.inflight = null;
-      setPreviewDom(k.key, previewText(k.key));
+      setPreviewDom(k.key, previewHtml(k.key));
       var n = pv.pending; pv.pending = null;
       if(n && App.current() === "search") queuePreview(n);
     });
 }
-function setPreviewDom(key, text){
+function setPreviewDom(key, html){
   if(!s.el) return;
   Array.prototype.forEach.call(s.el.querySelectorAll("[data-pid]"), function(el){
-    if(el.getAttribute("data-pid") === key) el.textContent = text;
+    if(el.getAttribute("data-pid") === key) el.innerHTML = html;
   });
 }
-function previewText(key){
+function tagHtml(cls, txt){ return '<span class="srch-tag' + (cls ? " " + cls : "") + '">' + App.esc(txt) + '</span>'; }
+/* Vista previa de la mejor fuente como etiquetas: estado (biblioteca/descarga) + "Al instante", calidad, idioma, tamaño, +N */
+function previewHtml(key){
   var r = pv.res[key];
   if(!r) return "";
-  if(r.err) return t("search.prev.error");
+  var note = function(txt){ return '<span class="srch-pv-tags"><span class="srch-pv-note">' + App.esc(txt) + '</span></span>'; };
+  if(r.err) return note(t("search.prev.error"));
   var all = r.visible.concat(r.hidden);
   var lib = false, dl = -1;
   all.forEach(function(x){
@@ -698,15 +701,23 @@ function previewText(key){
     if(!st) return;
     if(st.kind === "library") lib = true; else dl = Math.max(dl, st.pct);
   });
-  var parts = [];
-  if(lib) parts.push(t("search.prev.inLibrary"));
-  else if(dl >= 0) parts.push(t("search.prev.downloading", { pct: dl }));
+  var out = "";
+  if(lib) out += '<span class="srch-pv-st ok">' + App.esc(t("search.v2.inLibrary")) + '</span>';
+  else if(dl >= 0) out += '<span class="srch-pv-st warn">' + App.esc(t("search.v2.downloading", { pct: dl })) + '</span>';
   var best = bestStream(r.visible);
   var nInst = r.visible.filter(isInstant).length;
-  if(best) parts.push(describe(best) + " · " + t("search.prev.inCache", { more: nInst > 1 ? " (+" + (nInst - 1) + ")" : "" }));
-  else if(r.visible.length) parts.push(t("search.prev.noInstant", { n: r.visible.length - nInst }));
-  else parts.push(t("search.prev.none"));
-  return parts.join(" · ");
+  if(best){
+    var tg = tagHtml("solid", t("search.v2.instant"));
+    if(best.quality) tg += tagHtml("", best.quality);
+    var L = langLabels(best);
+    if(L.length) tg += tagHtml("", L[0]);
+    if(best.size) tg += tagHtml("", App.fmtSize(best.size));
+    if(r.visible.length > 1) tg += '<span class="srch-pv-more">' + App.esc(t("search.v2.moreSources", { n: r.visible.length - 1 })) + '</span>';
+    out += '<span class="srch-pv-tags">' + tg + '</span>';
+  }
+  else if(r.visible.length) out += note(t("search.prev.noInstant", { n: r.visible.length - nInst }));
+  else out += note(t("search.prev.none"));
+  return out;
 }
 
 function hintFor(level){
@@ -719,21 +730,31 @@ function setHint(){ App.setHintDefault(hintFor(s.level)); }
 
 /* ======================= Render común ======================= */
 
+var ICON_SEARCH = '<svg class="srch-ico" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>';
+var ICON_PLAY = '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+var ICON_CHECK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+var ICON_PLUS = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+
+/* Fondo backdrop con degradado (detalle/fuentes/packs) */
+function backdropHtml(bg){
+  return '<div class="srch-bd' + (bg ? " on" : "") + '"' + (bg ? ' style="background-image:url(\'' + App.esc(bg) + '\')"' : '') + '></div><div class="srch-shade"></div>';
+}
+
 function posterCard(m, i){
   var title = m.name || "?";
   var year = m.year || m.releaseInfo || "";
   var rating = m.imdbRating ? "★ " + m.imdbRating : "";
-  return '<div class="lib-card lib-card-sm focusable" data-act="item" data-type="' + App.esc(m.type) + '" data-i="' + i + '">' +
-      '<div class="lib-poster' + (m.poster ? " has-img" : "") + '" style="' + App.ui.placeholderStyle(title) + '">' +
-        '<div class="lib-initials">' + App.esc(App.ui.initials(title)) + '</div>' +
-        (m.poster ? '<img class="lib-img" src="' + App.esc(m.poster) + '" alt="" onerror="this.parentNode.classList.remove(\'has-img\')">' : '') +
-        (rating ? '<div class="lib-rating">' + App.esc(rating) + '</div>' : '') +
-        (m.type === "series" ? '<div class="lib-badge">' + App.esc(t("search.seriesBadge")) + '</div>' : '') +
+  var pk = previewKey("movie", m.id);
+  return '<div class="srch-card focusable" data-act="item" data-type="' + App.esc(m.type) + '" data-i="' + i + '">' +
+      '<div class="srch-poster' + (m.poster ? " has-img" : "") + '" style="' + App.ui.placeholderStyle(title) + '">' +
+        '<div class="srch-initials">' + App.esc(App.ui.initials(title)) + '</div>' +
+        (m.poster ? '<img class="srch-img" src="' + App.esc(m.poster) + '" alt="" onerror="this.parentNode.classList.remove(\'has-img\')">' : '') +
+        (rating ? '<div class="srch-rating">' + App.esc(rating) + '</div>' : '') +
+        (m.type === "series" ? '<div class="srch-kind">' + App.esc(t("search.seriesBadge")) + '</div>' : '') +
       '</div>' +
-      '<div class="lib-card-title">' + App.esc(title) + '</div>' +
-      '<div class="lib-card-sub">' + App.esc(year) + '</div>' +
-      (m.type === "movie" && addonBase() ? '<div class="srch-prev srch-prev-card" data-pid="' + App.esc(previewKey("movie", m.id)) + '">' +
-        App.esc(previewText(previewKey("movie", m.id))) + '</div>' : '') +
+      '<div class="srch-card-title">' + App.esc(title) + '</div>' +
+      '<div class="srch-card-sub">' + App.esc(year) + '</div>' +
+      (m.type === "movie" && addonBase() ? '<div class="srch-pv srch-card-pv" data-pid="' + App.esc(pk) + '">' + previewHtml(pk) + '</div>' : '') +
     '</div>';
 }
 
@@ -764,9 +785,9 @@ function remember(){ if(s.grid) s.focusMem[s.level] = s.grid.index; }
 
 function renderRoot(){
   s.level = "root"; setHint();
-  var h = '<div class="scroll srch-scroll">';
-  h += '<div class="srch-top"><div class="srch-box focusable" data-act="kb"><span class="srch-icon">⌕</span>' +
-       '<span class="' + (s.q ? "" : "muted") + '">' + App.esc(s.q || t("search.placeholder")) + '</span></div></div>';
+  var h = '<div class="srch-w"><div class="srch-scroll">';
+  h += '<div class="srch-top"><div class="srch-field focusable' + (s.q ? " has-q" : "") + '" data-act="kb">' + ICON_SEARCH +
+       '<span class="srch-field-txt">' + App.esc(s.q || t("search.placeholder")) + '</span></div></div>';
 
   if(s.loading){
     h += '<div class="srch-state"><div class="spinner"></div><p>' + App.esc(t("search.searching", { q: s.q })) + '</p></div>';
@@ -779,12 +800,12 @@ function renderRoot(){
     } else {
       if(s.didYou) h += '<div class="srch-didyou">' + App.esc(t("search.didYou", { q: s.didYou })) + '</div>';
       if(mv.length){
-        h += '<div class="section-title">' + App.esc(t("search.movies")) + ' <span class="muted">' + mv.length + '</span></div><div class="hscroll srch-hrow">';
+        h += '<div class="srch-sec">' + App.esc(t("search.movies")) + ' <span>' + mv.length + '</span></div><div class="srch-prow">';
         mv.forEach(function(m, i){ h += posterCard(m, i); });
         h += '</div>';
       }
       if(sr.length){
-        h += '<div class="section-title">' + App.esc(t("search.series")) + ' <span class="muted">' + sr.length + '</span></div><div class="hscroll srch-hrow">';
+        h += '<div class="srch-sec">' + App.esc(t("search.series")) + ' <span>' + sr.length + '</span></div><div class="srch-prow">';
         sr.forEach(function(m, i){ h += posterCard(m, i); });
         h += '</div>';
       }
@@ -793,20 +814,20 @@ function renderRoot(){
   } else {
     var rc = recent();
     if(rc.length){
-      h += '<div class="section-title">' + App.esc(t("search.recent")) + '</div><div class="chips srch-recent">';
-      rc.forEach(function(q, i){ h += '<div class="chip focusable" data-act="recent" data-i="' + i + '">' + App.esc(q) + '</div>'; });
+      h += '<div class="srch-sec">' + App.esc(t("search.recent")) + '</div><div class="srch-chips">';
+      rc.forEach(function(q, i){ h += '<div class="srch-chip focusable" data-act="recent" data-i="' + i + '">' + App.esc(q) + '</div>'; });
       h += '</div>';
     }
     s.seen = seenTitles(rc);
     if(s.seen.length){
-      h += '<div class="section-title">' + App.esc(t("search.seen")) + '</div><div class="chips srch-recent">';
-      s.seen.forEach(function(q, i){ h += '<div class="chip focusable" data-act="seen" data-i="' + i + '">' + App.esc(q) + '</div>'; });
+      h += '<div class="srch-sec">' + App.esc(t("search.seen")) + '</div><div class="srch-chips">';
+      s.seen.forEach(function(q, i){ h += '<div class="srch-chip focusable" data-act="seen" data-i="' + i + '">' + App.esc(q) + '</div>'; });
       h += '</div>';
     }
     if(!addonBase()) h += noAddonHtml();
     else h += stateBlock("", t("search.empty.title"), App.esc(t("search.empty.text")));
   }
-  h += '</div>';
+  h += '</div></div>';
   s.el.innerHTML = h;
   mountGrid(onRootSelect, s.focusMem.root);
 }
@@ -1022,70 +1043,140 @@ function openItem(m, o){
     });
 }
 
-function heroHtml(meta){
-  var line = [];
-  if(meta.year) line.push(App.esc(meta.year));
-  if(meta.rating) line.push('<span class="lib-star">★ ' + App.esc(meta.rating) + '</span>');
-  return '<div class="lib-hero">' +
-      '<div class="lib-hero-poster"><div class="lib-poster' + (meta.poster ? " has-img" : "") + '" style="' + App.ui.placeholderStyle(meta.name) + '">' +
-        '<div class="lib-initials">' + App.esc(App.ui.initials(meta.name)) + '</div>' +
-        (meta.poster ? '<img class="lib-img" src="' + App.esc(meta.poster) + '" alt="">' : '') +
-      '</div></div>' +
-      '<div class="lib-hero-info"><div class="lib-hero-title">' + App.esc(meta.name) + '</div>' +
-        '<div class="lib-hero-line">' + line.join('<span class="lib-dot">·</span>') + '</div>' +
-        (meta.genres && meta.genres.length ? '<div class="lib-hero-genres">' + App.esc(meta.genres.join(" · ")) + '</div>' : '') +
-        (meta.description ? '<div class="lib-hero-overview">' + App.esc(meta.description) + '</div>' : '') +
-      '</div></div>';
+var ICON_DOTS = '<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/></svg>';
+
+function titleSizeCls(name){
+  var n = String(name || "").length;
+  return n > 34 ? "xs" : (n > 20 ? "sm" : "");
 }
 
-function renderDetail(){
+/* Línea de meta: año · N temporadas · géneros · ★ nota */
+function metaLine(meta, nSeasons){
+  var parts = [];
+  if(meta.year) parts.push('<span>' + App.esc(meta.year) + '</span>');
+  if(nSeasons) parts.push('<span>' + App.esc(t("search.v2.seasons", { n: nSeasons })) + '</span>');
+  if(meta.genres && meta.genres.length) parts.push('<span>' + App.esc(meta.genres.join(", ")) + '</span>');
+  if(meta.rating) parts.push('<span class="srch-rate">★ ' + App.esc(meta.rating) + ' IMDb</span>');
+  return parts.join('<span class="srch-dot">·</span>');
+}
+
+/* Columna izquierda de la ficha: título, meta, sinopsis y botones (HTML ya construido) */
+function infoHtml(meta, nSeasons, buttons){
+  return '<section class="srch-info"><h1 class="srch-title ' + titleSizeCls(meta.name) + '">' + App.esc(meta.name) + '</h1>' +
+    '<div class="srch-meta">' + metaLine(meta, nSeasons) + '</div>' +
+    (meta.description ? '<p class="srch-ov">' + App.esc(meta.description) + '</p>' : '') +
+    (buttons ? '<div class="srch-btns">' + buttons + '</div>' : '') + '</section>';
+}
+
+/* Historial de la serie: mapa "s:e" → {watched, pct} y último episodio visto */
+function seriesHistory(id){
+  var out = { map: {}, last: null };
+  try{
+    ((App.history && App.history.list ? App.history.list() : []) || []).forEach(function(e){
+      var m = (e && e.meta) || {};
+      if(m.imdbId !== id || m.season === undefined || m.season === null) return;
+      var k = Number(m.season) + ":" + Number(m.episode);
+      var pct = e.dur > 0 ? e.pos / e.dur : 0;
+      var w = !!e.watched || pct >= 0.9;
+      var upd = e.updated || 0;
+      var cur = out.map[k];
+      if(!cur || upd >= cur.updated) out.map[k] = { watched: w, pct: pct, updated: upd };
+      if(!out.last || upd >= out.last.updated) out.last = { season: Number(m.season), episode: Number(m.episode), watched: w, updated: upd };
+    });
+  }catch(e){}
+  return out;
+}
+
+/* Episodio al que lleva el botón principal: reanudar el último empezado, el siguiente al último visto o el primero */
+function playTarget(hist){
+  var vids = (s.meta && s.meta.videos) || [];
+  if(!vids.length) return null;
+  function find(se, ep){ return vids.filter(function(v){ return v.season === se && v.episode === ep; })[0]; }
+  if(hist.last){
+    if(!hist.last.watched){
+      var cur = find(hist.last.season, hist.last.episode);
+      if(cur) return { kind: "resume", ep: cur };
+    } else {
+      var nx = nextEpisode(vids, hist.last.season, hist.last.episode);
+      if(nx) return { kind: "next", ep: nx };
+    }
+  }
+  var aired = vids.filter(function(v){ return v.season > 0 && !(v.released && Date.parse(v.released) > Date.now()); });
+  if(!aired.length) aired = vids.slice();
+  aired.sort(function(a, b){ return (a.season || 1e6) - (b.season || 1e6) || a.episode - b.episode; });
+  return aired.length ? { kind: "first", ep: aired[0] } : null;
+}
+
+function renderDetail(focusSeason){
   s.level = "detail"; setHint();
   var meta = s.meta;
-  var h = '<div class="lib-backdrop' + (meta.background ? " on" : "") + '"' +
-          (meta.background ? ' style="background-image:url(\'' + App.esc(meta.background) + '\')"' : '') + '></div><div class="lib-shade"></div>';
-  h += '<div class="scroll lib-detail-scroll">' + heroHtml(meta);
-  if(App.follow && s.item){
-    h += '<div class="chips srch-follow"><div class="chip focusable' + (App.follow.isFollowing(s.item.id) ? " active" : "") + '" data-act="follow">' +
-         App.esc(t(App.follow.isFollowing(s.item.id) ? "search.follow.btnOn" : "search.follow.btnOff")) + '</div></div>';
+  var hist = seriesHistory(s.item.id);
+  var tgt = s.seasons.length ? playTarget(hist) : null;
+  s.playTgt = tgt;
+  var realSeasons = s.seasons.filter(function(n){ return n > 0; }).length;
+
+  var btns = "";
+  if(tgt){
+    btns += '<div class="srch-btn primary focusable" data-act="play">' + ICON_PLAY + '<span>' +
+      App.esc(tgt.kind === "resume" ? t("search.v2.resume", { ep: epLabel(tgt.ep.season, tgt.ep.episode) }) : t("search.v2.playBest")) + '</span>' +
+      (tgt.kind === "resume" ? '' : '<small>' + App.esc(epLabel(tgt.ep.season, tgt.ep.episode)) + '</small>') + '</div>';
   }
+  if(App.follow && s.item){
+    var fol = App.follow.isFollowing(s.item.id);
+    btns += '<div class="srch-btn focusable' + (fol ? " on" : "") + '" data-act="follow">' + (fol ? ICON_CHECK : ICON_PLUS) +
+            '<span>' + App.esc(t(fol ? "search.v2.following" : "search.v2.follow")) + '</span></div>';
+  }
+  if(addonBase() && s.seasons.length && s.season !== 0 && s.season !== null){
+    btns += '<div class="srch-btn focusable" data-act="packs" data-mode="season"><span>' + App.esc(t("search.v2.fullSeason")) + '</span></div>';
+  }
+  btns += '<div class="srch-btn icon focusable" data-act="more" aria-label="' + App.esc(t("search.v2.more")) + '">' + ICON_DOTS + '</div>';
+
+  var h = '<div class="srch-w">' + backdropHtml(meta.background) + '<div class="srch-scroll srch-dscroll">' +
+          infoHtml(meta, realSeasons, btns);
   if(!s.seasons.length){
     h += stateBlock("", t("search.noEpisodes.title"), App.esc(t("search.noEpisodes.text")));
   } else {
-    h += '<div class="chips lib-seasons">';
+    h += '<div class="srch-seasons">';
     s.seasons.forEach(function(n){
-      h += '<div class="chip focusable' + (n === s.season ? " active" : "") + '" data-act="season" data-s="' + n + '">' +
+      h += '<div class="srch-chip focusable' + (n === s.season ? " active" : "") + '" data-act="season" data-s="' + n + '">' +
            App.esc(n === 0 ? t("search.specials") : t("search.season", { n: n })) + '</div>';
     });
-    h += '</div><div class="lib-eps">';
-    if(addonBase()){
-      if(s.season !== 0){
-        h += '<div class="row lib-ep srch-packrow focusable" data-act="packs" data-mode="season">' +
-             '<span class="lib-ep-num">⧉</span><span class="title">' + App.esc(t("search.pack.fullSeason", { n: s.season })) + '</span>' +
-             '<span class="meta">' + App.esc(t("search.pack.fullSeasonHint")) + '</span></div>';
-      }
-      h += '<div class="row lib-ep srch-packrow focusable" data-act="packs" data-mode="series">' +
-           '<span class="lib-ep-num">⧉</span><span class="title">' + App.esc(t("search.pack.series")) + '</span>' +
-           '<span class="meta">' + App.esc(t("search.pack.seriesHint")) + '</span></div>';
-    }
+    h += '</div><div class="srch-eps">';
     var now = Date.now();
     meta.videos.filter(function(v){ return v.season === s.season; })
       .sort(function(a, b){ return a.episode - b.episode; })
       .forEach(function(v){
         var future = v.released && Date.parse(v.released) > now;
         var pid = previewKey("series", s.item.id + ":" + v.season + ":" + v.episode);
-        h += '<div class="row lib-ep focusable' + (future ? " dim" : "") + '" data-act="ep" data-e="' + v.episode + '">' +
-             '<span class="lib-ep-num">' + App.esc(t("search.epShort", { e: pad2(v.episode) })) + '</span>' +
-             '<span class="title">' + App.esc(v.name || t("search.episode", { n: v.episode })) + '</span>' +
-             (addonBase() && !future ? '<span class="srch-prev" data-pid="' + App.esc(pid) + '">' + App.esc(previewText(pid)) + '</span>' : '') +
-             (future ? '<span class="meta">' + App.esc(t("search.comingSoon")) + '</span>' :
-               (v.released ? '<span class="meta num">' + App.esc(String(v.released).slice(0, 10)) + '</span>' : '')) +
-             '</div>';
+        var hi = hist.map[v.season + ":" + v.episode];
+        var nm = v.name || t("search.episode", { n: v.episode });
+        var sub = future ? t("search.comingSoon") : (v.runtime ? t("search.v2.min", { n: v.runtime }) : (v.released ? String(v.released).slice(0, 10) : ""));
+        h += '<div class="srch-ep focusable' + (future ? " dim" : "") + '" data-act="ep" data-e="' + v.episode + '">' +
+             '<div class="srch-ep-img">' +
+               '<span class="srch-ep-num">' + App.esc(pad2(v.episode)) + '</span>' +
+               (v.thumbnail ? '<img src="' + App.esc(v.thumbnail) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
+               (hi && hi.watched ? '<span class="srch-ep-seen">' + App.esc(t("search.v2.watched")) + '</span>' : '') +
+               (hi && !hi.watched && hi.pct > 0.02 ? '<div class="srch-ep-bar"><i style="width:' + Math.round(hi.pct * 100) + '%"></i></div>' :
+                 (hi && hi.watched ? '<div class="srch-ep-bar"><i style="width:100%"></i></div>' : '')) +
+             '</div>' +
+             '<div class="srch-ep-body">' +
+               '<div class="srch-ep-title">' + App.esc(t("search.epShort", { e: pad2(v.episode) }) + " · " + nm) + '</div>' +
+               (sub ? '<div class="srch-ep-sub">' + App.esc(sub) + '</div>' : '') +
+               (v.overview ? '<div class="srch-ep-ov">' + App.esc(v.overview) + '</div>' : '') +
+               (addonBase() && !future ? '<div class="srch-pv" data-pid="' + App.esc(pid) + '">' + previewHtml(pid) + '</div>' : '') +
+             '</div></div>';
       });
     h += '</div>';
   }
-  h += '</div>';
+  h += '</div></div>';
   s.el.innerHTML = h;
-  mountGrid(onDetailSelect, s.focusMem.detail);
+  var start = s.focusMem.detail;
+  if(focusSeason){
+    var all = s.el.querySelectorAll(".focusable");
+    for(var i = 0; i < all.length; i++){ if(all[i].classList.contains("active") && all[i].getAttribute("data-act") === "season"){ start = i; break; } }
+    s.focusMem.detail = start;
+  }
+  mountGrid(onDetailSelect, start);
 }
 
 function epFromEl(el){
@@ -1096,6 +1187,11 @@ function epFromEl(el){
 
 function onDetailSelect(i, el){
   var act = el.getAttribute("data-act");
+  if(act === "play"){
+    if(s.playTgt){ remember(); s.ep = s.playTgt.ep; openStreams({ autoPlay: true }); }
+    return;
+  }
+  if(act === "more"){ if(App.openMenu) App.openMenu(); return; }
   if(act === "follow"){
     var sr = curSeries();
     if(sr){ toggleFollow(sr); s.focusMem.detail = i; renderDetail(); }
@@ -1125,8 +1221,7 @@ function changeSeason(dir){
   var n = s.seasons[i + dir];
   if(n === undefined) return;
   s.season = n;
-  s.focusMem.detail = s.seasons.indexOf(n);
-  renderDetail();
+  renderDetail(true);
 }
 
 /* ======================= Fuentes ======================= */
@@ -1191,46 +1286,55 @@ function openStreams(o){
 function streamRow(x, i, incompatible, est){
   var badges = "";
   if(x.hash) badges += '<span class="srch-st" data-sth="' + App.esc(x.hash) + '">' + statusBadge(statusOf(x)) + '</span>';
-  if(incompatible) badges += '<span class="srch-cached srch-bad">' + App.esc(t("caps.unsupported")) + '</span>';
-  if(x.pack) badges += '<span class="srch-cached srch-pack">' + App.esc(t(x.pack.kind === "series" ? "search.badge.seriesPack" : "search.badge.seasonPack")) + '</span>';
-  if(x.cached) badges += '<span class="srch-cached">' + App.esc(t("search.badge.cached")) + '</span>';
-  else if(x.uncachedDebrid) badges += '<span class="srch-cached srch-dl">' + App.esc(t("search.badge.download")) + '</span>';
-  else if(x.url) badges += '<span class="srch-cached srch-play">' + App.esc(t("search.badge.direct")) + '</span>';
-  langLabels(x).forEach(function(l){ badges += '<span class="badge srch-lang">' + App.esc(l) + '</span>'; });
-  if(x.addons && addonBases().length > 1) badges += '<span class="badge srch-addon">' + App.esc(x.addons.join(" + ")) + '</span>';
-  if(x.quality) badges += '<span class="badge srch-q">' + App.esc(x.quality) + '</span>';
-  x.tags.forEach(function(tg){ badges += '<span class="badge srch-q">' + App.esc(tg) + '</span>'; });
+  if(incompatible) badges += tagHtml("bad", t("caps.unsupported"));
+  if(x.pack) badges += tagHtml("warn", t(x.pack.kind === "series" ? "search.badge.seriesPack" : "search.badge.seasonPack"));
+  if(x.cached) badges += tagHtml("solid", t("search.badge.cached"));
+  else if(x.uncachedDebrid) badges += tagHtml("warn", t("search.badge.download"));
+  else if(x.url) badges += tagHtml("ok", t("search.badge.direct"));
+  if(x.quality) badges += tagHtml("", x.quality);
+  langLabels(x).forEach(function(l){ badges += tagHtml("", l); });
+  x.tags.forEach(function(tg){ badges += tagHtml("", tg); });
+  if(x.addons && addonBases().length > 1) badges += tagHtml("mute", x.addons.join(" + "));
   var meta = [];
   if(incompatible && x.capsReasons.length) meta.push('<span class="srch-why">' + App.esc(x.capsReasons.map(function(r){ return t(r); }).join(" · ")) + '</span>');
-  if(x.seeders !== null) meta.push('<span class="srch-seed">👤 ' + x.seeders + '</span>');
+  if(x.seeders !== null) meta.push('<span class="srch-seed">' + App.esc(t("search.v2.seeds", { n: x.seeders })) + '</span>');
   if(x.provider) meta.push(App.esc(x.provider));
   var sizeHtml = "";
   if(est) sizeHtml = App.esc(t("search.sizeEst", { size: App.fmtSize(est) })) + (x.size ? '<small>' + App.esc(App.fmtSize(x.size) + " " + t("search.sizeEpisode")) + '</small>' : '');
   else if(x.size) sizeHtml = App.esc(App.fmtSize(x.size)) + (x.pack ? '<small>' + App.esc(t("search.sizeEpisode")) + '</small>' : '');
   var relName = est && x.torrentName ? x.torrentName : x.release;
-  return '<div class="row srch-row focusable' + (incompatible ? " dim srch-incompat" : "") + '" data-act="stream" data-i="' + i + '">' +
+  return '<div class="srch-row focusable' + (incompatible ? " dim srch-incompat" : "") + '" data-act="stream" data-i="' + i + '">' +
       '<div class="srch-main"><div class="srch-rel">' + App.esc(relName) + '</div>' +
-        '<div class="srch-sub">' + (x.name ? App.esc(x.name) : "") + (meta.length ? '<span class="lib-dot">·</span>' + meta.join(" · ") : "") + '</div>' +
+        '<div class="srch-sub">' + (x.name ? App.esc(x.name) : "") + (x.name && meta.length ? '<span class="srch-dot">·</span>' : '') + meta.join('<span class="srch-dot">·</span>') + '</div>' +
         (x.hash ? '<div class="srch-stx" data-stx="' + App.esc(x.hash) + '">' + statusExtra(statusOf(x)) + '</div>' : '') +
       '</div>' +
       '<div class="srch-badges">' + badges + '</div>' +
-      '<div class="meta num srch-size">' + sizeHtml + '</div>' +
+      '<div class="srch-size">' + sizeHtml + '</div>' +
     '</div>';
+}
+
+function hiddenRowHtml(n){
+  return '<div class="srch-row srch-hidden-row focusable" data-act="showhidden">' +
+         '<div class="srch-main"><div class="srch-rel">' + App.esc(t("caps.hidden", { n: n })) + '</div>' +
+         '<div class="srch-sub">' + App.esc(t("caps.showHidden")) + '</div></div></div>';
+}
+
+/* Cabecera compacta (episodio / packs): título grande + sinopsis */
+function headHtml(title, overview){
+  return '<div class="srch-head"><div class="srch-head-title">' + App.esc(title) + '</div>' +
+         (overview ? '<p class="srch-head-ov">' + App.esc(overview) + '</p>' : '') + '</div>';
 }
 
 function renderStreams(){
   s.level = "streams"; setHint();
   var meta = s.meta || {};
   var bg = meta.background || s.item.background;
-  var h = '<div class="lib-backdrop' + (bg ? " on" : "") + '"' + (bg ? ' style="background-image:url(\'' + App.esc(bg) + '\')"' : '') + '></div><div class="lib-shade"></div>';
-  h += '<div class="scroll lib-detail-scroll">';
+  var h = '<div class="srch-w">' + backdropHtml(bg) + '<div class="srch-scroll srch-dscroll">';
   if(s.item.type === "movie"){
-    h += heroHtml({ name: meta.name || s.item.name, year: meta.year || s.item.year, rating: meta.rating || s.item.imdbRating,
-                    poster: meta.poster || s.item.poster, description: meta.description || s.item.description || "",
-                    genres: meta.genres || [] });
+    h += infoHtml({ name: meta.name || s.item.name, year: meta.year || s.item.year, rating: meta.rating || s.item.imdbRating,
+                    description: meta.description || s.item.description || "", genres: meta.genres || [] }, 0, "");
   } else {
-    h += '<div class="srch-head"><div class="srch-head-title">' + App.esc(titleLine()) + '</div>' +
-         (s.ep && s.ep.overview ? '<p class="srch-head-ov">' + App.esc(s.ep.overview) + '</p>' : '') + '</div>';
+    h += headHtml(titleLine(), s.ep && s.ep.overview ? s.ep.overview : "");
   }
 
   s.rendered = [];
@@ -1240,21 +1344,19 @@ function renderStreams(){
   else if(s.streams && !s.streams.length && !s.hiddenStreams.length) h += stateBlock("", t("search.noSources.title"), App.esc(t("search.noSources.text")));
   else if(s.streams){
     var nNow = s.streams.filter(isInstant).length;
-    h += '<div class="section-title">' + App.esc(t("search.sources")) + ' <span class="muted">' + s.streams.length +
+    h += '<div class="srch-sec">' + App.esc(t("search.sources")) + ' <span>' + s.streams.length +
          (nNow ? " · " + App.esc(t("search.instantCount", { n: nNow })) : "") + '</span></div><div class="srch-list">';
     s.streams.forEach(function(x){ h += streamRow(x, s.rendered.length, false); s.rendered.push(x); });
     if(s.hiddenStreams.length){
       if(s.showHidden){
         s.hiddenStreams.forEach(function(x){ h += streamRow(x, s.rendered.length, true); s.rendered.push(x); });
       } else {
-        h += '<div class="row srch-row srch-hidden-row focusable" data-act="showhidden">' +
-             '<div class="srch-main"><div class="srch-rel">' + App.esc(t("caps.hidden", { n: s.hiddenStreams.length })) + '</div>' +
-             '<div class="srch-sub">' + App.esc(t("caps.showHidden")) + '</div></div></div>';
+        h += hiddenRowHtml(s.hiddenStreams.length);
       }
     }
     h += '</div>';
   }
-  h += '</div>';
+  h += '</div></div>';
   s.el.innerHTML = h;
   mountGrid(onStreamSelect, s.focusMem.streams);
 }
@@ -1480,30 +1582,26 @@ function renderPacks(){
   s.level = "packs"; setHint();
   var meta = s.meta || {};
   var bg = meta.background || s.item.background;
-  var h = '<div class="lib-backdrop' + (bg ? " on" : "") + '"' + (bg ? ' style="background-image:url(\'' + App.esc(bg) + '\')"' : '') + '></div><div class="lib-shade"></div>';
-  h += '<div class="scroll lib-detail-scroll"><div class="srch-head"><div class="srch-head-title">' + App.esc(packTitle()) + '</div>' +
-       '<p class="srch-head-ov">' + App.esc(t("search.pack.sizeNote")) + '</p></div>';
+  var h = '<div class="srch-w">' + backdropHtml(bg) + '<div class="srch-scroll srch-dscroll">' + headHtml(packTitle(), t("search.pack.sizeNote"));
   s.rendered = [];
   if(s.packsLoading) h += '<div class="srch-state"><div class="spinner"></div><p>' + App.esc(t("search.pack.loading")) + '</p></div>';
   else if(s.packsErr) h += stateBlock("err", t("search.err.addonTitle"), App.esc(s.packsErr));
   else if(s.packs && !s.packs.length && !s.packsHidden.length) h += stateBlock("", t("search.pack.none"), App.esc(t("search.pack.noneText")));
   else if(s.packs){
     var nC = s.packs.filter(function(x){ return x.cached; }).length;
-    h += '<div class="section-title">' + App.esc(t("search.pack.list")) + ' <span class="muted">' + s.packs.length +
+    h += '<div class="srch-sec">' + App.esc(t("search.pack.list")) + ' <span>' + s.packs.length +
          (nC ? " · " + App.esc(t("search.instantCount", { n: nC })) : "") + '</span></div><div class="srch-list">';
     s.packs.forEach(function(x){ h += streamRow(x, s.rendered.length, false, packEstimate(x)); s.rendered.push(x); });
     if(s.packsHidden.length){
       if(s.showHidden){
         s.packsHidden.forEach(function(x){ h += streamRow(x, s.rendered.length, true, packEstimate(x)); s.rendered.push(x); });
       } else {
-        h += '<div class="row srch-row srch-hidden-row focusable" data-act="showhidden">' +
-             '<div class="srch-main"><div class="srch-rel">' + App.esc(t("caps.hidden", { n: s.packsHidden.length })) + '</div>' +
-             '<div class="srch-sub">' + App.esc(t("caps.showHidden")) + '</div></div></div>';
+        h += hiddenRowHtml(s.packsHidden.length);
       }
     }
     h += '</div>';
   }
-  h += '</div>';
+  h += '</div></div>';
   s.el.innerHTML = h;
   mountGrid(onStreamSelect, s.focusMem.packs);
 }

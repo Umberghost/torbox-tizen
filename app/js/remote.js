@@ -40,6 +40,71 @@ App.i18n.add("es", {
   "remote.scan": "Escanea con el móvil",
   "remote.syncOk": "Historial sincronizado"
 });
+App.i18n.add("ca", {
+  "remote.playingTitle": "Reproduint a la TV",
+  "remote.play": "Reproduint {title}",
+  "remote.playFailed": "No s'ha pogut reproduir: {msg}",
+  "remote.keyUnknown": "Tecla desconeguda",
+  "remote.notPlaying": "No s'està reproduint res",
+  "remote.imported": "Ajustos importats ({n} elements)",
+  "remote.importedReport": "Importat: {settings} ajustos, {history} entrades d'historial, {favs} preferits, {follow} sèries seguides.",
+  "remote.importFailed": "Error en importar: {msg}",
+  "remote.exported": "Còpia de seguretat llesta",
+  "remote.scan": "Escaneja amb el mòbil",
+  "remote.syncOk": "Historial sincronitzat"
+});
+App.i18n.add("gl", {
+  "remote.playingTitle": "Reproducindo na TV",
+  "remote.play": "Reproducindo {title}",
+  "remote.playFailed": "Non se puido reproducir: {msg}",
+  "remote.keyUnknown": "Tecla descoñecida",
+  "remote.notPlaying": "Non se está reproducindo nada",
+  "remote.imported": "Axustes importados ({n} elementos)",
+  "remote.importedReport": "Importado: {settings} axustes, {history} entradas de historial, {favs} favoritos, {follow} series seguidas.",
+  "remote.importFailed": "Erro ao importar: {msg}",
+  "remote.exported": "Copia de seguridade lista",
+  "remote.scan": "Escanea co móbil",
+  "remote.syncOk": "Historial sincronizado"
+});
+App.i18n.add("eu", {
+  "remote.playingTitle": "Telebistan erreproduzitzen",
+  "remote.play": "{title} erreproduzitzen",
+  "remote.playFailed": "Ezin izan da erreproduzitu: {msg}",
+  "remote.keyUnknown": "Tekla ezezaguna",
+  "remote.notPlaying": "Ez dago ezer erreproduzitzen",
+  "remote.imported": "Ezarpenak inportatu dira ({n} elementu)",
+  "remote.importedReport": "Inportatuta: {settings} ezarpen, {history} historial-sarrera, {favs} gogoko, {follow} jarraitutako serie.",
+  "remote.importFailed": "Errorea inportatzean: {msg}",
+  "remote.exported": "Babeskopia prest",
+  "remote.scan": "Eskaneatu telefonoarekin",
+  "remote.syncOk": "Historiala sinkronizatu da"
+});
+App.i18n.add("pt", {
+  "remote.playingTitle": "A reproduzir na TV",
+  "remote.play": "A reproduzir {title}",
+  "remote.playFailed": "Não foi possível reproduzir: {msg}",
+  "remote.keyUnknown": "Tecla desconhecida",
+  "remote.notPlaying": "Nada está a ser reproduzido",
+  "remote.imported": "Definições importadas ({n} elementos)",
+  "remote.importedReport": "Importado: {settings} definições, {history} entradas de histórico, {favs} favoritos, {follow} séries seguidas.",
+  "remote.importFailed": "Falha ao importar: {msg}",
+  "remote.exported": "Cópia de segurança pronta",
+  "remote.scan": "Leia com o telemóvel",
+  "remote.syncOk": "Histórico sincronizado"
+});
+App.i18n.add("fr", {
+  "remote.playingTitle": "Lecture sur la TV",
+  "remote.play": "Lecture de {title}",
+  "remote.playFailed": "Lecture impossible : {msg}",
+  "remote.keyUnknown": "Touche inconnue",
+  "remote.notPlaying": "Aucune lecture en cours",
+  "remote.imported": "Réglages importés ({n} éléments)",
+  "remote.importedReport": "Importé : {settings} réglages, {history} entrées d'historique, {favs} favoris, {follow} séries suivies.",
+  "remote.importFailed": "Échec de l'importation : {msg}",
+  "remote.exported": "Sauvegarde prête",
+  "remote.scan": "Scannez avec votre téléphone",
+  "remote.syncOk": "Historique synchronisé"
+});
 
 /* Claves que se pueden importar (mismas que acepta service.js) */
 var IMPORT_KEYS = ["torboxToken", "tmdbKey", "defaultSource", "autoplayNext", "subLang", "audioLang", "subSize",

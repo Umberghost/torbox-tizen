@@ -570,20 +570,23 @@ function applyMetaToCard(el, card){
   }
 }
 
+var PLAY_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+function playBtn(label){ return '<div class="btn primary focusable" data-kind="play">' + PLAY_SVG + '<span>' + esc(label) + '</span></div>'; }
+function moreBtn(){ return App.openMenu ? '<div class="btn lib-more focusable" data-kind="more" aria-label="' + esc(App.t("v2lib.more")) + '">···</div>' : ""; }
+
 function heroHtml(title, m, fallbackYear, extraLine, actionsHtml){
   var bits = [];
   var year = (m && m.year) || fallbackYear;
   if(year) bits.push('<span class="num">' + year + '</span>');
-  if(m && m.rating) bits.push('<span class="lib-star num">★ ' + m.rating.toFixed(1) + '</span>' +
-    (m.votes ? ' <span class="muted num">(' + fmtVotes(m.votes) + ')</span>' : ''));
   if(m && m.runtime) bits.push('<span class="num">' + esc(App.t("library.minutes", { n: m.runtime })) + '</span>');
   if(extraLine) bits.push(extraLine);
+  if(m && m.genres && m.genres.length) bits.push('<span>' + esc(m.genres.slice(0, 3).join(", ")) + '</span>');
+  var rating = m && m.rating ? '<span class="lib-star num">★ ' + m.rating.toFixed(1) + '</span>' : '';
   return '<div class="lib-hero">' +
-      '<div class="lib-hero-poster">' + posterHtml(title, m ? (m.posterLarge || m.poster) : "", "") + '</div>' +
       '<div class="lib-hero-info">' +
+        '<div class="lib-back">' + esc(App.t("v2lib.back")) + '</div>' +
         '<h1 class="lib-hero-title">' + esc((m && m.title) || title) + '</h1>' +
-        '<div class="lib-hero-line">' + bits.join('<span class="lib-dot">·</span>') + '</div>' +
-        '<div class="lib-hero-genres">' + esc(m && m.genres ? m.genres.join(" · ") : "") + '</div>' +
+        '<div class="lib-hero-line">' + bits.join('<span class="lib-dot">·</span>') + (rating ? (bits.length ? '<span class="lib-dot">·</span>' : '') + rating : '') + '</div>' +
         '<p class="lib-hero-overview">' + esc(m && m.overview ? m.overview : (m ? "" : App.t("library.noInfo"))) + '</p>' +
         '<div class="lib-actions">' + (actionsHtml || "") + '</div>' +
       '</div>' +
@@ -628,7 +631,7 @@ function setBackdrop(el, url){
  * ==================================================================== */
 var lib = {
   id: "library", label: App.t("nav.library"), nav: true, order: 10,
-  get hint(){ return App.t("library.hint"); },
+  get hint(){ return App.t("v2lib.hint"); },
   _gen: 0,
 
   mount: function(el){
@@ -690,10 +693,19 @@ var lib = {
     if(cont.length){
       html += '<div class="section-title">' + esc(App.t("library.continue")) + '</div><div class="hscroll lib-continue">' +
         cont.map(function(h, i){
-          return '<div class="lib-card lib-card-sm focusable" data-kind="cont" data-i="' + i + '" data-key="' + esc(h.key) + '">' +
-            posterHtml(h.title, h.poster, '<span class="lib-marks">' + marksHtml(h.dur ? h.pos / h.dur : 0, false) + '</span>') +
-            '<div class="lib-card-title">' + esc(h.title) + '</div>' +
-            '<div class="lib-card-sub num">' + esc(h.subtitle || (h.dur ? App.t("library.remaining", { t: App.fmtTime(h.dur - h.pos) }) : "")) + '</div>' +
+          var hm = h.meta || {};
+          var still = hm.imdbId ? "https://images.metahub.space/background/medium/" + hm.imdbId + "/img" : (h.poster || "");
+          var alt = h.poster && h.poster !== still ? h.poster : "";
+          var pct = h.dur ? Math.round(Math.min(1, h.pos / h.dur) * 100) : 0;
+          return '<div class="lib-card hm-wide focusable" data-kind="cont" data-i="' + i + '" data-key="' + esc(h.key) + '">' +
+            '<div class="lib-poster hm-still" style="' + App.ui.placeholderStyle(h.title) + '">' +
+              '<span class="lib-initials">' + esc(App.ui.initials(h.title)) + '</span>' +
+              (still ? '<img class="lib-img" src="' + esc(still) + '" alt=""' + (alt ? ' data-alt="' + esc(alt) + '"' : '') +
+                ' onload="this.parentNode.classList.add(\'has-img\')" onerror="var a=this.getAttribute(\'data-alt\');if(a){this.removeAttribute(\'data-alt\');this.src=a}else{this.parentNode.removeChild(this)}">' : '') +
+            '</div>' +
+            '<div class="hm-wide-info"><div class="hm-wide-title">' + esc(h.title) + '</div>' +
+              '<div class="hm-wide-sub num">' + esc(h.subtitle || (h.dur ? App.t("library.remaining", { t: App.fmtTime(h.dur - h.pos) }) : "")) + '</div>' +
+              (pct ? '<div class="hm-bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div>' +
           '</div>';
         }).join("") + '</div>';
     }
@@ -846,7 +858,7 @@ App.screens.register(lib);
  * ==================================================================== */
 var showScreen = {
   id: "show", label: App.t("library.showLabel"), nav: false, section: "library",
-  get hint(){ return App.t("library.showHint"); },
+  get hint(){ return App.t("v2lib.showHint"); },
 
   mount: function(el){
     this.el = el; el.classList.add("lib-screen");
@@ -884,9 +896,13 @@ var showScreen = {
     var extraLine = (nSeasons ? esc(App.t("library.inLibrary", { n: nSeasons })) : "") +
       (m && m.seasons && m.seasons > nSeasons ? ' <span class="muted">' + esc(App.t("library.ofTotal", { n: m.seasons })) + '</span>' : "") +
       expLine(show);
-    var actions = (nu ? '<div class="btn primary focusable" data-kind="play">▶ ' + esc(playLabel) + '</div>' : '') +
+    var imdbId = m && m.imdbId;
+    var canFollow = !!(App.follow && imdbId);
+    var actions = (nu ? playBtn(playLabel) : '') +
       (nu && nu.resume ? '<div class="btn focusable" data-kind="restart">' + esc(App.t("library.fromStart")) + '</div>' : '') +
-      refreshBtn(show);
+      (canFollow ? '<div class="btn focusable" data-kind="follow">' + esc(App.follow.isFollowing(imdbId) ? App.t("v2home.following") : "+ " + App.t("v2home.follow")) + '</div>' : '') +
+      (show.seasonNums.length ? '<div class="btn focusable" data-kind="playSeason">' + esc(App.t("v2lib.playSeason")) + '</div>' : '') +
+      refreshBtn(show) + moreBtn();
 
     var chips = show.seasonNums.map(function(s){
       return '<div class="chip focusable' + (s === self.season ? ' active' : '') + '" data-kind="season" data-s="' + s + '">' + esc(App.t("library.season", { n: s })) + '</div>';
@@ -898,7 +914,7 @@ var showScreen = {
       '<div class="scroll lib-detail-scroll">' +
         heroHtml(show.title, m, show.year, extraLine, actions) +
         '<div class="chips lib-seasons">' + chips.join("") + '</div>' +
-        '<div class="lib-eps"></div>' +
+        '<div class="hscroll lib-eps"></div>' +
         recsHtml() +
       '</div>';
     if(m) setBackdrop(el, m.backdrop);
@@ -924,25 +940,32 @@ var showScreen = {
       c.classList.toggle("active", (c.dataset.s === "x" ? "x" : +c.dataset.s) === self.season);
     });
     var rows;
+    function cardOf(attrs, label, name, ep, size){
+      var inst = '<span class="lib-ep-inst">' + esc(App.t("v2lib.instant")) + '</span>';
+      return '<div class="lib-ep-card focusable' + capsRowClass(name) + '" ' + attrs + '>' +
+        '<div class="lib-ep-still" style="' + App.ui.placeholderStyle(name) + '">' +
+          '<span class="lib-initials lib-ep-ini">' + esc(label) + '</span>' +
+          '<span class="lib-ep-marks">' + epMarks(ep.key) + '</span>' +
+          epBar(ep.key) +
+        '</div>' +
+        '<div class="lib-ep-body">' +
+          '<div class="lib-ep-title"><b class="num">' + esc(label) + '</b><span class="lib-ep-sep"> · </span><span class="lib-ep-name">' + esc(name) + '</span></div>' +
+          '<div class="lib-ep-dur num lib-ep-meta">' + esc(App.fmtSize(size)) + '</div>' +
+          '<div class="lib-ep-extra"><p class="lib-ep-ov"></p><div class="lib-ep-tags">' + inst +
+            (ep.quality ? '<span class="lib-tag">' + esc(ep.quality) + '</span>' : '') +
+            '<span class="lib-tag">' + esc(App.fmtSize(size)) + '</span>' + capsBadge(name) + '</div></div>' +
+        '</div></div>';
+    }
     if(this.season === "x"){
       rows = show.extras.map(function(x, i){
-        return '<div class="row lib-ep focusable' + capsRowClass(x.fileName) + '" data-kind="extra" data-i="' + i + '" data-key="' + esc(x.key) + '">' +
-          '<div class="title">' + esc(x.fileName) + '</div>' +
-          capsBadge(x.fileName) +
-          '<span class="lib-ep-marks">' + epMarks(x.key) + '</span>' +
-          '<div class="meta num">' + App.fmtSize(x.size) + '</div></div>';
+        return cardOf('data-kind="extra" data-i="' + i + '" data-key="' + esc(x.key) + '"', "#" + (i + 1), x.fileName, x, x.size);
       });
     } else {
       var season = show.seasons[this.season] || {};
       rows = Object.keys(season).map(Number).sort(function(a, b){ return a - b; }).map(function(n){
         var ep = season[n];
-        return '<div class="row lib-ep focusable' + capsRowClass(ep.fileName) + '" data-kind="ep" data-s="' + ep.season + '" data-e="' + n + '" data-key="' + esc(ep.key) + '">' +
-          '<span class="lib-ep-num num">E' + (n < 10 ? "0" : "") + n + '</span>' +
-          '<div class="title"><span class="lib-ep-name">' + esc(ep.fileName) + '</span></div>' +
-          capsBadge(ep.fileName) +
-          '<span class="lib-ep-marks">' + epMarks(ep.key) + '</span>' +
-          (ep.quality ? '<span class="badge">' + esc(ep.quality) + '</span>' : '') +
-          '<div class="meta num lib-ep-meta">' + App.fmtSize(ep.size) + '</div></div>';
+        return cardOf('data-kind="ep" data-s="' + ep.season + '" data-e="' + n + '" data-key="' + esc(ep.key) + '"',
+          "E" + (n < 10 ? "0" : "") + n, ep.fileName, ep, ep.size);
       });
     }
     box.innerHTML = rows.join("") || '<p class="muted">' + esc(App.t("library.noEpisodes")) + '</p>';
@@ -955,12 +978,23 @@ var showScreen = {
         if(!data || self.showObj !== show || self.season !== sn) return;
         var byNum = {};
         data.episodes.forEach(function(e){ byNum[e.episode] = e; });
-        Array.prototype.forEach.call(box.querySelectorAll(".lib-ep"), function(r){
+        Array.prototype.forEach.call(box.querySelectorAll(".lib-ep-card[data-e]"), function(r){
           var e = byNum[+r.dataset.e]; if(!e) return;
           if(e.name) r.querySelector(".lib-ep-name").textContent = e.name;
-          var meta = r.querySelector(".lib-ep-meta");
           var ep = show.seasons[sn][+r.dataset.e];
-          if(meta) meta.textContent = (e.runtime ? App.t("library.minutes", { n: e.runtime }) + " · " : "") + App.fmtSize(ep.size);
+          var meta = r.querySelector(".lib-ep-meta");
+          if(meta) meta.textContent = (e.runtime ? App.t("library.minutes", { n: e.runtime }) : App.fmtSize(ep.size));
+          var ov = r.querySelector(".lib-ep-ov");
+          if(ov && e.overview) ov.textContent = e.overview;
+          if(e.still){
+            var still = r.querySelector(".lib-ep-still");
+            var img = new Image();
+            img.className = "lib-ep-img"; img.alt = "";
+            img.onload = function(){ still.classList.add("has-img"); };
+            img.onerror = function(){ if(img.parentNode) img.parentNode.removeChild(img); };
+            img.src = e.still;
+            still.insertBefore(img, still.firstChild);
+          }
         });
       });
     }
@@ -968,8 +1002,11 @@ var showScreen = {
 
   refreshMarks: function(){
     if(!this.el) return;
-    Array.prototype.forEach.call(this.el.querySelectorAll(".lib-ep"), function(r){
+    Array.prototype.forEach.call(this.el.querySelectorAll(".lib-ep-card"), function(r){
       var mk = r.querySelector(".lib-ep-marks"); if(mk) mk.innerHTML = epMarks(r.dataset.key);
+      var st = r.querySelector(".lib-ep-still"), bar = st && st.querySelector(".lib-ep-bar");
+      if(bar && bar.parentNode) bar.parentNode.removeChild(bar);
+      if(st) st.insertAdjacentHTML("beforeend", epBar(r.dataset.key));
     });
   },
 
@@ -994,6 +1031,18 @@ var showScreen = {
       if(f) playFile({ title: show.title, meta: show.meta, videos: [1, 2] }, x.source, x.item, f, undefined);
     } else if(kind === "refresh"){
       var me = this; refreshItems(cardItems(show), function(){ me.render(); me.grid.focus(0, true); });
+    } else if(kind === "more"){
+      if(App.openMenu) App.openMenu();
+    } else if(kind === "follow"){
+      var mm = show.meta;
+      if(mm && mm.imdbId && App.follow){
+        App.follow.toggle({ imdbId: mm.imdbId, name: mm.title || show.title, poster: mm.poster || "" });
+        node.textContent = App.follow.isFollowing(mm.imdbId) ? App.t("v2home.following") : "+ " + App.t("v2home.follow");
+      }
+    } else if(kind === "playSeason"){
+      var sNum = this.season === "x" ? show.seasonNums[0] : this.season;
+      var first = show.episodes.filter(function(e){ return e.season === sNum; })[0];
+      if(first) playEpisode(show, first, 0);
     } else if(kind === "rec"){
       openRec(node.dataset.title);
     }
@@ -1022,6 +1071,11 @@ var showScreen = {
     }
     var allW = showProgress(show) >= 1;
     out.push({ label: App.t(allW ? "library.act.unwatchAll" : "library.act.watchAll"), run: function(){ markEpisodes(show, show.episodes, !allW); self.refreshMarks(); } });
+    if(App.follow && show.meta && show.meta.imdbId){
+      var fm = show.meta, fon = App.follow.isFollowing(fm.imdbId);
+      out.push({ label: App.t(fon ? "home.actUnfollow" : "home.actFollow"), run: function(){
+        App.follow.toggle({ imdbId: fm.imdbId, name: fm.title || show.title, poster: fm.poster || "" }); self.render(); self.grid.focus(0, true); } });
+    }
     out.push({ label: App.t("library.act.refresh"), run: function(){ refreshItems(cardItems(show), function(){ self.render(); self.grid.focus(0, true); }); } });
     out.push({ label: App.t("library.act.remove"), run: function(){ removeItems(cardItems(show), show.meta ? show.meta.title : show.title, function(){ App.back(); }); } });
     return out;
@@ -1063,13 +1117,18 @@ function epMarks(key){
   if(p > 0.01) return '<span class="progress lib-ep-prog"><i style="width:' + Math.round(p * 100) + '%"></i></span>';
   return "";
 }
+/* Barra de progreso al pie del still de un episodio (completa si está visto) */
+function epBar(key){
+  var p = H.watched(key) ? 1 : H.progress(key);
+  return p > 0.01 ? '<div class="lib-ep-bar"><i style="width:' + Math.round(p * 100) + '%"></i></div>' : "";
+}
 
 /* ====================================================================
  * Pantalla: detalle de película / descarga suelta
  * ==================================================================== */
 var movieScreen = {
   id: "movie", label: App.t("library.movieLabel"), nav: false, section: "library",
-  get hint(){ return App.t("library.movieHint"); },
+  get hint(){ return App.t("v2lib.movieHint"); },
 
   mount: function(el){
     this.el = el; el.classList.add("lib-screen");
@@ -1107,11 +1166,11 @@ var movieScreen = {
 
     var actions = '';
     if(main){
-      actions += '<div class="btn primary focusable" data-kind="play">▶ ' + esc(resume ? App.t("library.resumeAt", { t: App.fmtTime(resume) }) : App.t("library.play")) + '</div>';
+      actions += playBtn(resume ? App.t("library.resumeAt", { t: App.fmtTime(resume) }) : App.t("library.play"));
       if(resume) actions += '<div class="btn focusable" data-kind="restart">' + esc(App.t("library.fromStart")) + '</div>';
       actions += '<div class="btn focusable" data-kind="watched">' + esc(H.watched(key) ? App.t("library.watched") : App.t("library.markWatched")) + '</div>';
     }
-    actions += refreshBtn(card);
+    actions += refreshBtn(card) + moreBtn();
     var extra = (card.quality ? '<span class="badge">' + esc(card.quality) + '</span>' : '') +
       (main ? ' ' + capsBadge(fileName(main)) : '') +
       ' <span class="muted num">' + App.fmtSize(itemSize(card.item)) + ' · ' + esc(App.torbox.SOURCE_LABEL[src] || src) + '</span>' + expLine(card);
@@ -1156,6 +1215,7 @@ var movieScreen = {
     else if(kind === "restart") playFile(card, src, card.item, this.main, 0);
     else if(kind === "watched"){ toggleWatched(this.mainKey, this.watchedInfo(this.mainKey, this.main.id)); this.render(true); }
     else if(kind === "refresh"){ var me = this; refreshItems([card.item], function(){ me.render(true); }); }
+    else if(kind === "more"){ if(App.openMenu) App.openMenu(); }
     else if(kind === "file"){
       var f = findFile(card.item, node.dataset.f);
       if(f) playFile(card, src, card.item, f, undefined);
@@ -1207,7 +1267,7 @@ App.screens.register(movieScreen);
  * ==================================================================== */
 var filesScreen = {
   id: "files", label: App.t("library.filesLabel"), nav: false, section: "library",
-  get hint(){ return App.t("library.filesHint"); },
+  get hint(){ return App.t("v2lib.filesHint"); },
   mount: function(el){ this.el = el; el.classList.add("lib-screen"); },
 
   show: function(params){

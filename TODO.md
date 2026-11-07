@@ -99,5 +99,5 @@ Numeración = la de la lista de ideas original.
 - [x] **#93** Tamaño de interfaz ajustable.
 - [x] **#94** Salvapantallas con pósters tras X minutos de inactividad.
 - [x] **#95** Sonidos de navegación opcionales.
-- [ ] **#98** Más idiomas de interfaz (catalán, gallego, euskera, portugués, francés).
+- [x] **#98** Más idiomas de interfaz (catalán, gallego, euskera, portugués, francés).
 - [x] **#100** Telemetría local opcional de uso de pantallas para priorizar mejoras.

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TorBox TV — Inicio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0D12}
+a{color:#19D46B}a:hover{color:#5BE597}
+</style>
+</helmet>
+<div style="width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #0A0D12; color: #F2F5F8; font-family: Inter, system-ui, sans-serif; display: flex">
+
+  <nav aria-label="Secciones" style="width: 112px; flex: none; background: #0F141B; display: flex; flex-direction: column; align-items: center; padding: 40px 0; gap: 14px; z-index: 3; border-right: 1px solid #1C2430">
+    <div style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 26px; margin-bottom: 26px">T<span style="color: {{accent}}">B</span></div>
+    <a href="#" aria-label="Inicio" style="width: 64px; height: 64px; border-radius: 18px; background: {{accent}}; color: #04120A; display: flex; align-items: center; justify-content: center">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+    </a>
+    <a href="#" aria-label="Buscar" style="width: 64px; height: 64px; border-radius: 18px; color: #A3AFBC; display: flex; align-items: center; justify-content: center">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    </a>
+    <a href="#" aria-label="Biblioteca" style="width: 64px; height: 64px; border-radius: 18px; color: #A3AFBC; display: flex; align-items: center; justify-content: center">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="16" rx="1"/><path d="M17.5 5l3.5 14"/></svg>
+    </a>
+    <a href="#" aria-label="TV en directo" style="width: 64px; height: 64px; border-radius: 18px; color: #A3AFBC; display: flex; align-items: center; justify-content: center">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 2l4 4 4-4"/></svg>
+    </a>
+    <a href="#" aria-label="Descargas" style="width: 64px; height: 64px; border-radius: 18px; color: #A3AFBC; display: flex; align-items: center; justify-content: center; position: relative">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+      <span style="position: absolute; top: 10px; right: 10px; width: 12px; height: 12px; border-radius: 50%; background: #F2B84B"></span>
+    </a>
+    <div style="flex: 1"></div>
+    <a href="#" aria-label="Ajustes" style="width: 64px; height: 64px; border-radius: 18px; color: #A3AFBC; display: flex; align-items: center; justify-content: center">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </a>
+    <div aria-label="Perfil" style="width: 52px; height: 52px; border-radius: 50%; background: #2B3645; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; margin-top: 8px">M</div>
+  </nav>
+
+  <main style="flex: 1; position: relative; display: flex; flex-direction: column">
+    <div aria-hidden="true" style="position: absolute; inset: 0 0 auto 0; height: 760px; background: #1A2633"></div>
+    <div aria-hidden="true" style="position: absolute; right: 0; top: 0; width: 1180px; height: 760px; background: #23384A; opacity: .55"></div>
+    <div aria-hidden="true" style="position: absolute; inset: 0 0 auto 0; height: 760px; background: linear-gradient(90deg, #0A0D12 18%, rgba(10,13,18,.55) 55%, rgba(10,13,18,0) 80%), linear-gradient(0deg, #0A0D12 4%, rgba(10,13,18,0) 45%)"></div>
+    <div style="position: absolute; right: 120px; top: 150px; color: #6C7B8B; font-size: 20px; border: 1px dashed #3A4757; padding: 10px 16px; border-radius: 10px">[Fondo del título enfocado]</div>
+
+    <header style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 40px 96px 0 72px">
+      <div style="display: flex; gap: 12px">
+        <span style="padding: 10px 22px; border-radius: 999px; background: rgba(242,245,248,.12); font-weight: 600; font-size: 22px">Para ti</span>
+        <span style="padding: 10px 22px; border-radius: 999px; color: #A3AFBC; font-size: 22px">Series</span>
+        <span style="padding: 10px 22px; border-radius: 999px; color: #A3AFBC; font-size: 22px">Películas</span>
+        <span style="padding: 10px 22px; border-radius: 999px; color: #A3AFBC; font-size: 22px">Filtros</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 24px; color: #A3AFBC; font-size: 22px">
+        <span style="display: flex; align-items: center; gap: 10px"><span style="width: 10px; height: 10px; border-radius: 50%; background: {{accent}}"></span>TorBox conectado</span>
+        <span style="font-variant-numeric: tabular-nums">21:47</span>
+      </div>
+    </header>
+
+    <section style="position: relative; padding: 96px 96px 0 72px; max-width: 900px; display: flex; flex-direction: column; gap: 22px">
+      <div style="display: flex; gap: 12px; align-items: center; font-size: 20px; color: #C9D2DB">
+        <span style="background: rgba(242,245,248,.14); padding: 6px 12px; border-radius: 8px; font-weight: 600">Serie</span>
+        <span>2021 · 3 temporadas · Crimen, Drama</span>
+        <span style="color: #F2B84B; font-weight: 600">★ 7.5</span>
+      </div>
+      <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 96px; line-height: 1; letter-spacing: -1px">Lupin</h1>
+      <p style="margin: 0; font-size: 26px; line-height: 1.5; color: #C9D2DB">Inspirado por las aventuras de Arsène Lupin, el ladrón de guante blanco Assane Diop se propone vengar la injusticia sufrida por su padre.</p>
+      <div style="display: flex; gap: 16px; align-items: center; margin-top: 10px">
+        <button style="display: flex; align-items: center; gap: 14px; padding: 20px 36px; border: 0; border-radius: 16px; background: #F2F5F8; color: #0A0D12; font: 700 26px Inter, sans-serif; box-shadow: 0 0 0 4px #0A0D12, 0 0 0 8px #F2F5F8">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>
+          Reanudar T1·E03
+        </button>
+        <button style="padding: 20px 30px; border: 0; border-radius: 16px; background: rgba(242,245,248,.14); color: #F2F5F8; font: 600 24px Inter, sans-serif">Ficha</button>
+        <button aria-label="Seguir serie" style="width: 72px; height: 72px; border: 0; border-radius: 16px; background: rgba(242,245,248,.14); color: #F2F5F8; display: flex; align-items: center; justify-content: center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <span style="margin-left: 12px; display: flex; gap: 10px; align-items: center; font-size: 20px; color: #C9D2DB">
+          <span style="border: 1px solid #3E4B5B; padding: 6px 12px; border-radius: 8px">1080p</span>
+          <span style="border: 1px solid #3E4B5B; padding: 6px 12px; border-radius: 8px">Castellano</span>
+          <span style="color: {{accent}}; font-weight: 600">● Al instante</span>
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; margin-top: 6px; font-size: 20px; color: #A3AFBC">
+        <div style="width: 320px; height: 6px; border-radius: 3px; background: rgba(242,245,248,.18)"><div style="width: 38%; height: 6px; border-radius: 3px; background: {{accent}}"></div></div>
+        <span>Quedan 27 min · termina a las 22:14</span>
+      </div>
+    </section>
+
+    <section aria-label="Continuar viendo" style="position: relative; margin-top: 64px; padding-left: 72px">
+      <h2 style="margin: 0 0 18px; font-family: 'Space Grotesk', sans-serif; font-size: 32px; font-weight: 600">Continuar viendo</h2>
+      <div style="display: flex; gap: 28px">
+        <div style="width: 380px; flex: none; transform: scale(1.06); transform-origin: left center; border-radius: 18px; box-shadow: 0 0 0 4px #F2F5F8, 0 22px 50px rgba(0,0,0,.6); overflow: hidden; background: #22313F">
+          <div style="height: 214px; background: #2C4256; display: flex; align-items: flex-end; padding: 14px; box-sizing: border-box; color: #8FA2B5; font-size: 18px">[Still del episodio]</div>
+          <div style="padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 8px">
+            <div style="font-weight: 700; font-size: 24px">Lupin</div>
+            <div style="font-size: 19px; color: #A3AFBC">T1·E03 · Capítulo 3</div>
+            <div style="height: 5px; border-radius: 3px; background: rgba(242,245,248,.18)"><div style="width: 38%; height: 5px; border-radius: 3px; background: {{accent}}"></div></div>
+          </div>
+        </div>
+        <div style="width: 380px; flex: none; border-radius: 18px; overflow: hidden; background: #18212B">
+          <div style="height: 214px; background: #2A2E40"></div>
+          <div style="padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 8px">
+            <div style="font-weight: 600; font-size: 24px">Rebelde</div>
+            <div style="font-size: 19px; color: #F2B84B">Descargando · 42 %</div>
+            <div style="height: 5px; border-radius: 3px; background: rgba(242,245,248,.18)"><div style="width: 42%; height: 5px; border-radius: 3px; background: #F2B84B"></div></div>
+          </div>
+        </div>
+        <div style="width: 380px; flex: none; border-radius: 18px; overflow: hidden; background: #18212B">
+          <div style="height: 214px; background: #3A2B2B"></div>
+          <div style="padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 8px">
+            <div style="font-weight: 600; font-size: 24px">Dune: Parte dos</div>
+            <div style="font-size: 19px; color: #A3AFBC">1 h 12 min restantes</div>
+            <div style="height: 5px; border-radius: 3px; background: rgba(242,245,248,.18)"><div style="width: 55%; height: 5px; border-radius: 3px; background: {{accent}}"></div></div>
+          </div>
+        </div>
+        <div style="width: 380px; flex: none; border-radius: 18px; overflow: hidden; background: #18212B">
+          <div style="height: 214px; background: #253A30"></div>
+          <div style="padding: 14px 18px 16px"><div style="font-weight: 600; font-size: 24px">La casa de papel</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Nuevos episodios" style="position: relative; margin-top: 44px; padding-left: 72px">
+      <h2 style="margin: 0 0 18px; font-family: 'Space Grotesk', sans-serif; font-size: 32px; font-weight: 600">Nuevos episodios de lo que sigues</h2>
+      <div style="display: flex; gap: 24px">
+        <div style="display: flex; align-items: center; gap: 18px; background: #141A22; border-radius: 16px; padding: 14px 22px 14px 14px; flex: none">
+          <div style="width: 64px; height: 92px; border-radius: 10px; background: #33405A"></div>
+          <div><div style="font-weight: 600; font-size: 22px">The Bear · T4·E01</div><div style="color: {{accent}}; font-size: 19px">Hoy · listo para ver</div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 18px; background: #141A22; border-radius: 16px; padding: 14px 22px 14px 14px; flex: none">
+          <div style="width: 64px; height: 92px; border-radius: 10px; background: #4A3A33"></div>
+          <div><div style="font-weight: 600; font-size: 22px">Severance · T3·E02</div><div style="color: #A3AFBC; font-size: 19px">Mañana</div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 18px; background: #141A22; border-radius: 16px; padding: 14px 22px 14px 14px; flex: none">
+          <div style="width: 64px; height: 92px; border-radius: 10px; background: #2F4A44"></div>
+          <div><div style="font-weight: 600; font-size: 22px">Lupin · T4·E01</div><div style="color: #A3AFBC; font-size: 19px">Jue 13</div></div>
+        </div>
+      </div>
+    </section>
+
+    <footer style="position: absolute; left: 72px; right: 96px; bottom: 28px; display: flex; justify-content: space-between; color: #8494A5; font-size: 20px">
+      <span>◄ Menú · ▲▼ filas · OK abrir</span>
+      <span style="display: flex; align-items: center; gap: 10px"><span style="border: 1px solid #3E4B5B; border-radius: 8px; padding: 4px 10px; color: #C9D2DB">Mantén OK</span> más opciones</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#19D46B","options":["#19D46B","#4C8DFF","#F2B84B","#E25C8C"]},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#19D46B' };
+  }
+}
+</script>
+</body>
+</html>

@@ -184,3 +184,33 @@ globales. Implementación transparente en App.store (prefijo por perfil) — los
 ### Varios add-ons (agente Search)
 Nuevo ajuste `stremioAddons` (array de URLs de manifest); `stremioAddon` (string) sigue valiendo como primero.
 Fuentes fusionadas y deduplicadas por infoHash/url.
+
+## Rediseño "TorBox 2.0" (semver interno v3.0.0) — especificación visual OBLIGATORIA
+Referencia visual: `design/*.dc.html` (maquetas 1920×1080: Main=Inicio, Detail=Ficha de serie, Player=Reproductor,
+Guide=TV en directo, Phone=web del móvil 390×844). Ábrelas como HTML de referencia (ignora `{{accent}}`/x-dc: es
+el color de acento). Lienzo: https://claude.ai/artifact/Qst6HEoZgJZHKV6GaYftxG
+
+**Tokens** (en `:root` de base.css; los temas de extras.js deben seguir funcionando cambiando `--accent`):
+- Fondo `--bg:#0A0D12`; superficies `--surface:#141A22`, `--surface-2:#1C2430`, `--surface-3:#2B3645`; rail `#0F141B`.
+- Texto `--text:#F2F5F8`, secundario `--muted:#A3AFBC`, terciario `#8494A5`; bordes `#3E4B5B`.
+- Acento `--accent:#19D46B` (SOLO acción principal y estados "listo"); aviso `--warn:#F2B84B`; error `--danger:#FF6B6B`.
+- Tipografía: títulos **Space Grotesk** 600/700, texto **Inter** 400–700 (Google Fonts con fallback system-ui;
+  si no hay red, el fallback debe verse bien). Mínimo 19–20 px en TV para texto secundario, 22–26 px normal.
+- Radios 14–20 px; rejilla de 8 px; márgenes laterales 96 px (72 px junto al rail).
+
+**Reglas UX**
+1. **Navegación lateral (rail)** de 112 px a la izquierda con iconos SVG de trazo (Inicio, Buscar, Biblioteca,
+   TV, Descargas; abajo Ajustes y avatar de perfil) en vez de pestañas arriba. ◄ desde el borde izquierdo del
+   contenido entra al rail; ► o OK vuelve al contenido. Sección activa: fondo acento con icono oscuro.
+   "Continuar" deja de ser sección propia del rail (su contenido vive en Inicio; la pantalla puede seguir
+   existiendo con nav:false).
+2. **Foco inequívoco**: aro blanco 4 px (`box-shadow: 0 0 0 4px var(--text)`), escala 1.04–1.06 en tarjetas,
+   sombra; botones enfocados = fondo blanco + texto oscuro + doble aro. Nunca solo cambio de color.
+3. **Una acción principal por pantalla** (botón blanco grande); secundarias en `rgba(242,245,248,.13)`.
+4. **Barra de pista inferior** en cada pantalla: a la izquierda las teclas útiles, a la derecha la píldora
+   "Mantén OK" + "más opciones" (texto i18n existente main.hint / hints de cada pantalla). Sustituye al hint de
+   la cabecera.
+5. Cabecera mínima: chips de filtro/categoría a la izquierda (si la pantalla los tiene), estado
+   ("TorBox conectado" con punto acento) y hora a la derecha.
+6. Insignias/etiquetas: borde `#3E4B5B` radio 8 px; "Al instante" = fondo acento texto oscuro; descargando = warn.
+7. Sin emoji en la UI (usar SVG inline de trazo). Contraste ≥ 4.5:1.

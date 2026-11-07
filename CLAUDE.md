@@ -9,7 +9,15 @@ con **Tizen**. Es una web app que corre en el webview de TizenBrew; navegación 
 para mando a distancia (D-pad). La tele del usuario **no tiene antena** y Tizen es
 sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 
-## Estado actual (v2.3, 2026-11-07) — LEER ARCHITECTURE.md
+## Estado actual: TorBox 2.0 (semver v3.0.0, 2026-11-08) — LEER ARCHITECTURE.md
+- Nombre visible "TorBox 2.0" (`App.displayVersion`); semver interno v3.0.0 porque el cargador y el Worker usan
+  la etiqueta vX.Y.Z más alta (ya existían v2.1–v2.5). Siguientes versiones: v3.x.
+- Rediseño 2.0 (rail lateral, foco blanco, barra "Mantén OK", guía TDT principal) — spec en ARCHITECTURE.md y
+  maquetas en `design/`. Interfaz en 7 idiomas (en, es, ca, gl, eu, pt, fr).
+- Publicar: `python tools/bundle.py` (app/dist) + `python tizen-app/build.py` (wgt) + commit + tag + push.
+- El push con `.github/workflows/android.yml` exige que `gh` tenga el scope `workflow`.
+
+## Estado v2.3 (histórico)
 - **Interfaz en inglés por defecto, multi-idioma (en/es)**: toda cadena visible con `App.t()` y textos en
   `app/i18n/<modulo>.js`. Idioma de contenido (sinopsis/episodios) separado: `App.i18n.contentLang()`.
 - v2.3: Inicio (catálogos TMDB-addon localizados), Buscar estilo Stremio (Cinemeta/TMDB + add-on Torrentio del

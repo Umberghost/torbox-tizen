@@ -102,36 +102,102 @@ function build(){
     '<div class="pl-sleep" id="plSleep"></div>' +
     '<div class="pl-recap" id="plRecap"></div>' +
     '<div class="pl-osd" id="plOsd">' +
-      '<div class="pl-top"><span class="pl-live" id="plLive">' + App.esc(App.t("player.live")) + '</span>' +
-        '<div class="pl-titles"><div class="pl-title" id="plTitle"></div><div class="pl-subtitle" id="plSubtitle"></div></div>' +
-        '<div class="pl-engine" id="plEngine"></div></div>' +
-      '<div class="pl-progress" id="plProg"><div class="pl-bar"><i id="plFill"></i><b id="plHead"></b></div>' +
-        '<div class="pl-times num"><span id="plCur">0:00</span><span id="plRemain"></span><span id="plDur">0:00</span></div></div>' +
-      '<div class="pl-panel" id="plPanel"></div>' +
-      '<div class="pl-keys legend"><span>' + App.esc(App.t("player.keyPanel")) + '</span>' +
-        '<span>' + App.esc(App.t("player.keyTracks")) + '</span><span id="plNextHint">' + App.esc(App.t("player.keyNext")) + '</span></div>' +
+      '<div class="pl-top">' +
+        '<div class="pl-titles"><div class="pl-eyebrow"><span class="pl-live" id="plLive">' + App.esc(App.t("player.live")) + '</span><span id="plSubtitle"></span></div>' +
+          '<h1 class="pl-title" id="plTitle"></h1><div class="pl-line" id="plLine"></div></div>' +
+        '<div class="pl-tags" id="plTags"></div><span class="pl-engine" id="plEngine"></span></div>' +
+      '<div class="pl-progress" id="plProg"><span class="pl-t num" id="plCur">0:00</span>' +
+        '<div class="pl-bar"><i id="plFill"></i><span class="pl-segs" id="plSegs"></span><b id="plHead"></b></div>' +
+        '<span class="pl-t pl-t-r num" id="plRemain"></span><span id="plDur" style="display:none"></span></div>' +
+      '<div class="pl-bar-ctl" id="plPanel" role="toolbar"></div>' +
     '</div>' +
     '<div class="pl-countdown" id="plCount"></div>' +
     '<div class="pl-error" id="plErr"></div>';
   ["plAv","plVideo","plSub","plSpin","plBuf","plPause","plSeek","plOsd","plLive","plTitle","plSubtitle",
-   "plEngine","plProg","plFill","plHead","plCur","plRemain","plDur","plNextHint","plCount","plErr",
-   "plThumb","plSeekTxt","plSkip","plSleep","plRecap","plPanel"]
+   "plEngine","plProg","plFill","plHead","plCur","plRemain","plDur","plCount","plErr",
+   "plThumb","plSeekTxt","plSkip","plSleep","plRecap","plPanel","plTags","plSegs","plLine"]
     .forEach(function(id){ els[id] = document.getElementById(id); });
   els.subSpan = els.plSub.querySelector("span");
 }
 
 function setClass(on, cls, el){ (el || root).classList.toggle(cls, !!on); }
 
+function osdVisible(){ return !!(root && root.classList.contains("osd-on") && !els.plOsd.classList.contains("hide")); }
 function showOsd(ms){
   if(!root) return;
+  var was = osdVisible();
   els.plOsd.classList.remove("hide");
   root.classList.add("osd-on");
+  if(!was){ P.ctlId = "pp"; P.barTouched = false; P._tagT = 0; }
   clearTimeout(P.osdT);
+  renderBar();
+  refreshTags();
   if(!P.paused || (P.opts && P.opts.live)){
-    P.osdT = setTimeout(hideOsd, P.panelOpen ? 10000 : (ms || 4000));
+    P.osdT = setTimeout(hideOsd, ms || 5000);
   }
 }
-function hideOsd(){ if(root){ closePanel(); clearTimeout(P.osdT); els.plOsd.classList.add("hide"); root.classList.remove("osd-on"); } }
+function hideOsd(){ if(root){ clearTimeout(P.osdT); els.plOsd.classList.add("hide"); root.classList.remove("osd-on"); } }
+
+/* ---- Títulos (eyebrow pequeño + título grande) ---- */
+function pad2(n){ n = Number(n); return n < 10 ? "0" + n : String(n); }
+function paintTitles(o){
+  var m = o.meta || {}, eyebrow = o.subtitle || "", big = o.title || "", line = "";
+  if(o.live){ eyebrow = ""; line = o.subtitle || ""; }
+  else if(m.episodeTitle && m.season !== undefined && m.season !== null && m.episode !== undefined && m.episode !== null){
+    eyebrow = (o.title || "") + " · " + App.t("player.v2.se", { s: m.season, e: pad2(m.episode) });
+    big = m.episodeTitle;
+  }
+  els.plSubtitle.textContent = eyebrow;
+  els.plTitle.textContent = big;
+  els.plLine.textContent = line;
+  els.plLine.style.display = line ? "" : "none";
+  els.plSubtitle.style.display = eyebrow ? "" : "none";
+}
+
+/* ---- Etiquetas técnicas (calidad·códec, audio, subtítulos) ---- */
+var VCODEC = { hvc1: "HEVC", hev1: "HEVC", hevc: "HEVC", h265: "HEVC", avc1: "H.264", avc: "H.264", h264: "H.264", vp09: "VP9", vp9: "VP9", av01: "AV1", av1: "AV1" };
+function subLabelNow(){
+  var off = App.t("player.v2.no");
+  if(!P.engine) return off;
+  if(P.sub.kind === "emb"){
+    var t = P.engine.tracks().text.filter(function(x){ return x.index === P.sub.index; })[0];
+    return t ? t.label : App.t("player.embedded");
+  }
+  if(P.sub.kind === "ext"){ var s = ((P.opts && P.opts.subtitles) || [])[P.sub.index]; return s ? (s.label || langName(s.lang)) : App.t("player.file"); }
+  return off;
+}
+function refreshTags(){
+  if(!P.engine || !P.opts || !osdVisible()) return;
+  if(Date.now() - (P._tagT || 0) < 2000) return;
+  P._tagT = Date.now();
+  var o = P.opts, m = o.meta || {}, tags = [], res = "", vc = "";
+  try{
+    P.engine.info().forEach(function(r){
+      if(r[0] === "res"){ var h = Number(String(r[1]).split("×")[1]); if(h) res = h >= 2000 ? "4K" : h + "p"; }
+      if(r[0] === "vcodec"){ var k = String(r[1]).toLowerCase().split(".")[0]; vc = VCODEC[k] || String(r[1]).toUpperCase(); }
+    });
+  }catch(e){}
+  if(!res) res = m.quality || o.quality || "";
+  if(res || vc) tags.push(res + (res && vc ? " · " : "") + vc);
+  try{
+    var tr = P.engine.tracks(), cur = tr.audio.filter(function(a){ return a.current; })[0] || tr.audio[0];
+    if(cur) tags.push(App.t("player.v2.tagAudio", { v: cur.label }));
+  }catch(e){}
+  if(!o.live || P.sub.kind !== "off") tags.push(App.t("player.v2.tagSubs", { v: subLabelNow() }));
+  els.plTags.innerHTML = tags.map(function(x){ return '<span>' + App.esc(x) + '</span>'; }).join("");
+}
+
+/* ---- Segmentos de intro / créditos sobre la barra ---- */
+function renderSegs(){
+  var sig = (P.skip ? P.skip.list.length : 0) + ":" + Math.round(P.dur || 0);
+  if(sig === P._segSig) return;
+  P._segSig = sig;
+  if(!P.skip || !(P.dur > 0)){ els.plSegs.innerHTML = ""; return; }
+  els.plSegs.innerHTML = P.skip.list.map(function(x){
+    var e = x.e || P.dur, l = Math.max(0, Math.min(100, x.s / P.dur * 100)), w = Math.max(0.6, Math.min(100 - l, (e - x.s) / P.dur * 100));
+    return '<i style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%"></i>';
+  }).join("");
+}
 
 function setBuffering(on, pct){
   P.buffering = !!on;
@@ -478,8 +544,10 @@ function updateUi(){
     els.plHead.style.left = pct + "%";
     els.plCur.textContent = App.fmtTime(shown);
     els.plDur.textContent = App.fmtTime(P.dur);
-    els.plRemain.textContent = "−" + App.fmtTime(P.dur - shown);
+    els.plRemain.textContent = "−" + App.fmtTime(Math.max(0, P.dur - shown));
+    renderSegs();
   }
+  refreshTags();
   // subtítulos externos
   if(P.sub.kind === "ext" && P.extCues.length){
     var cue = findCue(P.extCues, t - (P.subDelay || 0));
@@ -533,16 +601,15 @@ function closeEngine(){
 function setupUi(o){
   build();
   applySubSize();
-  els.plTitle.textContent = o.title || "";
-  els.plSubtitle.textContent = o.subtitle || "";
+  paintTitles(o);
+  els.plTags.innerHTML = ""; els.plSegs.innerHTML = ""; P._segSig = ""; P.barTouched = false; P.ctlId = "pp";
   setClass(o.live, "live", root);
-  els.plNextHint.style.display = o.next ? "" : "none";
   els.plFill.style.width = "0%"; els.plHead.style.left = "0%";
   els.plCur.textContent = "0:00"; els.plDur.textContent = o.live ? "" : "0:00"; els.plRemain.textContent = "";
   els.plErr.classList.remove("on");
   els.plSeek.classList.remove("on");
   showSubText(""); P._lastSub = "";
-  closePanel(); closeRecap(true);
+  closeRecap(true);
   els.plVideo.style.objectFit = ""; els.plVideo.style.transform = "";
   P.skip = null; P.skipCur = null; els.plSkip.classList.remove("on");
   els.plThumb.style.backgroundImage = ""; P.still = "";
@@ -697,7 +764,7 @@ function startCountdown(){
   els.plCount.classList.add("on");
   function paint(){
     els.plCount.innerHTML = '<div class="pl-count-n num">' + P.countdown.n + '</div>' +
-      '<div><b>' + App.esc(App.t("player.nextIn", { n: P.countdown.n })) + '</b><br><span class="muted">' + App.esc(App.t("player.nextKeys")) + '</span></div>';
+      '<div><b>' + App.esc(App.t("player.nextIn", { n: P.countdown.n })) + '</b><span class="muted">' + App.esc(App.t("player.nextKeys")) + '</span></div>';
   }
   paint();
   P.countdown.t = setInterval(function(){
@@ -937,7 +1004,8 @@ function statusObj(){
     dur: P.dur || 0,
     paused: !!P.paused,
     live: active ? !!o.live : false,
-    key: active ? (o.key || null) : null
+    key: active ? (o.key || null) : null,
+    poster: active ? (o.poster || "") : ""
   };
 }
 function emitState(){ App.bus.emit("player:state", statusObj()); }
@@ -1258,76 +1326,91 @@ function maybeRecap(o, startAt){
   if(p && p.then) p.then(function(txt){ done(txt ? String(txt).slice(0, 420) : ""); }).catch(function(){});
 }
 
-/* ================= Panel de controles con iconos (A1) ================= */
-function panelItems(){
+/* ================= Barra de controles (siempre visible con el OSD) ================= */
+var SVG = {
+  rw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
+  ff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4l11 8-11 8z"/><rect x="17" y="4" width="3" height="16" rx="1"/></svg>'
+};
+function nextLabel(o){
+  var m = (o && o.meta) || {};
+  if(m.episode !== undefined && m.episode !== null && !isNaN(Number(m.episode))) return App.t("player.v2.nextEp", { ep: "E" + pad2(Number(m.episode) + 1) });
+  return App.t("player.ctl.next");
+}
+/* it: {id, grp:"l"|"r", ic (svg|texto), txt (texto del botón), label (acción), run, keep, more (va al menú ···)} */
+function allItems(){
   var o = P.opts || {}, live = !!o.live, L = [];
-  function add(id, icon, key, run, opt){
-    opt = opt || {};
-    if(opt.show === false) return;
-    L.push({ id: id, icon: icon, label: App.t(key), run: run, keep: !!opt.keep });
-  }
-  add("rw", "−10", "player.ctl.rw", function(){ seekBy(-10); }, { keep: true, show: !live });
-  add("pp", P.paused ? "▶" : "❚❚", "player.ctl.playpause", togglePause, { keep: true });
-  add("ff", "+10", "player.ctl.ff", function(){ seekBy(10); }, { keep: true, show: !live });
-  add("replay", "↺10", "player.ctl.replay", function(){
+  function add(it, show){ if(show === false) return; L.push(it); }
+  add({ id: "rw", grp: "l", ic: SVG.rw, label: App.t("player.ctl.rw"), run: function(){ seekBy(-10); }, keep: true }, !live);
+  add({ id: "pp", grp: "l", ic: P.paused ? SVG.play : SVG.pause, label: App.t("player.ctl.playpause"), run: togglePause, keep: true, main: true });
+  add({ id: "ff", grp: "l", ic: SVG.ff, label: App.t("player.ctl.ff"), run: function(){ seekBy(10); }, keep: true }, !live);
+  add({ id: "next", grp: "l", ic: SVG.next, txt: nextLabel(o), label: App.t("player.ctl.next"), run: function(){ goNext(); } }, !!o.next && !live);
+  add({ id: "audio", grp: "r", txt: App.t("player.ctl.audio"), label: App.t("player.ctl.audio"), run: audioMenu });
+  add({ id: "subs", grp: "r", txt: App.t("player.ctl.subs"), label: App.t("player.ctl.subs"), run: subMenu });
+  add({ id: "speed", grp: "r", txt: App.t("player.v2.speed", { v: P.speed || 1 }), label: App.t("player.ctl.speed"), run: speedMenu }, !live);
+  add({ id: "zoom", grp: "r", txt: App.t("player.v2.picture"), label: App.t("player.ctl.zoom"), run: zoomMenu });
+  add({ id: "sleep", grp: "r", txt: App.t("player.v2.sleepIn"), label: App.t("player.ctl.sleep"), run: sleepMenu });
+  add({ id: "info", grp: "r", ic: "i", sq: true, label: App.t("player.ctl.info"), run: infoPanel });
+  add({ id: "replay", more: true, label: App.t("player.ctl.replay"), run: function(){
     if(!P.started) return;
     P.engine.seek(Math.max(0, curTime() - 10));
     if(P.paused) togglePause();
     showOsd();
-  }, { keep: true, show: !live });
-  add("audio", "♪", "player.ctl.audio", audioMenu);
-  add("subs", "CC", "player.ctl.subs", subMenu);
-  add("subdelay", "CC±", "player.ctl.subdelay", subDelayMenu, { show: !live });
-  add("speed", (P.speed || 1) + "×", "player.ctl.speed", speedMenu, { show: !live });
-  add("zoom", "⤢", "player.ctl.zoom", zoomMenu);
-  add("info", "i", "player.ctl.info", infoPanel);
-  add("sleep", "☾", "player.ctl.sleep", sleepMenu);
-  add("next", "⏭", "player.ctl.next", function(){ goNext(); }, { show: !!o.next && !live });
-  add("close", "✕", "player.ctl.close", stop);
+  } }, !live);
+  add({ id: "subdelay", more: true, label: App.t("player.ctl.subdelay"), run: subDelayMenu }, !live);
+  add({ id: "close", more: true, label: App.t("player.ctl.close"), run: stop });
   return L;
 }
-function renderPanel(){
-  var items = P.panelItems = panelItems();
-  if(P.panelIdx >= items.length) P.panelIdx = items.length - 1;
-  if(P.panelIdx < 0) P.panelIdx = 0;
-  els.plPanel.innerHTML = items.map(function(it, i){
-    return '<div class="pl-ic' + (i === P.panelIdx ? " focused" : "") + '"><b>' + App.esc(it.icon) + '</b><span>' + App.esc(it.label) + '</span></div>';
-  }).join("");
+function barItems(){
+  var all = allItems(), bar = all.filter(function(x){ return !x.more; }), more = all.filter(function(x){ return x.more; });
+  if(more.length) bar.push({ id: "more", grp: "r", ic: "···", sq: true, label: App.t("player.v2.more"), run: function(){ moreMenu(more); } });
+  return bar;
 }
-function openPanel(){
-  if(!P.started) return;
-  P.panelOpen = true;
-  P.panelIdx = P.panelIdx || 1;
-  els.plPanel.classList.add("on");
-  root.classList.add("panel-on");
-  renderPanel();
-  showOsd(10000);
+function moreMenu(more){
+  App.ui.menu(App.t("player.v2.more"), more.map(function(it){ return { label: it.label, value: it.id }; })).then(function(v){
+    if(v === null || !P.active) return;
+    var it = more.filter(function(x){ return x.id === v; })[0];
+    if(it) it.run();
+  });
 }
-function closePanel(){
-  if(!els || !els.plPanel) return;
-  P.panelOpen = false;
-  els.plPanel.classList.remove("on");
-  if(root) root.classList.remove("panel-on");
+function btnHtml(it, foc){
+  var cls = "pl-b" + (it.main ? " main" : "") + (it.sq ? " sq" : "") + (it.ic && it.txt ? " ictxt" : "") + (!it.ic ? " txt" : "") + (foc ? " focused" : "");
+  var inner = (it.ic ? (it.ic.charAt(0) === "<" ? '<span class="pl-bi">' + it.ic + '</span>' : '<span class="pl-bt">' + App.esc(it.ic) + '</span>') : "") +
+    (it.txt ? '<span class="pl-bx">' + App.esc(it.txt) + '</span>' : "");
+  return '<button class="' + cls + '" aria-label="' + App.esc(it.label) + '">' + inner + '</button>';
 }
-function panelKey(k){
-  var n = (P.panelItems || []).length;
-  if(App.isBack(k) || k === K.UP || k === K.DOWN){ closePanel(); showOsd(); return true; }
-  if(k === K.LEFT){ P.panelIdx = (P.panelIdx + n - 1) % n; renderPanel(); showOsd(10000); return true; }
-  if(k === K.RIGHT){ P.panelIdx = (P.panelIdx + 1) % n; renderPanel(); showOsd(10000); return true; }
+function renderBar(){
+  if(!els || !els.plPanel || !P.opts) return;
+  var items = P.barItems = barItems();
+  var idx = -1;
+  items.forEach(function(it, i){ if(it.id === P.ctlId) idx = i; });
+  if(idx < 0){ idx = 0; items.forEach(function(it, i){ if(it.id === "pp") idx = i; }); P.ctlId = items[idx] ? items[idx].id : "pp"; }
+  var l = "", r = "";
+  items.forEach(function(it, i){ var h = btnHtml(it, i === idx); if(it.grp === "l") l += h; else r += h; });
+  els.plPanel.innerHTML = '<div class="pl-grp">' + l + '</div><div class="pl-grp">' + r + '</div>';
+}
+function barKey(k){
+  var items = P.barItems || [], idx = 0;
+  items.forEach(function(it, i){ if(it.id === P.ctlId) idx = i; });
+  if(k === K.LEFT || k === K.RIGHT){
+    idx = Math.max(0, Math.min(items.length - 1, idx + (k === K.RIGHT ? 1 : -1)));
+    P.ctlId = items[idx].id; P.barTouched = true;
+    showOsd();
+    return true;
+  }
   if(k === K.OK){
-    var it = P.panelItems[P.panelIdx];
-    if(it){
-      if(!it.keep) closePanel();
-      it.run();
-      if(it.keep && P.panelOpen){ renderPanel(); showOsd(10000); }
-    }
+    var it = items[idx];
+    P.barTouched = true;
+    if(it){ it.run(); if(P.active){ if(it.keep) showOsd(); else renderBar(); } }
     return true;
   }
   return false;
 }
 function actions(){
   if(!P.active) return [];
-  return panelItems().map(function(it){ return { label: it.label, run: it.run }; });
+  return allItems().map(function(it){ return { label: it.label, run: it.run }; });
 }
 
 /* ================= API pública ================= */
@@ -1369,7 +1452,7 @@ function stop(){
   clearTimers();
   closeEngine();
   clearSleep();
-  closePanel(); closeRecap(true);
+  closeRecap(true);
   P.active = false;
   P.started = false;
   if(root){
@@ -1402,34 +1485,36 @@ function onKey(k){
   // Tarjeta "resumen de la temporada anterior": cualquier tecla la salta
   if(P.recap){ closeRecap(false); return true; }
 
-  if(P.panelOpen && k !== K.STOP){ if(panelKey(k)) return true; }
+  var vis = osdVisible();
 
-  if(App.isBack(k) || k === K.STOP){ stop(); return true; }
+  if(k === K.STOP){ stop(); return true; }
+  if(App.isBack(k)){ if(vis) hideOsd(); else stop(); return true; }
 
   // Números (directo)
   var d = App.digit(k);
   if(d >= 0){ if(o.onDigit) o.onDigit(d); showOsd(); return true; }
 
   if(o.live){
-    if(k === K.CHUP || (k === K.UP && o.onChannel)){ if(o.onChannel) o.onChannel(1); showOsd(); return true; }
+    if(k === K.CHUP || (k === K.UP && o.onChannel && !vis)){ if(o.onChannel) o.onChannel(1); showOsd(); return true; }
     if(k === K.CHDOWN || (k === K.DOWN && o.onChannel)){ if(o.onChannel) o.onChannel(-1); showOsd(); return true; }
   }
 
   switch(k){
     case K.OK:
-      if(P.skipCur && doSkip()) return true;
-      if(P.started && !P.paused && root.classList.contains("osd-on") && !els.plOsd.classList.contains("hide")){ openPanel(); return true; }
-      if(P.started && P.paused && !els.plOsd.classList.contains("hide")){ openPanel(); return true; }
+      if(P.skipCur && (!vis || !P.barTouched) && doSkip()) return true;
+      if(!vis){ showOsd(); return true; }
+      if(P.started && barKey(k)) return true;
       togglePause(); return true;
+    case K.LEFT: case K.RIGHT:
+      if(vis){ if(barKey(k)) return true; }
+      seekBy(k === K.LEFT ? -10 : 10); return true;
+    case K.UP: if(vis) hideOsd(); else showOsd(); return true;
+    case K.DOWN: showOsd(); return true;
     case K.PLAYPAUSE: togglePause(); return true;
     case K.PLAY: if(P.paused) togglePause(); else showOsd(); return true;
     case K.PAUSE: if(!P.paused) togglePause(); else showOsd(); return true;
-    case K.LEFT: seekBy(-10); return true;
-    case K.RIGHT: seekBy(10); return true;
     case K.RW: seekBy(-60); return true;
     case K.FF: seekBy(60); return true;
-    case K.UP: tracksPanel(); return true;
-    case K.DOWN: openPanel(); showOsd(); return true;
     case K.INFO: infoPanel(); return true;
     case K.NEXT: if(o.next) goNext(); else App.hint(App.t("player.noNext")); return true;
     case K.PREV: if(!o.live && P.started){ P.engine.seek(0); showOsd(); } return true;

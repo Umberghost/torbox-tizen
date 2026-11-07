@@ -26,7 +26,17 @@ function jget(k, def){ try{ var r = localStorage.getItem(k); return r === null ?
 /* ================= Qué hay de nuevo (#89) =================
  * Añade una entrada por versión (la más nueva arriba). Se muestran las de versiones posteriores a la última vista.
  */
+App.displayVersion = "2.0";   // versión comercial que ve el usuario (App.version es el semver interno)
 var CHANGELOG = [
+  { v: "3.0.0", label: "2.0",
+    en: ["New design: side menu with icons instead of the top tabs, a clean header and a hint bar at the bottom.",
+         "Much more visible focus: a white ring and a slight zoom on whatever is selected.",
+         "Options bar: Hold OK (or TOOLS / Menu) opens the options of any screen.",
+         "Everything from 2.5.0: profiles with PIN, themes, interface size, screensaver, offline start with automatic rollback, and a mobile layout."],
+    es: ["Nuevo diseño: menú lateral con iconos en lugar de las pestañas superiores, cabecera limpia y barra de pistas abajo.",
+         "Foco mucho más visible: aro blanco y un ligero zoom en lo seleccionado.",
+         "Barra de opciones: Mantén OK (o TOOLS / Menú) abre las opciones de cualquier pantalla.",
+         "Todo lo de la 2.5.0: perfiles con PIN, temas, tamaño de interfaz, salvapantallas, arranque sin red con vuelta automática atrás y diseño para móvil."] },
   { v: "2.5.0",
     en: ["Hold OK (or press TOOLS / Menu) on any screen to open an options menu — no colour buttons needed.",
          "Profiles with optional PIN: each person has their own history, follows and preferences.",
@@ -52,11 +62,11 @@ function showWhatsNew(){
   if(!items.length){ App.store.setGlobal("seenVer", App.version); return; }
   var html = items.map(function(c){
     var lines = c[lang] || c.en || [];
-    return '<div class="wn-ver">' + App.esc(c.v) + '</div><ul class="wn-list">' +
+    return '<div class="wn-ver">' + App.esc(c.label || c.v) + '</div><ul class="wn-list">' +
       lines.map(function(l){ return '<li>' + App.esc(l) + '</li>'; }).join("") + '</ul>';
   }).join("");
   App.ui.modal({
-    title: t("whatsnew.title", { v: App.version }), wide: true, html: html,
+    title: t("shell.whatsnew", { v: App.displayVersion }), wide: true, html: html,
     buttons: [{ label: t("whatsnew.close"), value: true }],
     onClose: function(){ App.store.setGlobal("seenVer", App.version); }
   });
@@ -209,7 +219,7 @@ function bootSourceLabel(){
 function sysRows(){
   var b = App.bootInfo, mb = (App.store.usage() / 1048576).toFixed(2);
   var rows = [
-    [t("sys.version"), App.version],
+    [t("sys.version"), App.displayVersion + " (" + App.version + ")"],
     [t("sys.boot"), b ? ((b.ver || "?") + (b.pinned ? " (pin)" : "")) : "—"],
     [t("sys.bootSource"), bootSourceLabel()],
     [t("sys.storage"), mb + " MB"],

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TorBox TV — Móvil</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0D12}
+a{color:#19D46B}a:hover{color:#5BE597}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0D12; color: #F2F5F8; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; padding: 22px 18px 0">
+  <header style="display: flex; justify-content: space-between; align-items: center">
+    <div style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px">Tor<span style="color: {{accent}}">Box</span> TV</div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #A3AFBC"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{accent}}"></span>Salón · conectada</div>
+  </header>
+
+  <section aria-label="Reproduciendo" style="margin-top: 18px; background: #141A22; border-radius: 18px; padding: 14px; display: flex; gap: 12px; align-items: center">
+    <div style="width: 56px; height: 80px; border-radius: 10px; background: #2C4256; flex: none"></div>
+    <div style="flex: 1; min-width: 0">
+      <div style="font-size: 12px; color: #A3AFBC">Reproduciendo en la TV</div>
+      <div style="font-weight: 700; font-size: 16px">Lupin · T1·E03</div>
+      <div style="margin-top: 8px; height: 5px; border-radius: 3px; background: rgba(242,245,248,.18)"><div style="width: 38%; height: 5px; border-radius: 3px; background: {{accent}}"></div></div>
+      <div style="margin-top: 6px; font-size: 12px; color: #A3AFBC">17:52 / 47:02</div>
+    </div>
+  </section>
+
+  <div style="display: flex; justify-content: center; gap: 14px; margin-top: 14px">
+    <button aria-label="Retroceder 10 segundos" style="width: 56px; height: 56px; border: 0; border-radius: 16px; background: #1C2430; color: #F2F5F8; font: 600 14px Inter, sans-serif">-10</button>
+    <button aria-label="Pausa" style="width: 76px; height: 56px; border: 0; border-radius: 16px; background: #F2F5F8; color: #0A0D12; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+    </button>
+    <button aria-label="Avanzar 10 segundos" style="width: 56px; height: 56px; border: 0; border-radius: 16px; background: #1C2430; color: #F2F5F8; font: 600 14px Inter, sans-serif">+10</button>
+    <button aria-label="Detener" style="width: 56px; height: 56px; border: 0; border-radius: 16px; background: #1C2430; color: #F2F5F8; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+    </button>
+  </div>
+
+  <section aria-label="Mando" style="margin: 22px auto 0; width: 236px; height: 236px; border-radius: 50%; background: #141A22; position: relative">
+    <button aria-label="Arriba" style="position: absolute; left: 88px; top: 10px; width: 60px; height: 60px; border: 0; background: transparent; color: #C9D2DB; font-size: 26px">▲</button>
+    <button aria-label="Abajo" style="position: absolute; left: 88px; bottom: 10px; width: 60px; height: 60px; border: 0; background: transparent; color: #C9D2DB; font-size: 26px">▼</button>
+    <button aria-label="Izquierda" style="position: absolute; left: 10px; top: 88px; width: 60px; height: 60px; border: 0; background: transparent; color: #C9D2DB; font-size: 26px">◀</button>
+    <button aria-label="Derecha" style="position: absolute; right: 10px; top: 88px; width: 60px; height: 60px; border: 0; background: transparent; color: #C9D2DB; font-size: 26px">▶</button>
+    <button style="position: absolute; left: 73px; top: 73px; width: 90px; height: 90px; border: 0; border-radius: 50%; background: #2B3645; color: #F2F5F8; font: 700 20px Inter, sans-serif">OK</button>
+  </section>
+  <div style="display: flex; justify-content: center; gap: 14px; margin-top: 14px">
+    <button style="height: 48px; padding: 0 22px; border: 0; border-radius: 14px; background: #1C2430; color: #F2F5F8; font: 600 15px Inter, sans-serif">Atrás</button>
+    <button style="height: 48px; padding: 0 22px; border: 0; border-radius: 14px; background: #1C2430; color: #F2F5F8; font: 600 15px Inter, sans-serif">Opciones</button>
+    <button style="height: 48px; padding: 0 22px; border: 0; border-radius: 14px; background: #1C2430; color: #F2F5F8; font: 600 15px Inter, sans-serif">Inicio</button>
+  </div>
+
+  <label for="q" style="margin-top: 22px; font-size: 13px; color: #A3AFBC">Buscar y ver en la TV</label>
+  <input id="q" value="lupin" style="margin-top: 6px; height: 48px; border-radius: 14px; border: 1px solid #2B3645; background: #141A22; color: #F2F5F8; padding: 0 14px; font: 16px Inter, sans-serif">
+
+  <div style="flex: 1"></div>
+  <nav aria-label="Secciones" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 -18px; border-top: 1px solid #1C2430; background: #0F141B">
+    <a href="#" style="height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{accent}}; font-size: 12px; text-decoration: none; font-weight: 600">Mando</a>
+    <a href="#" style="height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #A3AFBC; font-size: 12px; text-decoration: none">Buscar</a>
+    <a href="#" style="height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #A3AFBC; font-size: 12px; text-decoration: none">Añadir</a>
+    <a href="#" style="height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #A3AFBC; font-size: 12px; text-decoration: none">Ajustes</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#19D46B","options":["#19D46B","#4C8DFF","#F2B84B","#E25C8C"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#19D46B' };
+  }
+}
+</script>
+</body>
+</html>

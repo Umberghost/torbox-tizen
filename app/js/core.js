@@ -3,7 +3,7 @@
 "use strict";
 
 var App = window.App = window.App || {};
-App.version = "2.5.0";
+App.version = "3.0.0";
 
 /* ---------------- Registro (log) ----------------
  * Guarda los últimos mensajes de consola y errores para verlos desde la web del
@@ -455,7 +455,12 @@ var dicts = {};
 App.i18n = {
   LANGS: [
     { code: "en", label: "English", tmdb: "en-US", iso3: "eng" },
-    { code: "es", label: "Español", tmdb: "es-ES", iso3: "spa" }
+    { code: "es", label: "Español", tmdb: "es-ES", iso3: "spa" },
+    { code: "ca", label: "Català", tmdb: "ca-ES", iso3: "cat" },
+    { code: "gl", label: "Galego", tmdb: "gl-ES", iso3: "glg" },
+    { code: "eu", label: "Euskara", tmdb: "eu-ES", iso3: "eus" },
+    { code: "pt", label: "Português", tmdb: "pt-PT", iso3: "por" },
+    { code: "fr", label: "Français", tmdb: "fr-FR", iso3: "fre" }
   ],
   add: function(lang, table){
     var d = dicts[lang] = dicts[lang] || {};

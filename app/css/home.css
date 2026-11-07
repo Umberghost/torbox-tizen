@@ -1,36 +1,70 @@
-/* home.css — pantalla Inicio (prefijo .home-) y modal de Trakt (.trakt-). Reutiliza tarjetas .lib-. */
-.home-screen{display:none;flex-direction:column}
-.home-screen.on{display:flex}
+/* home.css — pantalla Inicio rediseño 2.0 (prefijos .home- y .hm-) y modal de Trakt (.trakt-).
+ * Tarjetas 16:9 (.hm-wide) y barras (.hm-bar) compartidas con library.css/continue.js. */
+.home-screen{display:none;overflow:hidden}
+.home-screen.on{display:block}
 
-/* ---- Hero ---- */
-.home-hero{position:relative;flex:none;height:330px;overflow:hidden}
+/* ---- Hero a pantalla completa: fondo del título enfocado + degradado izquierda/abajo ---- */
 .home-hero-bg{
-  position:absolute;inset:0;background-size:cover;background-position:center 25%;
-  opacity:0;transition:opacity .35s ease;
+  position:absolute;left:0;right:0;top:0;height:760px;background-size:cover;background-position:center 20%;
+  background-color:#1A2633;opacity:0;transition:opacity .35s ease;
 }
-.home-hero-bg.on{opacity:.55}
+.home-hero-bg.on{opacity:1}
 .home-hero-shade{
-  position:absolute;inset:0;
-  background:linear-gradient(90deg,var(--bg) 0%,rgba(11,15,20,.85) 38%,rgba(11,15,20,.2) 75%,rgba(11,15,20,.55) 100%),
-             linear-gradient(0deg,var(--bg) 0%,rgba(11,15,20,0) 45%);
+  position:absolute;left:0;right:0;top:0;height:760px;pointer-events:none;
+  background:linear-gradient(90deg,var(--bg) 18%,rgba(10,13,18,.55) 55%,rgba(10,13,18,0) 80%),
+             linear-gradient(0deg,var(--bg) 4%,rgba(10,13,18,0) 45%);
 }
-.home-hero-info{position:absolute;left:var(--gutter);bottom:26px;width:980px;max-width:62%}
-.home-hero-title{
-  font-size:52px;font-weight:700;line-height:1.1;margin-bottom:10px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+
+/* ---- Scroll: márgenes 72 px junto al rail ---- */
+.home-scroll{position:relative;z-index:1;height:100%;padding:0 96px 80px 72px;overflow-y:auto}
+
+/* ---- Chips de categoría ---- */
+.home-chips{display:flex;gap:12px;padding:36px 0 0}
+.hm-chip{
+  padding:10px 22px;border-radius:999px;font-size:22px;color:var(--muted,#A3AFBC);
+  border:2px solid transparent;white-space:nowrap;
 }
-.home-hero-meta{color:var(--warn);font-size:22px;margin-bottom:10px;min-height:30px}
-.home-hero-desc{
-  color:#c9d3db;font-size:22px;line-height:1.45;margin:0;
+.hm-chip.on{background:rgba(242,245,248,.12);color:var(--text);font-weight:600}
+.hm-chip.focused{background:var(--text);color:var(--bg);font-weight:700;box-shadow:0 0 0 3px rgba(242,245,248,.35)}
+
+/* ---- Información del título ---- */
+.hm-hero-info{max-width:900px;padding-top:64px;display:flex;flex-direction:column;gap:20px;min-height:360px}
+.hm-meta{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:20px;color:#C9D2DB}
+.hm-type{background:rgba(242,245,248,.14);padding:6px 12px;border-radius:8px;font-weight:600}
+.hm-star{color:var(--warn);font-weight:600}
+.hm-title{
+  font-family:var(--font-title,"Space Grotesk",system-ui,"Segoe UI",sans-serif);
+  font-size:88px;line-height:1.02;letter-spacing:-1px;font-weight:700;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.hm-desc{
+  margin:0;font-size:24px;line-height:1.5;color:#C9D2DB;max-width:860px;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
+.hm-btns{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:4px}
+.hm-btn{
+  display:flex;align-items:center;gap:12px;padding:18px 30px;border-radius:16px;
+  background:rgba(242,245,248,.14);color:var(--text);font-size:24px;font-weight:600;
+}
+.hm-btn.on{color:var(--accent)}
+.hm-btn-main{background:var(--text);color:var(--bg);font-weight:700;font-size:26px;padding:20px 36px}
+.hm-btn.focused{
+  background:var(--text);color:var(--bg);font-weight:700;
+  box-shadow:0 0 0 4px var(--bg),0 0 0 8px var(--text);
+}
+.hm-tags{display:flex;gap:10px;align-items:center;margin-left:12px;font-size:20px;color:#C9D2DB}
+.hm-tag{border:1px solid #3E4B5B;padding:6px 12px;border-radius:8px}
+.hm-instant{color:var(--accent);font-weight:600}
+.hm-prog{display:flex;align-items:center;gap:16px;font-size:20px;color:var(--muted,#A3AFBC)}
 
 /* ---- Filas ---- */
-.home-scroll{flex:1;height:auto;min-height:0;padding-top:0}
-.home-row{margin-bottom:6px}
+.home-row{margin-top:40px}
 .home-row[hidden]{display:none}
-.home-row .section-title{margin:12px 0 0}
-.home-hscroll{gap:26px;padding:16px 10px 26px}
+.home-row-title{
+  font-family:var(--font-title,"Space Grotesk",system-ui,"Segoe UI",sans-serif);
+  font-size:32px;font-weight:600;margin:0 0 2px;
+}
+.home-hscroll{gap:26px;padding:22px 24px 30px 10px;margin-left:-10px}
 .home-card{width:210px}
 .home-card .lib-initials{font-size:52px}
 .home-row-state{
@@ -40,21 +74,25 @@
 .home-row-state.err{color:var(--danger)}
 .home-spin{width:34px;height:34px;border-width:4px}
 
+/* ---- Tarjetas compactas: nuevos episodios ---- */
+.home-row-calendar .home-hscroll{gap:24px}
+.hm-compact{
+  flex:none;display:flex;align-items:center;gap:18px;background:var(--surface);border-radius:16px;
+  padding:14px 22px 14px 14px;transition:transform .16s ease;
+}
+.hm-compact .hm-mini{width:64px;padding-top:0;height:92px;border-radius:10px;flex:none}
+.hm-compact .hm-mini .lib-initials{font-size:24px}
+.hm-compact-title{font-weight:600;font-size:22px;white-space:nowrap}
+.hm-compact-when{font-size:19px;color:var(--muted,#A3AFBC);margin-top:2px}
+.hm-compact.ready .hm-compact-when{color:var(--accent)}
+.hm-compact.focused{transform:scale(1.05);background:var(--surface-2);box-shadow:0 0 0 4px var(--text),0 18px 40px rgba(0,0,0,.55)}
+
 /* ---- Modal de Trakt ---- */
 .trakt-code{
   font-size:64px;font-weight:800;letter-spacing:10px;color:var(--accent);
   text-align:center;margin:18px 0;font-variant-numeric:tabular-nums;
 }
 .trakt-wait{text-align:center;color:var(--muted)}
-
-/* ---- Chips de acciones (filtros, sorpréndeme, recargar) ---- */
-.home-chips{display:flex;gap:18px;padding:14px 10px 4px}
-.home-chip{
-  padding:10px 26px;border-radius:30px;font-size:22px;background:rgba(255,255,255,.08);
-  border:2px solid transparent;color:var(--fg,#e8eef3);white-space:nowrap;
-}
-.home-chip.on{background:rgba(255,255,255,.18);color:var(--warn)}
-.home-chip.focused,.home-chip.focus,.home-chip:focus{border-color:var(--accent);background:rgba(255,255,255,.2)}
 
 /* ---- Número de puesto del Top 10 ---- */
 .home-rank{
