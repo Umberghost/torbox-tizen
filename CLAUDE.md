@@ -9,7 +9,12 @@ con **Tizen**. Es una web app que corre en el webview de TizenBrew; navegación 
 para mando a distancia (D-pad). La tele del usuario **no tiene antena** y Tizen es
 sistema cerrado (sin ADB), así que todo entra por red/APIs web.
 
-## Estado actual: TorBox 2.0 (semver v3.0.0, 2026-11-08) — LEER ARCHITECTURE.md
+## Estado actual: Faro 2.0 (semver v3.3.0, 2026-11-08) — LEER ARCHITECTURE.md
+- **Nombre visible "Faro"** (cliente no oficial "para TorBox"); identificadores internos siguen como torbox-tizen.
+- **Worker desplegado**: https://faro.manuelvm691997.workers.dev (cuenta Cloudflare personal del usuario; `cloud/wrangler.toml`,
+  KV `TB_KV`). Redesplegar: `cd cloud && npx wrangler deploy`. Sirve la última etiqueta (API GitHub → jsDelivr → master).
+- **Cuenta Faro** (v3.3): sync E2E entre dispositivos. `js/account.js` (cliente, WebCrypto, BIP39 12 palabras, códigos de
+  vinculación) + rutas `/acct/<id>` y `/pair/<id>` del Worker (blobs cifrados, proof, versión, TTL 10 min, rate limit).
 - Nombre visible "TorBox 2.0" (`App.displayVersion`); semver interno v3.0.0 porque el cargador y el Worker usan
   la etiqueta vX.Y.Z más alta (ya existían v2.1–v2.5). Siguientes versiones: v3.x.
 - Rediseño 2.0 (rail lateral, foco blanco, barra "Mantén OK", guía TDT principal) — spec en ARCHITECTURE.md y

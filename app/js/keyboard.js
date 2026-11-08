@@ -110,7 +110,7 @@ function pasteFromClipboard(){
 document.addEventListener("paste", function(ev){
   if(!st) return;
   var txt = ev.clipboardData ? ev.clipboardData.getData("text") : "";
-  if(txt){ ev.preventDefault(); insertText(txt); }
+  if(txt){ ev.preventDefault(); st.physical = true; insertText(txt); }
 });
 
 function insert(ch){
@@ -176,10 +176,15 @@ App.ui.keyboard = {
     // Atrás del mando / Escape → cancelar
     if(k === K.BACK || k === K.BACK_LG || k === K.ESC){ finish(false); return true; }
     // Backspace físico → borrar
-    if(k === K.BACKSPACE){ st.value = st.value.slice(0, -1); paintValue(); return true; }
-    if(k === K.UP || k === K.DOWN || k === K.LEFT || k === K.RIGHT || k === K.OK){
+    if(k === K.BACKSPACE){ st.physical = true; st.value = st.value.slice(0, -1); paintValue(); return true; }
+    /* Intro con teclado físico: si se ha escrito con él (o es Intro del teclado numérico), confirma.
+     * Con el mando, OK sigue pulsando la tecla enfocada del teclado en pantalla. */
+    if(k === K.OK && (st.physical || (e && e.code === "NumpadEnter"))){ finish(true); return true; }
+    if(k === K.UP || k === K.DOWN || k === K.LEFT || k === K.RIGHT){
+      st.physical = false;   // vuelve a manejarse con flechas: OK = tecla enfocada
       st.grid.handleKey(k); return true;
     }
+    if(k === K.OK){ st.grid.handleKey(k); return true; }
     // Botones de color: VERDE = hecho, ROJO = borrar
     if(k === K.GREEN){ finish(true); return true; }
     if(k === K.RED){ st.value = st.value.slice(0, -1); paintValue(); return true; }
@@ -188,7 +193,7 @@ App.ui.keyboard = {
     // Números del mando / teclado físico
     var d = App.digit(k);
     var key = e && e.key;
-    if(key && key.length === 1 && !(e.ctrlKey || e.metaKey || e.altKey)){ insert(key); return true; }
+    if(key && key.length === 1 && !(e.ctrlKey || e.metaKey || e.altKey)){ st.physical = true; insert(key); return true; }
     if(d >= 0){ insert(String(d)); return true; }
     return true;
   }

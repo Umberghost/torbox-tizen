@@ -1761,17 +1761,46 @@ function showAddonHelp(){
     title: t("search.addons.helpTitle"),
     html: '<p>' + App.esc(t("search.addons.help")) + (url ? ' <b>' + App.esc(url) + '</b>' : '') + '</p>' +
           '<p>' + App.esc(t("search.addons.suggest")) + '</p>' +
-          '<p>Torrentio — torrentio.strem.fun<br>Comet — comet.elfhosted.com<br>MediaFusion — mediafusion.elfhosted.com<br>' +
-          App.esc(t("search.addons.torbox")) + ' — stremio.torbox.app/manifest.json</p>',
+          '<p>Torrentio — torrentio.strem.fun/configure<br>Comet — comet.elfhosted.com/configure<br>MediaFusion — mediafusion.elfhosted.com/configure</p>',
     buttons: [{ label: t("ui.close"), value: true }]
+  });
+}
+/* Añadir un add-on pegando/escribiendo la URL de su manifest (Ctrl+V funciona en el teclado) */
+function addAddon(){
+  App.ui.keyboard.open({
+    title: t("search.addons.addTitle"), placeholder: "https://…/manifest.json",
+    onDone: function(v){
+      var base = normAddon(v);
+      if(!/^https?:\/\/[^\s\/]+\.[^\s]+/i.test(base)){ App.ui.toast(t("search.addons.invalid"), 4000); return; }
+      if(addonBases().indexOf(base) >= 0){ App.ui.toast(t("search.addons.exists"), 3000); return; }
+      App.ui.toast(t("search.addons.checking"), 2000);
+      // Comprobar que responde como add-on de Stremio con recurso "stream"
+      withTimeout(App.net.fetch(base + "/manifest.json").then(function(r){
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }), 15000, "timeout").then(function(m){
+        var res = (m && m.resources) || [];
+        var hasStream = res.some(function(x){ return x === "stream" || (x && x.name === "stream"); });
+        if(!hasStream) throw new Error(t("search.addons.noStreams"));
+        var arr = App.settings.get("stremioAddons");
+        arr = Array.isArray(arr) ? arr.slice() : [];
+        arr.push(base + "/manifest.json");
+        App.settings.set("stremioAddons", arr);
+        App.ui.toast(t("search.addons.added", { name: (m && m.name) || addonName(base) }), 4000);
+      }).catch(function(e){
+        App.ui.toast(t("search.addons.addFailed", { msg: e.message }), 6000);
+      });
+    }
   });
 }
 function manageAddons(){
   var list = addonBases();
-  var items = list.map(function(b){ return { label: addonName(b) + " · " + addonHost(b), value: b }; });
+  var items = [{ label: "＋ " + t("search.addons.add"), value: "__add" }].concat(
+    list.map(function(b){ return { label: addonName(b) + " · " + addonHost(b), value: b }; }));
   items.push({ label: t("search.addons.helpItem"), value: "__help" });
   App.ui.menu(t(list.length ? "search.addons.menuTitle" : "search.addons.none"), items).then(function(v){
     if(!v) return;
+    if(v === "__add"){ addAddon(); return; }
     if(v === "__help"){ showAddonHelp(); return; }
     App.ui.confirm(t("search.addons.removeTitle", { name: addonName(v) }), t("search.addons.removeText"), t("search.addons.remove"), t("ui.cancel"))
       .then(function(ok){ if(ok) removeAddon(v); });

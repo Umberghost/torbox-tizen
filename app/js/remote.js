@@ -470,6 +470,7 @@ var syncBusy = false;
 function syncHistory(){
   var b = syncBase(), sec = syncSecret();
   if(!b || !sec || syncBusy || !App.history || !App.history.list) return;
+  if(App.account && App.account.isLinked && App.account.isLinked()) return;   // la Cuenta Faro sincroniza el historial
   syncBusy = true;
   var local = App.history.list().slice(0, 300);
   fetch(b + "/sync/" + sec, {

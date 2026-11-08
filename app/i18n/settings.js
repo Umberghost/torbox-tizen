@@ -1741,3 +1741,12 @@ window.App.i18n.add("gl", {"keyboard.paste": "Pegar", "keyboard.pasteFail": "Non
 window.App.i18n.add("eu", {"keyboard.paste": "Itsatsi", "keyboard.pasteFail": "Ezin izan da arbela irakurri. Sakatu Ctrl+V."});
 window.App.i18n.add("pt", {"keyboard.paste": "Colar", "keyboard.pasteFail": "Não foi possível ler a área de transferência. Prima Ctrl+V."});
 window.App.i18n.add("fr", {"keyboard.paste": "Coller", "keyboard.pasteFail": "Impossible de lire le presse-papiers. Appuyez sur Ctrl+V."});
+
+/* Subapartado Cuenta Faro */
+window.App.i18n.add("en", {"settings.sub.faro": "Faro account & sync"});
+window.App.i18n.add("es", {"settings.sub.faro": "Cuenta Faro y sincronización"});
+window.App.i18n.add("ca", {"settings.sub.faro": "Compte Faro i sincronització"});
+window.App.i18n.add("gl", {"settings.sub.faro": "Conta Faro e sincronización"});
+window.App.i18n.add("eu", {"settings.sub.faro": "Faro kontua eta sinkronizazioa"});
+window.App.i18n.add("pt", {"settings.sub.faro": "Conta Faro e sincronização"});
+window.App.i18n.add("fr", {"settings.sub.faro": "Compte Faro et synchronisation"});

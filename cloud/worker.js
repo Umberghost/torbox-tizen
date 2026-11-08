@@ -7,6 +7,7 @@
  *   https://<tu-worker>.workers.dev/proxy?url=<URL> → proxy CORS (la API de TorBox solo admite torbox.app)
  *   https://<tu-worker>.workers.dev/ping   → {ok:true, service:"torbox-worker"}
  *
+ *   /acct/<id> (GET/PUT/DELETE) y /pair/<id> (GET/PUT) -> cuentas cifradas E2E y vinculación de dispositivos (ver README)
  *   https://<tu-worker>.workers.dev/manifest.json, /sw.js, /icon-192.png, /icon-512.png → PWA instalable en el móvil
  *   https://<tu-worker>.workers.dev/sync/<clave> (GET/PUT) → sincroniza "Continuar viendo" (requiere el KV TB_KV)
  *
@@ -77,7 +78,7 @@ function cors(h) {
   h = h || new Headers();
   h.set("Access-Control-Allow-Origin", "*");
   h.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  h.set("Access-Control-Allow-Headers", "Authorization,Content-Type,Accept,Range,trakt-api-key,trakt-api-version");
+  h.set("Access-Control-Allow-Headers", "Authorization,Content-Type,Accept,Range,trakt-api-key,trakt-api-version,X-Faro-Proof");
   h.set("Access-Control-Expose-Headers", "Content-Type,Content-Length,Content-Range");
   h.set("Access-Control-Max-Age", "600");
   return h;
@@ -247,6 +248,100 @@ async function handleSync(request, env, key) {
   return json({ ok: true, entries: keys.map((x) => stored[x]) });
 }
 
+/* ---------------- Cuentas cifradas de extremo a extremo (KV TB_KV) ----------------
+ * El servidor solo guarda blobs opacos (base64) cifrados por el cliente; nunca ve datos ni claves.
+ *   GET    /acct/<id>   -> {ok,v,blob,updated} | 404
+ *   PUT    /acct/<id>   {v,blob[,proofHash en v=0]} + header X-Faro-Proof (v>0) -> {ok,v} | 409 {ok:false,v} | 403 | 413
+ *   DELETE /acct/<id>   header X-Faro-Proof -> {ok:true}
+ *   PUT    /pair/<id>   {blob} -> TTL 600 s     GET /pair/<id> -> {ok,blob} y se borra (un solo uso)
+ * <id> = 32 hex minúsculas. Rutas con CORS abierto y exentas de ACCESS_PASSWORD. */
+const ACCT_MAX_BLOB = 2 * 1024 * 1024;
+const PAIR_MAX_BLOB = 256 * 1024;
+const RL_MAX = 60, RL_WINDOW = 600000;
+const HEX32 = /^[a-f0-9]{32}$/, HEX64 = /^[a-f0-9]{64}$/i;
+const B64 = /^[A-Za-z0-9+\/_-]*={0,2}$/;
+async function sha256Hex(str) {
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(str)));
+  return Array.from(d).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function rateLimited(request, env) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const win = Math.floor(Date.now() / RL_WINDOW);
+  const k = "rl:" + ip + ":" + win;
+  let n = 0;
+  try { n = parseInt(await env.TB_KV.get(k), 10) || 0; } catch (e) { n = 0; }
+  if (n >= RL_MAX) return true;
+  try { await env.TB_KV.put(k, String(n + 1), { expirationTtl: 660 }); } catch (e) { /* ignorar */ }
+  return false;
+}
+async function readJsonBody(request, maxChars) {
+  const text = await request.text();
+  if (text.length > maxChars) return { err: json({ ok: false, detail: "too large" }, 413) };
+  try { const b = JSON.parse(text); if (b && typeof b === "object") return { body: b }; } catch (e) { /* abajo */ }
+  return { err: json({ ok: false, detail: "bad json" }, 400) };
+}
+async function handleAcct(request, env, id) {
+  if (!env.TB_KV) return json({ ok: false, detail: "KV no configurado (binding TB_KV)" }, 501);
+  if (!HEX32.test(id)) return json({ ok: false, detail: "bad id" }, 400);
+  const k = "acct:" + id, m = request.method;
+  if (m === "GET") {
+    if (await rateLimited(request, env)) return json({ ok: false, detail: "rate limited" }, 429);
+    let rec = null;
+    try { rec = await env.TB_KV.get(k, "json"); } catch (e) { rec = null; }
+    if (!rec) return json({ ok: false, detail: "not found" }, 404);
+    return json({ ok: true, v: rec.v, blob: rec.blob, updated: rec.updated });
+  }
+  if (m !== "PUT" && m !== "DELETE") return json({ ok: false, detail: "method not allowed" }, 405);
+  let rec = null;
+  try { rec = await env.TB_KV.get(k, "json"); } catch (e) { rec = null; }
+  const proof = request.headers.get("X-Faro-Proof") || "";
+  const proofOk = async () => !!rec && HEX64.test(proof) && safeEq(await sha256Hex(proof), String(rec.proofHash || ""));
+  if (m === "DELETE") {
+    if (!rec) return json({ ok: false, detail: "not found" }, 404);
+    if (!(await proofOk())) return json({ ok: false, detail: "forbidden" }, 403);
+    await env.TB_KV.delete(k);
+    return json({ ok: true });
+  }
+  const r = await readJsonBody(request, ACCT_MAX_BLOB + 4096);
+  if (r.err) return r.err;
+  const b = r.body;
+  if (typeof b.blob !== "string" || !B64.test(b.blob) || !Number.isInteger(b.v) || b.v < 0) return json({ ok: false, detail: "bad body" }, 400);
+  if (b.blob.length > ACCT_MAX_BLOB) return json({ ok: false, detail: "too large" }, 413);
+  const cur = rec ? rec.v : 0;
+  if (rec) {
+    if (!(await proofOk())) return json({ ok: false, detail: "forbidden" }, 403);
+  } else if (b.v === 0) {
+    if (typeof b.proofHash !== "string" || !HEX64.test(b.proofHash)) return json({ ok: false, detail: "forbidden" }, 403);
+  }
+  if (b.v !== cur) return json({ ok: false, v: cur }, 409);
+  const next = { v: cur + 1, blob: b.blob, updated: Date.now(), proofHash: rec ? rec.proofHash : b.proofHash.toLowerCase() };
+  await env.TB_KV.put(k, JSON.stringify(next));
+  return json({ ok: true, v: next.v });
+}
+async function handlePair(request, env, id) {
+  if (!env.TB_KV) return json({ ok: false, detail: "KV no configurado (binding TB_KV)" }, 501);
+  if (!HEX32.test(id)) return json({ ok: false, detail: "bad id" }, 400);
+  const k = "pair:" + id, m = request.method;
+  if (m === "PUT") {
+    const r = await readJsonBody(request, PAIR_MAX_BLOB + 1024);
+    if (r.err) return r.err;
+    const blob = r.body.blob;
+    if (typeof blob !== "string" || !B64.test(blob)) return json({ ok: false, detail: "bad body" }, 400);
+    if (blob.length > PAIR_MAX_BLOB) return json({ ok: false, detail: "too large" }, 413);
+    await env.TB_KV.put(k, JSON.stringify({ blob }), { expirationTtl: 600 });
+    return json({ ok: true, expires: Date.now() + 600000 });
+  }
+  if (m === "GET") {
+    if (await rateLimited(request, env)) return json({ ok: false, detail: "rate limited" }, 429);
+    let rec = null;
+    try { rec = await env.TB_KV.get(k, "json"); } catch (e) { rec = null; }
+    if (!rec) return json({ ok: false, detail: "not found" }, 404);
+    await env.TB_KV.delete(k);
+    return json({ ok: true, blob: rec.blob });
+  }
+  return json({ ok: false, detail: "method not allowed" }, 405);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -255,7 +350,10 @@ export default {
     // Rutas públicas aunque haya contraseña: ping, login y archivos de la PWA
     const pwa = pwaResponse(url.pathname);
     if (pwa) return pwa;
-    if (url.pathname === "/ping") return json({ ok: true, service: "torbox-worker", version: "1.1", auth: !!env.ACCESS_PASSWORD, sync: !!env.TB_KV });
+    if (url.pathname === "/ping") return json({ ok: true, service: "torbox-worker", version: "1.1", auth: !!env.ACCESS_PASSWORD, sync: !!env.TB_KV, accounts: !!env.TB_KV });
+    // Cuentas cifradas y vinculación: públicas (los datos van cifrados de extremo a extremo)
+    if (url.pathname.startsWith("/acct/")) return handleAcct(request, env, url.pathname.slice(6));
+    if (url.pathname.startsWith("/pair/")) return handlePair(request, env, url.pathname.slice(6));
     if (env.ACCESS_PASSWORD) {
       if (url.pathname === "/login") return handleLogin(request, env, url);
       if (!(await isAuthed(request, env))) {

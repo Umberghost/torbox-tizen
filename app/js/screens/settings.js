@@ -392,7 +392,7 @@ function rows(){
 /* ---------- Pestañas ---------- */
 var TABS = ["integrations", "playback", "search", "home", "live", "appearance", "general", "system"];
 var TAB_BY_ID = {
-  integrations: ["accountStatus", "accountRD", "torboxToken", "rdToken", "debridProvider", "rotateKey", "stremioAddon", "stremioAddonsList",
+  integrations: ["faroAccount", "accountServer", "accountStatus", "accountRD", "torboxToken", "rdToken", "debridProvider", "rotateKey", "stremioAddon", "stremioAddonsList",
     "tmdbKey", "omdbKey", "traktLink", "traktClientId", "traktClientSecret", "ntfyTopic", "ntfyTest", "notifyReady", "syncUrl"],
   playback: ["autoplayNext", "subLang", "audioLang", "subSize", "openSubs", "playerSpeed", "resumeRewind", "skipIntroAuto", "subDelay"],
   search: ["autoPlayBest", "prefQuality", "maxSizeGB", "prefAudio", "hideUnsupported", "forgetFormats", "followAuto", "followList", "followNow"],
@@ -409,8 +409,9 @@ var TAB_BY_GROUP = {
   "settings.group.player": "playback", "settings.group.live": "live", "settings.group.appearance": "appearance",
   "settings.group.system": "system", "settings.group.data": "system"
 };
-var SUBS = ["streaming", "search", "meta", "trakt", "notify", "apps"];
+var SUBS = ["faro", "streaming", "search", "meta", "trakt", "notify", "apps"];
 var SUB_BY_ID = {
+  faroAccount: "faro", accountServer: "faro",
   accountStatus: "streaming", accountRD: "streaming", torboxToken: "streaming", rdToken: "streaming", debridProvider: "streaming", rotateKey: "streaming",
   stremioAddon: "search", stremioAddonsList: "search", tmdbKey: "meta", omdbKey: "meta",
   traktLink: "trakt", traktClientId: "trakt", traktClientSecret: "trakt",
