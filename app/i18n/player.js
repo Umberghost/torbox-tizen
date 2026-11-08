@@ -1064,3 +1064,12 @@ window.App.i18n.add("gl", {"player.ctl.fs": "Pantalla completa", "player.ctl.fsE
 window.App.i18n.add("eu", {"player.ctl.fs": "Pantaila osoa", "player.ctl.fsExit": "Irten pantaila osotik", "player.muted": "Mutu", "player.unmuted": "Soinua aktibatuta"});
 window.App.i18n.add("pt", {"player.ctl.fs": "Ecrã inteiro", "player.ctl.fsExit": "Sair do ecrã inteiro", "player.muted": "Silenciado", "player.unmuted": "Som ativado"});
 window.App.i18n.add("fr", {"player.ctl.fs": "Plein écran", "player.ctl.fsExit": "Quitter le plein écran", "player.muted": "Son coupé", "player.unmuted": "Son activé"});
+
+/* Menú de audio sin pistas detectadas */
+window.App.i18n.add("en", {"player.audioCurrent": "Current track", "player.audioWhyPc": "The browser can't see the audio tracks inside this file. To choose one, open it in VLC (copy the link) or use the TV app."});
+window.App.i18n.add("es", {"player.audioCurrent": "Pista actual", "player.audioWhyPc": "El navegador no puede ver las pistas de audio de este archivo. Para elegir otra, ábrelo en VLC (copia el enlace) o usa la app de la tele."});
+window.App.i18n.add("ca", {"player.audioCurrent": "Pista actual", "player.audioWhyPc": "El navegador no pot veure les pistes d'àudio d'aquest fitxer. Per triar-ne una altra, obre'l amb VLC (copia l'enllaç) o fes servir l'app de la tele."});
+window.App.i18n.add("gl", {"player.audioCurrent": "Pista actual", "player.audioWhyPc": "O navegador non pode ver as pistas de audio deste ficheiro. Para escoller outra, ábreo en VLC (copia a ligazón) ou usa a app da tele."});
+window.App.i18n.add("eu", {"player.audioCurrent": "Uneko pista", "player.audioWhyPc": "Nabigatzaileak ezin ditu fitxategi honen audio-pistak ikusi. Beste bat aukeratzeko, ireki VLCn (kopiatu esteka) edo erabili telebistako aplikazioa."});
+window.App.i18n.add("pt", {"player.audioCurrent": "Faixa atual", "player.audioWhyPc": "O navegador não consegue ver as faixas de áudio deste ficheiro. Para escolher outra, abra-o no VLC (copie a ligação) ou use a app da TV."});
+window.App.i18n.add("fr", {"player.audioCurrent": "Piste actuelle", "player.audioWhyPc": "Le navigateur ne voit pas les pistes audio de ce fichier. Pour en choisir une autre, ouvrez-le dans VLC (copiez le lien) ou utilisez l'app TV."});

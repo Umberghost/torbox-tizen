@@ -929,11 +929,20 @@ function subMenu(){
 function audioMenu(){
   if(!P.engine) return;
   var tr = P.engine.tracks();
-  if(tr.audio.length < 2){ App.hint(tr.audio.length ? App.t("player.audioOne") : App.t("player.audioNoSwitch")); return; }
-  App.ui.menu(App.t("player.audioTitle"), tr.audio.map(function(a){
-    return { label: a.label, value: a.index, selected: !!a.current };
-  })).then(function(v){
-    if(v === null || !P.active) return;
+  /* Siempre abre el menú: el aviso de la barra inferior queda oculto tras el reproductor y parecía que no hacía nada */
+  var items = tr.audio.map(function(a){ return { label: a.label, value: a.index, selected: !!a.current }; });
+  var pc = !App.isTizen() && P.opts && P.opts.url && !P.opts.live;
+  if(!items.length) items.push({ label: App.t("player.audioCurrent"), value: "none", selected: true });
+  if(tr.audio.length < 2) items.push({ label: App.t(tr.audio.length ? "player.audioOne" : (pc ? "player.audioWhyPc" : "player.audioNoSwitch")), value: "none" });
+  if(tr.audio.length < 2 && pc) items.push({ label: App.t("player.copyLink"), value: "copy" });
+  App.ui.menu(App.t("player.audioTitle"), items).then(function(v){
+    if(v === null || !P.active || v === "none") return;
+    if(v === "copy"){
+      var url = P.opts.url, done = function(){ App.ui.toast(App.t("player.linkCopied"), 9000); };
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function(){ window.prompt("URL", url); });
+      else window.prompt("URL", url);
+      return;
+    }
     if(P.engine.selectAudio(Number(v))) App.hint(App.t("player.audioChanged"));
     else App.hint(App.t("player.audioFail"));
   });
