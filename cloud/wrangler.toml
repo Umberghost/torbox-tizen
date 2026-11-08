@@ -1,0 +1,12 @@
+# Configuración de despliegue del Worker "faro" (cliente Faro para TorBox / Real-Debrid).
+# Desplegar:   npx wrangler deploy            (desde la carpeta cloud/)
+# Contraseña:  npx wrangler secret put ACCESS_PASSWORD   (opcional; protege el acceso)
+name = "faro"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Sincronización de "Continuar viendo" entre dispositivos (GET/PUT /sync/<clave>)
+[[kv_namespaces]]
+binding = "TB_KV"
+id = "27b1b283fa294910abf284431fe15569"

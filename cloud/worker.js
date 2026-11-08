@@ -28,14 +28,27 @@ function cmpVer(a, b) {
   for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0);
   return 0;
 }
+function pickLatest(names) {
+  return (names || []).filter((n) => /^v?\d+\.\d+\.\d+$/.test(n)).map((n) => (n.charAt(0) === "v" ? n : "v" + n)).sort(cmpVer).pop();
+}
+/* 1º API de GitHub (puede estar limitada desde las IP compartidas de Cloudflare);
+ * 2º lista de versiones que conoce jsDelivr; 3º la última conocida; 4º master. */
 async function latestVersion() {
   if (cachedVer && Date.now() - cachedAt < 300000) return cachedVer;
+  let v = null;
   try {
-    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/tags?per_page=30`, { headers: { "User-Agent": "TorBox-TV-Worker" } });
-    const tags = await r.json();
-    const v = tags.map((t) => t.name).filter((n) => /^v\d+\.\d+\.\d+$/.test(n)).sort(cmpVer).pop();
-    if (v) { cachedVer = v; cachedAt = Date.now(); }
-  } catch (e) { /* se usa la última conocida o master */ }
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/tags?per_page=50`, {
+      headers: { "User-Agent": "Faro-Worker", "Accept": "application/vnd.github+json" }, cf: { cacheTtl: 120 }
+    });
+    if (r.ok) { const tags = await r.json(); if (Array.isArray(tags)) v = pickLatest(tags.map((t) => t.name)); }
+  } catch (e) { /* siguiente método */ }
+  if (!v) {
+    try {
+      const r = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${GH_REPO}`, { cf: { cacheTtl: 120 } });
+      if (r.ok) { const j = await r.json(); v = pickLatest((j.versions || []).map((x) => x.version || x)); }
+    } catch (e) { /* siguiente método */ }
+  }
+  if (v) { cachedVer = v; cachedAt = Date.now(); }
   return cachedVer || "master";
 }
 
