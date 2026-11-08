@@ -99,6 +99,9 @@ async function serveApp(path) {
   if (ext === "html") {
     let html = await res.text();
     html = html.replace(/<\/head>/i, PWA_HEAD + "</head>");
+    // Versión en las URLs de los scripts/estilos propios: el navegador nunca mezcla archivos de versiones distintas
+    html = html.replace(/(<(?:script|link)\b[^>]*\s(?:src|href)=")(?!https?:|\/\/|data:|\$)([^"?#]+\.(?:js|css))"/gi,
+      (m, pre, url) => pre + url + "?v=" + encodeURIComponent(ver) + '"');
     return new Response(html, { status: 200, headers: { "Content-Type": TYPES.html, "Cache-Control": "no-cache" } });
   }
   const h = new Headers();
