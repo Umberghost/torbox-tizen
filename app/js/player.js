@@ -651,6 +651,26 @@ function start(o, startAt, engineName, urlIdx){
   P.sub = { kind: "off", index: -1 }; P.extCues = [];
   fetchOnlineSubs(o);
 
+  /* Navegador (sin AVPlay): versión HLS convertida por TorBox/Real-Debrid (transcode.js). Si no hay,
+   * se sigue con el archivo original; el original queda como alternativa si el HLS falla. */
+  if(engineName === "video" && !o._tcDone && App.transcode && App.transcode.wanted(o)){
+    o._tcDone = true;
+    App.ui.toast(App.t("tc.preparing"), 6000);
+    App.transcode.prepare(o).then(function(sess){
+      if(P.engine !== engine || P.opts !== o) return;
+      if(sess){
+        o._origUrl = o._origUrl || o.url;
+        o.tc = sess;
+        o.urls = [o._origUrl].concat((o.urls || []).filter(function(u){ return u !== o._origUrl; }));
+        o.url = sess.url;
+        App.ui.toast(App.t("tc.on", { svc: sess.label }), 4000);
+      }
+      start(o, startAt, engineName, 0);
+    });
+    return;
+  }
+  if(engineName === "video" && o.tc) els.plEngine.textContent = "HTML5 · " + o.tc.label + " HLS";
+
   var urls = urlList(o);
   engine.open(urls[urlIdx] || o.url, startAt || 0).then(function(){
     if(P.engine !== engine) return;
@@ -697,6 +717,14 @@ function fileNameOf(o){
 
 function onEngineError(msg, code, wasPlaying){
   console.warn("[player] error", code, msg);
+  var o0 = P.opts;
+  if(o0 && P.active && P.engineName === "video" && !o0.tc && !o0._tcForce && App.transcode && App.transcode.possible(o0)){
+    console.info("[player] el original no se reproduce: pruebo la versión convertida");
+    var pos0 = wasPlaying ? curTime() : (P._startAt || 0);
+    o0._tcForce = true; o0._tcDone = false;
+    start(o0, pos0, "video");
+    return;
+  }
   App.bus.emit("player:error", { key: P.opts ? P.opts.key : null, message: msg });
   var learned = false;
   if(P.opts && !P.opts.live && isFormatError(code, msg) && App.caps && App.caps.learnFail){
@@ -913,20 +941,54 @@ function subMenu(){
   tr.text.forEach(function(t){
     items.push({ label: App.t("player.subsEmbedded", { label: t.label }), value: "emb:" + t.index, selected: P.sub.kind === "emb" && P.sub.index === t.index });
   });
+  var tc = P.opts && P.opts.tc;
+  if(tc && tc.select){
+    if(tc.sub !== null) items[0].selected = false;
+    tc.subs.forEach(function(s){
+      items.push({ label: App.t("player.subsEmbedded", { label: s.label }), value: "tc:" + s.index, selected: tc.sub === s.index });
+    });
+  }
   ((P.opts && P.opts.subtitles) || []).forEach(function(s, i){
     items.push({ label: App.t("player.subsFile", { label: s.label || langName(s.lang) }), value: "ext:" + i, selected: P.sub.kind === "ext" && P.sub.index === i });
   });
   if(items.length === 1) items.push({ label: P.onlineSubsPending ? App.t("player.subsLoading") : App.t("player.subsNone"), value: "off" });
   App.ui.menu(App.t("player.subsTitle"), items).then(function(v){
     if(v === null || !P.active) return;
+    if(tc && tc.select){
+      if(v === "off" && tc.sub !== null){ tcRestart(tc.audio, null); return selectSub("off", -1, true); }
+      if(String(v).indexOf("tc:") === 0){ selectSub("off", -1, true); return tcRestart(tc.audio, Number(String(v).slice(3))); }
+      if(String(v).indexOf("ext:") === 0 && tc.sub !== null) tcRestart(tc.audio, null);
+    }
     if(v === "off") return selectSub("off");
     var parts = String(v).split(":");
     selectSub(parts[0], Number(parts[1]));
   });
 }
 
+function tcRestart(audio, sub){
+  var o = P.opts, tc = o && o.tc;
+  if(!tc || !tc.select) return;
+  var pos = curTime();
+  App.ui.toast(App.t("tc.switching"), 6000);
+  tc.select(audio, sub).then(function(url){
+    if(P.opts !== o || !P.active) return;
+    o.url = url;
+    start(o, pos, "video");
+  }).catch(function(e){ App.hint(App.t("player.audioFail")); console.warn("[transcode] cambio de pista:", e && e.message); });
+}
+
 function audioMenu(){
   if(!P.engine) return;
+  var tc = P.opts && P.opts.tc;
+  if(tc && tc.select && tc.audios.length > 1){
+    App.ui.menu(App.t("player.audioTitle"), tc.audios.map(function(a){
+      return { label: a.label, value: a.index, selected: a.index === tc.audio };
+    })).then(function(v){
+      if(v === null || !P.active || Number(v) === tc.audio) return;
+      tcRestart(Number(v), tc.sub);
+    });
+    return;
+  }
   var tr = P.engine.tracks();
   if(tr.audio.length < 2){ App.hint(tr.audio.length ? App.t("player.audioOne") : App.t("player.audioNoSwitch")); return; }
   App.ui.menu(App.t("player.audioTitle"), tr.audio.map(function(a){

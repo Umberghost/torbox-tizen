@@ -521,7 +521,8 @@ function buildOpts(ctx, x){
     poster: ctx.poster,
     meta: { type: ctx.type, imdbId: ctx.id, season: ctx.type === "series" ? ctx.season : undefined,
             episode: ctx.type === "series" ? ctx.episode : undefined, title: ctx.name,
-            filename: x.filename || undefined, source: "stremio" }
+            filename: x.filename || undefined, source: "stremio",
+            hash: x.hash || undefined, svc: x.svc || undefined, fileIdx: x.fileIdx }
   };
   if(ctx.type === "series"){
     opts.next = function(){ return nextOpts(ctx); };

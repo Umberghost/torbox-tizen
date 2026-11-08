@@ -66,7 +66,8 @@ var STATE = {
   compressing: "downloading", magnet_conversion: "metaDL", waiting_files_selection: "metaDL",
   magnet_error: "error", error: "error", virus: "error", dead: "stalled (no seeds)"
 };
-var infoCache = {};   // id → info (los torrents terminados no cambian)
+var infoCache = {};
+var linkIds = {};     // enlace de descarga → id de /unrestrict/link   // id → info (los torrents terminados no cambian)
 
 function toItem(t, info){
   var done = t.status === "downloaded";
@@ -143,6 +144,7 @@ var RD = {
       return rd("/unrestrict/link", { method: "POST", form: { link: restricted } });
     }).then(function(u){
       if(!u || !u.download) throw new Error(App.t("rd.noLink"));
+      if(u.id) linkIds[u.download] = u.id;   // para /streaming/transcode (transcode.js)
       return u.download;
     });
   },
@@ -207,7 +209,18 @@ tb.checkCached = function(){ return hasTB() ? O.checkCached.apply(tb, arguments)
 tb.addMagnet = function(){ return addToRD() ? RD.addMagnet.apply(RD, arguments) : O.addMagnet.apply(tb, arguments); };
 /* addMagnetTo("RD"|"TB"|"", magnet, name): manda a la cuenta que indica la fuente del add-on ("[RD⬇️]"→RD);
  * si esa cuenta no está configurada (o no se sabe), a la cuenta destino de siempre. */
-tb.rdUser = function(){ return rd("/user"); };   // comprobación de la clave (checks.js)
+tb.rdUser = function(){ return rd("/user"); };
+/* Versión HLS convertida por Real-Debrid de un enlace ya desrestringido → URL .m3u8 */
+tb.rdTranscode = function(url){
+  var id = linkIds[url];
+  if(!id) return Promise.reject(new Error("sin id de enlace"));
+  return rd("/streaming/transcode/" + encodeURIComponent(id)).then(function(j){
+    var a = (j && j.apple) || {}, keys = Object.keys(a);
+    var k = keys.indexOf("full") >= 0 ? "full" : keys[0];
+    if(!k || !a[k]) throw new Error("sin HLS");
+    return a[k];
+  });
+};   // comprobación de la clave (checks.js)
 tb.addMagnetTo = function(svc, magnet, name){
   if(svc === "RD" && hasRDt()) return RD.addMagnet(magnet, name);
   if(svc === "TB" && hasTB()) return O.addMagnet.call(tb, magnet, name);
