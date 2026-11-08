@@ -1002,6 +1002,15 @@ function seekBy(delta){
   }, 700);
 }
 
+/* ◄► mantenido: el salto crece cuanto más tiempo se mantiene (10 s → 30 s → 1 min → 2 min por repetición) */
+function holdStep(){
+  var now = Date.now();
+  if(!P.holdT0 || now - (P.holdLast || 0) > 350) P.holdT0 = now;   // pulsación nueva
+  P.holdLast = now;
+  var held = now - P.holdT0;
+  return held < 1500 ? 10 : held < 4000 ? 30 : held < 8000 ? 60 : 120;
+}
+
 function togglePause(){
   if(!P.engine || !P.started) return;
   if(P.paused){ P.engine.play(); setPaused(false); }
@@ -1523,7 +1532,7 @@ function onKey(k){
       togglePause(); return true;
     case K.LEFT: case K.RIGHT:
       if(vis && P.barActive){ if(barKey(k)) return true; }
-      seekBy(k === K.LEFT ? -10 : 10); return true;
+      seekBy((k === K.LEFT ? -1 : 1) * holdStep()); return true;
     case K.UP: if(vis) hideOsd(); else showOsd(); return true;
     case K.DOWN: enterBar(); return true;
     case K.PLAYPAUSE: togglePause(); return true;
