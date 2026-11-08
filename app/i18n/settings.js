@@ -1750,3 +1750,12 @@ window.App.i18n.add("gl", {"settings.sub.faro": "Conta Faro e sincronización"})
 window.App.i18n.add("eu", {"settings.sub.faro": "Faro kontua eta sinkronizazioa"});
 window.App.i18n.add("pt", {"settings.sub.faro": "Conta Faro e sincronização"});
 window.App.i18n.add("fr", {"settings.sub.faro": "Compte Faro et synchronisation"});
+
+/* Trakt: Client Secret opcional (apps PKCE sin secreto) */
+window.App.i18n.add("en", {"settings.traktClientSecret": "Trakt Client Secret (optional)"});
+window.App.i18n.add("es", {"settings.traktClientSecret": "Client Secret de Trakt (opcional)"});
+window.App.i18n.add("ca", {"settings.traktClientSecret": "Client Secret de Trakt (opcional)"});
+window.App.i18n.add("gl", {"settings.traktClientSecret": "Client Secret de Trakt (opcional)"});
+window.App.i18n.add("eu", {"settings.traktClientSecret": "Trakt Client Secret (aukerakoa)"});
+window.App.i18n.add("pt", {"settings.traktClientSecret": "Client Secret do Trakt (opcional)"});
+window.App.i18n.add("fr", {"settings.traktClientSecret": "Client Secret Trakt (facultatif)"});

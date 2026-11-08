@@ -18,7 +18,10 @@ function clientId(){ return String(S("traktClientId") || "").trim(); }
 function clientSecret(){ return String(S("traktClientSecret") || "").trim(); }
 function auth(){ var a = S("traktAuth"); return a && a.access_token ? a : null; }
 
-function isConfigured(){ return !!(clientId() && clientSecret()); }
+/* Desde oct. 2026 Trakt ya no emite Client Secret en las apps nuevas (PKCE): basta el Client ID y el
+ * secreto solo se envía si el usuario tiene uno (apps antiguas). */
+function isConfigured(){ return !!clientId(); }
+function withSecret(body){ var sec = clientSecret(); if(sec) body.client_secret = sec; return body; }
 function isLinked(){ return !!(isConfigured() && auth()); }
 
 /* ---------------- HTTP ---------------- */
@@ -60,10 +63,10 @@ function ensureToken(){
   if(a.expires_at && a.expires_at - Date.now() > 24 * 3600 * 1000) return Promise.resolve(a);
   if(refreshing) return refreshing;
   var tryRefresh = function(i){
-    return rawCall("/oauth/token", { method: "POST", body: {
-      refresh_token: a.refresh_token, client_id: clientId(), client_secret: clientSecret(),
+    return rawCall("/oauth/token", { method: "POST", body: withSecret({
+      refresh_token: a.refresh_token, client_id: clientId(),
       redirect_uri: REDIRECTS[i], grant_type: "refresh_token"
-    }}).catch(function(e){
+    })}).catch(function(e){
       if(i + 1 < REDIRECTS.length && (e.status === 400 || e.status === 401)) return tryRefresh(i + 1);
       throw e;
     });
@@ -125,9 +128,9 @@ function link(){
       function poll(){
         if(done) return;
         if(Date.now() > deadline){ finish(false, App.t("trakt.linkExpired")); return; }
-        rawCall("/oauth/device/token", { method: "POST", body: {
-          code: dc.device_code, client_id: clientId(), client_secret: clientSecret()
-        }}).then(function(j){
+        rawCall("/oauth/device/token", { method: "POST", body: withSecret({
+          code: dc.device_code, client_id: clientId()
+        })}).then(function(j){
           if(done) return;
           saveToken(j);
           console.info("[trakt] vinculado");
@@ -153,9 +156,9 @@ function link(){
 
 function unlink(){
   var a = auth();
-  var p = a ? rawCall("/oauth/revoke", { method: "POST", body: {
-    token: a.access_token, client_id: clientId(), client_secret: clientSecret()
-  }}).catch(function(){}) : Promise.resolve();
+  var p = a ? rawCall("/oauth/revoke", { method: "POST", body: withSecret({
+    token: a.access_token, client_id: clientId()
+  })}).catch(function(){}) : Promise.resolve();
   return p.then(function(){
     App.settings.set("traktAuth", null);
     wlCache = null;
