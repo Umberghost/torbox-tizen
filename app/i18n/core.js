@@ -530,3 +530,10 @@ window.App.i18n.add("gl", {"main.pcKeys": "Teclado: R G Y B = botóns de cor · 
 window.App.i18n.add("eu", {"main.pcKeys": "Teklatua: R G Y B = kolore-botoiak · I = info · M edo eskuineko klika = aukerak · Esc = atzera"});
 window.App.i18n.add("pt", {"main.pcKeys": "Teclado: R G Y B = botões de cor · I = info · M ou clique direito = opções · Esc = voltar"});
 window.App.i18n.add("fr", {"main.pcKeys": "Clavier : R G Y B = touches de couleur (rouge, vert, jaune, bleu) · I = info · M ou clic droit = options · Échap = retour"});
+window.App.i18n.add("en", {"shell.deskHint": "Esc: back · M: menu · R G Y B: colour buttons", "shell.rightClick": "Right-click", "shell.backNav": "Back"});
+window.App.i18n.add("es", {"shell.deskHint": "Esc: atrás · M: menú · R G Y B: botones de color", "shell.rightClick": "Clic derecho", "shell.backNav": "Atrás"});
+window.App.i18n.add("ca", {"shell.deskHint": "Esc: enrere · M: menú · R G Y B: botons de color", "shell.rightClick": "Clic dret", "shell.backNav": "Enrere"});
+window.App.i18n.add("gl", {"shell.deskHint": "Esc: atrás · M: menú · R G Y B: botóns de cor", "shell.rightClick": "Clic dereito", "shell.backNav": "Atrás"});
+window.App.i18n.add("eu", {"shell.deskHint": "Esc: atzera · M: menua · R G Y B: kolore-botoiak", "shell.rightClick": "Eskuineko klika", "shell.backNav": "Atzera"});
+window.App.i18n.add("pt", {"shell.deskHint": "Esc: voltar · M: menu · R G Y B: botões de cor", "shell.rightClick": "Clique direito", "shell.backNav": "Voltar"});
+window.App.i18n.add("fr", {"shell.deskHint": "Échap : retour · M : menu · R G Y B : boutons de couleur", "shell.rightClick": "Clic droit", "shell.backNav": "Retour"});

@@ -995,6 +995,74 @@ function heroHtml(ch, now){
   return h + '</div>';
 }
 
+/* ---- PC / móvil (no TV): clic/toque en la guía; en móvil la guía es una lista de canales ---- */
+function listMode(){ return !App.isTizen() && document.body.classList.contains("mobile"); }
+
+function listHtml(now){
+  var G = S.guide, h = "";
+  if(!G.rows.length) return '<div class="lg-empty muted">' + App.esc(S.favOnly ? t("live.v2.noFavs") : t("live.guideEmpty")) + '</div>';
+  G.rows.forEach(function(row, i){
+    var ch = row.ch, e = epgFor(ch), cur = e && e.now, nx = e && e.next;
+    var fav = S.favs.indexOf(ch.id) >= 0;
+    h += '<div class="lgl-item' + (ch.id === S.playingId ? ' playing' : '') + (i === G.row ? ' cur' : '') + '" data-r="' + i + '">' +
+      '<div class="lgl-logo">' + logoHtml(ch, "lgl-img") + '</div><div class="lgl-txt">' +
+      '<div class="lgl-name"><b class="num">' + ch.num + '</b><span>' + App.esc(ch.name) + '</span>' + (fav ? '<i class="lg-star">★</i>' : '') + '</div>';
+    if(cur){
+      var p = Math.max(0, Math.min(1, (now - cur.hi) / Math.max(1, cur.hf - cur.hi)));
+      h += '<div class="lgl-now">' + App.esc(cur.t) + ' <span class="muted num">' + hhmm(cur.hi) + '–' + hhmm(cur.hf) + '</span></div>' +
+           '<div class="lg-prog"><i style="width:' + (p * 100).toFixed(0) + '%"></i></div>';
+      if(nx) h += '<div class="lgl-next">' + App.esc(t("live.v2.upNext")) + ' <b>' + App.esc(nx.t) + '</b> <span class="num">· ' + hhmm(nx.hi) + '</span></div>';
+    } else {
+      h += '<div class="lgl-now muted">' + App.esc(S.epg || !S.epgLoading ? t("live.v2.noGuide") : t("live.epg.loading")) + '</div>';
+    }
+    h += '</div></div>';
+  });
+  return h;
+}
+
+/* Delegación de clic/toque (solo fuera de la TV). Un toque/clic = enfocar + OK. */
+function guideClick(ev){
+  var G = S.guide; if(!G) return;
+  var n = ev.target.closest ? ev.target : null; if(!n) return;
+  var bi = n.closest("[data-bi]");
+  if(bi){ G.zone = "bar"; G.bi = Number(bi.getAttribute("data-bi")); G.blurred = false; guideBarSelect(); return; }
+  if(n.closest(".lg-preview")){ var rc = G.rows[G.row]; if(rc) playChannel(rc.ch); return; }
+  var item = n.closest("[data-r]") || n.closest(".lg-row");
+  if(!item) return;
+  var ri = Number(item.getAttribute("data-r"));
+  if(isNaN(ri) || !G.rows[ri]) return;
+  G.zone = "grid"; G.blurred = false; G.row = ri;
+  var evn = n.closest("[data-e]");
+  if(evn && !n.closest(".lg-ch") && G.rows[ri].evs[Number(evn.getAttribute("data-e"))]){
+    G.ev = Number(evn.getAttribute("data-e")); G.cursor = Math.max(G.rows[ri].evs[G.ev].hi, G.ws);
+    guideSelect();
+  } else {
+    playChannel(G.rows[ri].ch);
+  }
+}
+/* Pulsar/mantener sobre una fila deja seleccionado ese canal sin repintar (el menú contextual lo usa) */
+function guidePointDown(ev){
+  var G = S.guide; if(!G || !ev.target.closest) return;
+  var item = ev.target.closest("[data-r]");
+  if(!item) return;
+  var ri = Number(item.getAttribute("data-r"));
+  if(G.rows[ri]){ G.zone = "grid"; G.row = ri; var e = ev.target.closest("[data-e]"); if(e) G.ev = Number(e.getAttribute("data-e")); }
+}
+function guideWheel(ev){
+  var G = S.guide;
+  if(!G || listMode()) return;
+  var d = ev.deltaY > 0 ? 1 : ev.deltaY < 0 ? -1 : 0;
+  if(!d) return;
+  ev.preventDefault();
+  var nt = Math.max(0, Math.min(Math.max(0, G.rows.length - GUIDE_ROWS), G.top + d));
+  if(nt === G.top) return;
+  G.top = nt;
+  if(G.row < G.top) G.row = G.top;
+  if(G.row >= G.top + GUIDE_ROWS) G.row = G.top + GUIDE_ROWS - 1;
+  var r = G.rows[G.row]; if(r) G.ev = pickEv(r.evs, G.cursor);
+  renderGuide();
+}
+
 function renderGuide(){
   var G = S.guide;
   if(!G || !S.el) return;
@@ -1013,6 +1081,11 @@ function renderGuide(){
     el.className = "live-guide";
     el.innerHTML = '<div class="lg-hero"></div><div class="lg-bar"></div><div class="lg-main"></div>';
     S.el.appendChild(el);
+    if(!App.isTizen()){
+      el.addEventListener("click", guideClick);
+      el.addEventListener("pointerdown", guidePointDown);
+      el.addEventListener("wheel", guideWheel, { passive: false });
+    }
     G.heroKey = "";
   }
   var now = Date.now() / 1000, ws = G.ws, we = ws + GUIDE_SPAN;
@@ -1029,9 +1102,18 @@ function renderGuide(){
   var h = '<span class="lg-bar-label">' + App.esc(t("live.v2.view")) + '</span>';
   guideBarItems().forEach(function(it, i){
     if(i === 2) h += '<span class="lg-bar-sep"></span><span class="lg-bar-label">' + App.esc(t("live.v2.apps")) + '</span>';
-    h += '<span class="lg-chip' + (it.on ? ' on' : '') + (G.zone === "bar" && G.bi === i && !G.blurred ? ' fcs' : '') + '">' + App.esc(it.label) + '</span>';
+    h += '<span data-bi="' + i + '" class="lg-chip' + (it.on ? ' on' : '') + (G.zone === "bar" && G.bi === i && !G.blurred ? ' fcs' : '') + '">' + App.esc(it.label) + '</span>';
   });
   el.querySelector(".lg-bar").innerHTML = h;
+
+  if(listMode()){   // móvil: lista de canales con nativo scroll
+    var lm = el.querySelector(".lg-main"), keep = lm.scrollTop;
+    el.classList.add("lg-list");
+    lm.innerHTML = listHtml(now);
+    lm.scrollTop = keep;
+    return;
+  }
+  el.classList.remove("lg-list");
 
   /* --- rejilla --- */
   h = '<div class="lg-times"><div class="lg-corner">' + App.esc(dayLabel(ws)) + '</div><div class="lg-axis">';
@@ -1049,10 +1131,10 @@ function renderGuide(){
   for(var i = G.top; i < Math.min(G.rows.length, G.top + GUIDE_ROWS); i++){
     var row = G.rows[i], isCur = i === G.row;
     var fav = S.favs.indexOf(row.ch.id) >= 0;
-    h += '<div class="lg-row' + (isCur ? ' cur' : '') + '"><div class="lg-ch"><b class="num">' + row.ch.num + '</b>' +
+    h += '<div class="lg-row' + (isCur ? ' cur' : '') + '" data-r="' + i + '"><div class="lg-ch"><b class="num">' + row.ch.num + '</b>' +
          '<span>' + App.esc(row.ch.name) + '</span>' + (fav ? '<i class="lg-star">★</i>' : '') + '</div><div class="lg-line">';
     if(!row.evs.length){
-      h += '<div class="lg-ev lg-none' + (isCur && gridFocus ? ' sel' : '') + '" style="left:0;width:100%"><span>' +
+      h += '<div data-e="0" class="lg-ev lg-none' + (isCur && gridFocus ? ' sel' : '') + '" style="left:0;width:100%"><span>' +
            App.esc(S.epg || !S.epgLoading ? t("live.v2.noGuide") : t("live.epg.loading")) + '</span></div>';
     }
     for(var j = 0; j < row.evs.length; j++){
@@ -1062,7 +1144,7 @@ function renderGuide(){
       var onAir = e.hi <= now && e.hf > now, hasRem = !!rem[remKey(row.ch.id, e.hi)];
       var cls = 'lg-ev' + (onAir ? ' on' : '') + (isCur && gridFocus && j === G.ev ? ' sel' : '') +
                 (hasRem ? ' rem' : '') + (e.hi < ws ? ' cl' : '') + (e.hf > we ? ' cr' : '');
-      h += '<div class="' + cls + '" style="left:' + ((a - ws) / GUIDE_SPAN * 100) + '%;width:' + ((b - a) / GUIDE_SPAN * 100) + '%">' +
+      h += '<div data-e="' + j + '" class="' + cls + '" style="left:' + ((a - ws) / GUIDE_SPAN * 100) + '%;width:' + ((b - a) / GUIDE_SPAN * 100) + '%">' +
            '<span class="lg-ev-t">' + App.esc(e.t) + '</span>' +
            '<span class="lg-ev-s num">' + hhmm(e.hi) + (onAir ? ' · ' + App.esc(t("live.v2.onAir")) : '') + '</span>' +
            (hasRem ? '<em class="lg-rem">' + App.esc(t("live.v2.reminder")) + '</em>' : '') + '</div>';

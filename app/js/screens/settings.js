@@ -571,7 +571,7 @@ function edit(row){
 
 function onSelect(i, el){
   var tb = el.getAttribute("data-tab");
-  if(tb){ setTab(tb); if(s.grid && s.grid.items.length > TABS.length) s.grid.focus(TABS.length); return; }
+  if(tb){ setTab(tb); if(!App.isTizen()) return; if(s.grid && s.grid.items.length > TABS.length) s.grid.focus(TABS.length); return; }
   var row = rowAt(el); if(row) edit(row);
 }
 

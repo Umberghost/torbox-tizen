@@ -237,7 +237,8 @@ function buildShell(){
   hintbarEl.appendChild(hintEl);
   var pill = document.createElement("div");
   pill.className = "hint-pill";
-  pill.innerHTML = '<b>' + App.esc(App.t("shell.holdOk")) + '</b><span>' + App.esc(App.t("shell.moreOptions")) + '</span>';
+  /* PC/móvil: en vez de "Mantén OK" (mando de TV) se indica el clic derecho */
+  pill.innerHTML = '<b>' + App.esc(App.t(App.isTizen() ? "shell.holdOk" : "shell.rightClick")) + '</b><span>' + App.esc(App.t("shell.moreOptions")) + '</span>';
   hintbarEl.appendChild(pill);
   app.appendChild(hintbarEl);
   updateStatus();
@@ -248,8 +249,19 @@ function buildShell(){
 (function(){
   var orig = App.setHintDefault;
   App.setHintDefault = function(msg){
+    /* Fuera de la TV los consejos de mando (◄ ▲▼ OK) no sirven: consejo único de ratón/teclado */
+    if(!App.isTizen() && msg) return orig(App.t("shell.deskHint"));
     orig(String(msg || "").replace(/\s*[·•]\s*(Hold OK|Mantén OK)[^·•]*$/i, ""));
   };
+  /* Con la barra de pista oculta (móvil/táctil) los avisos se mostrarían en ningún sitio: pasan a toast */
+  if(!App.isTizen()){
+    var origHint = App.hint;
+    App.hint = function(msg, ms){
+      var hb = document.getElementById("hintbar");
+      if(hb && window.getComputedStyle(hb).display === "none" && msg && App.ui && App.ui.toast) App.ui.toast(msg, ms || 3000);
+      else origHint(msg, ms);
+    };
+  }
 })();
 
 /* ================= Menú contextual (A1) =================
@@ -512,10 +524,21 @@ function isPhoneDevice(){
   var sw = Math.min(window.screen ? screen.width : 9999, window.screen ? screen.height : 9999);
   return sw < 700 || /Android.*Mobile|iPhone|iPod|Mobile Safari/i.test(navigator.userAgent);
 }
+/* Clases de body para el diseño adaptable (fuera de la TV nunca cambian el aspecto en Tizen):
+ *   mobile   → ventana estrecha (<1000 px) o vertical
+ *   portrait → vertical
+ *   touch    → pantalla táctil como puntero principal (móvil/tablet)
+ *   desk     → navegador de escritorio con ratón y ventana ancha (no TV, no mobile) */
 function applyMobile(){
-  var narrow = window.innerWidth < 1000 || window.innerHeight > window.innerWidth;
-  document.body.classList.toggle("mobile", narrow);
-  document.body.classList.toggle("portrait", window.innerHeight > window.innerWidth);
+  var tv = App.isTizen();
+  var narrow = !tv && (window.innerWidth < 1000 || window.innerHeight > window.innerWidth);
+  var coarse = false;
+  try{ coarse = window.matchMedia("(pointer: coarse)").matches; }catch(e){}
+  var cl = document.body.classList;
+  cl.toggle("mobile", narrow);
+  cl.toggle("portrait", !tv && window.innerHeight > window.innerWidth);
+  cl.toggle("touch", !tv && coarse);
+  cl.toggle("desk", !tv && !narrow && !coarse);
 }
 function initMobile(){
   if(isPhoneDevice()){
@@ -526,6 +549,114 @@ function initMobile(){
   applyMobile();
   window.addEventListener("resize", App.debounce(applyMobile, 150));
   window.addEventListener("orientationchange", function(){ setTimeout(applyMobile, 200); });
+}
+
+/* ================= Entrada PC / táctil (solo fuera de la TV) =================
+ * - Pulsación larga (550 ms) sobre un .focusable = enfocar + menú de opciones (como mantener OK).
+ * - Atrás del navegador/Android = App.back() (una entrada "guardia" en el historial).
+ * - Flechas flotantes en las filas horizontales con el ratón (la rueda normal sigue siendo vertical;
+ *   Mayús+rueda o el gesto horizontal del trackpad también las desplazan). */
+function setupNonTvInput(){
+  /* ---- Pulsación larga ---- */
+  var LP_MS = 550, lp = null, suppressUntil = 0;
+  function gridOf(el){
+    var n = el.parentNode;
+    while(n && n !== document){ if(n._fg) return n._fg; n = n.parentNode; }
+    return null;
+  }
+  function lpCancel(){ if(lp){ clearTimeout(lp.timer); lp = null; } }
+  document.addEventListener("touchstart", function(ev){
+    lpCancel();
+    if(ev.touches.length !== 1) return;
+    var tg = ev.target, el = tg && tg.closest ? tg.closest(".focusable") : null;
+    if(!el || el.tagName === "INPUT" || el.tagName === "TEXTAREA") return;
+    if(App.player && App.player.isActive && App.player.isActive()) return;
+    var t = ev.touches[0];
+    lp = { x: t.clientX, y: t.clientY, el: el, timer: setTimeout(function(){
+      var node = lp && lp.el; lp = null;
+      if(!node || !document.body.contains(node)) return;
+      suppressUntil = Date.now() + 900;
+      var g = gridOf(node);
+      if(g){
+        g.refresh(false);
+        var i = g.items.indexOf(node);
+        if(i >= 0){
+          if(document.body.classList.contains("zone-header")) focusContent();
+          g.focus(i);
+        }
+      }
+      try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){}
+      App.openMenu();
+    }, LP_MS) };
+  }, { passive: true });
+  document.addEventListener("touchmove", function(ev){
+    if(!lp) return;
+    var t = ev.touches[0];
+    if(Math.abs(t.clientX - lp.x) > 10 || Math.abs(t.clientY - lp.y) > 10) lpCancel();
+  }, { passive: true });
+  document.addEventListener("touchend", lpCancel, { passive: true });
+  document.addEventListener("touchcancel", lpCancel, { passive: true });
+  /* El clic que sigue a la pulsación larga no debe abrir el elemento */
+  document.addEventListener("click", function(ev){
+    if(Date.now() < suppressUntil){ ev.preventDefault(); ev.stopPropagation(); }
+  }, true);
+
+  /* ---- Atrás del navegador / Android ---- */
+  var GUARD = { faro: 2 };
+  function sig(){
+    var m = document.getElementById("main");
+    return [current ? current.id : "", stack.length, App.ui.isModalOpen() ? 1 : 0,
+      (App.player && App.player.isActive && App.player.isActive()) ? 1 : 0, m ? m.innerHTML.length : 0].join("|");
+  }
+  try{
+    history.replaceState({ faro: 1 }, "", location.href);
+    history.pushState(GUARD, "", location.href);
+  }catch(e){ return; }
+  window.addEventListener("popstate", function(ev){
+    if(ev.state && ev.state.faro === 2) return;   // avance hasta la entrada guardia: nada que hacer
+    var busy = App.ui.isModalOpen() || (App.player && App.player.isActive && App.player.isActive()) ||
+      (App.ui.keyboard && App.ui.keyboard.isOpen && App.ui.keyboard.isOpen());
+    var atHome = current && current.id === "home" && !stack.length;
+    if(!busy && atHome){ history.back(); return; }   // raíz: dejar que el navegador salga
+    if(zone === "header" && !busy){ zone = "content"; syncNav(); }
+    var before = sig();
+    onKeyDown({ keyCode: K.ESC, preventDefault: function(){}, stopPropagation: function(){} });
+    if(!busy && sig() === before && current && current.id !== "home"){ App.section("home"); }
+    try{ history.pushState(GUARD, "", location.href); }catch(e){}
+  });
+
+  /* ---- Flechas de fila con el ratón ---- */
+  if(window.matchMedia && !window.matchMedia("(pointer: coarse)").matches){
+    var arrows = document.createElement("div");
+    arrows.className = "row-arrows";
+    arrows.innerHTML = '<div class="ra ra-l" aria-hidden="true">‹</div><div class="ra ra-r" aria-hidden="true">›</div>';
+    document.body.appendChild(arrows);
+    var rowEl = null, hideT = null;
+    function place(){
+      if(!rowEl || !document.body.contains(rowEl) || !document.body.classList.contains("desk")){ arrows.classList.remove("on"); return; }
+      var r = rowEl.getBoundingClientRect();
+      var canL = rowEl.scrollLeft > 4, canR = rowEl.scrollLeft < rowEl.scrollWidth - rowEl.clientWidth - 4;
+      if(r.height < 40 || (!canL && !canR)){ arrows.classList.remove("on"); return; }
+      arrows.style.top = r.top + "px"; arrows.style.height = r.height + "px";
+      arrows.style.left = r.left + "px"; arrows.style.width = r.width + "px";
+      arrows.querySelector(".ra-l").style.visibility = canL ? "visible" : "hidden";
+      arrows.querySelector(".ra-r").style.visibility = canR ? "visible" : "hidden";
+      arrows.classList.add("on");
+    }
+    document.addEventListener("mouseover", function(ev){
+      var h = ev.target && ev.target.closest ? ev.target.closest(".hscroll") : null;
+      if(h){ clearTimeout(hideT); if(h !== rowEl){ rowEl = h; } place(); }
+      else if(!(ev.target.closest && ev.target.closest(".row-arrows"))){
+        clearTimeout(hideT); hideT = setTimeout(function(){ rowEl = null; arrows.classList.remove("on"); }, 120);
+      }
+    });
+    document.addEventListener("scroll", function(){ if(rowEl) place(); }, true);
+    arrows.addEventListener("click", function(ev){
+      var t = ev.target; if(!rowEl || !t || !t.classList) return;
+      var d = t.classList.contains("ra-l") ? -1 : t.classList.contains("ra-r") ? 1 : 0;
+      if(d) rowEl.scrollBy ? rowEl.scrollBy({ left: d * rowEl.clientWidth * 0.8, behavior: "smooth" }) : (rowEl.scrollLeft += d * rowEl.clientWidth * 0.8);
+    });
+  }
 }
 
 /* ================= Arranque ================= */
@@ -553,10 +684,21 @@ function boot(){
     bb.className = "touch-back";
     bb.textContent = "←";
     bb.title = App.t("ui.back");
+    bb.setAttribute("role", "button");
+    bb.setAttribute("aria-label", App.t("ui.back"));
     bb.addEventListener("click", function(){
       onKeyDown({ keyCode: K.ESC, preventDefault: function(){}, stopPropagation: function(){} });
     });
-    document.body.appendChild(bb);
+    /* Va dentro de la cabecera (nunca tapa el contenido); en Inicio, sin nada a lo que volver, se oculta */
+    var hl = document.getElementById("headerLeft");
+    (hl || document.body).appendChild(bb);
+    function syncBackBtn(){
+      var atRoot = current && current.id === "home" && !stack.length;
+      bb.classList.toggle("is-hidden", !!atRoot);
+    }
+    App.bus.on("screen:show", syncBackBtn);
+    syncBackBtn();
+    setupNonTvInput();
     /* Clic derecho = menú de opciones (como mantener OK) */
     document.addEventListener("contextmenu", function(ev){
       var tg = ev.target;
