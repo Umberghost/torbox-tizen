@@ -575,7 +575,10 @@ var A = App.account = {
         if(res.status !== 200 || !res.json || !res.json.blob) throw mkErr("server", "HTTP " + res.status);
         return decryptBytes(r[1], res.json.blob).catch(function(){ throw mkErr("badCode"); });
       });
-    }).then(function(mk){ return enroll(mk); })
+    }).then(function(mk){
+      if(mk.length !== 16) throw mkErr("isShareCode");   // es un código de "Compartir configuración"
+      return enroll(mk);
+    })
       .catch(function(e){
         console.warn("[account] link: " + (e && e.message));
         App.ui.toast(errText(e), 5000);
@@ -723,6 +726,114 @@ function fmtAgo(ms){
   if(!ms) return t("account.never");
   try{ return new Date(ms).toLocaleString(); }catch(e){ return String(ms); }
 }
+/* ================= Compartir configuración con un amigo =================
+ * Solo claves de servicios y preferencias (lista blanca). NO viaja: historial, favoritos, series seguidas,
+ * perfiles, vínculo de Trakt (traktAuth), avisos ntfy, cuenta Faro ni ajustes propios del dispositivo.
+ * Usa el mismo buzón de un solo uso que la vinculación (/pair, 10 min, cifrado con el código). */
+var SHARE_KEYS = ["torboxToken", "rdToken", "debridProvider", "tmdbKey", "omdbKey", "stremioAddon", "stremioAddons",
+  "traktClientId", "traktClientSecret", "liveListUrl", "liveExtraLists", "defaultSource", "autoplayNext", "subLang",
+  "audioLang", "subSize", "openSubs", "playerSpeed", "resumeRewind", "skipIntroAuto", "autoPlayBest", "prefQuality",
+  "maxSizeGB", "prefAudio", "hideUnsupported", "contentLanguage", "uiLanguage", "followAuto", "notifyReady", "hideWatchedHome"];
+var SHARE_LABELS = { torboxToken: "TorBox", rdToken: "Real-Debrid", tmdbKey: "TMDB", omdbKey: "OMDb",
+  traktClientId: "Trakt", stremioAddons: "add-ons", stremioAddon: "add-ons", liveListUrl: "TV" };
+function shareSummary(st){
+  var names = [];
+  Object.keys(st).forEach(function(k){ var n = SHARE_LABELS[k]; if(n && st[k] && (!Array.isArray(st[k]) || st[k].length) && names.indexOf(n) < 0) names.push(n); });
+  return names.join(", ");
+}
+function shareSettings(){
+  if(!subtle()){ App.ui.toast(t("account.err.nocrypto")); return Promise.resolve(); }
+  var all = App.settings.all(), st = {};
+  SHARE_KEYS.forEach(function(k){ var v = all[k]; if(v !== undefined && v !== null && v !== "") st[k] = v; });
+  if(!Object.keys(st).length){ App.ui.toast(t("account.share.empty"), 5000); return Promise.resolve(); }
+  var code = newCode(), expires = Date.now() + 10 * 60 * 1000;
+  var payload = utf8(JSON.stringify({ faroShare: 1, from: App.version, at: Date.now(), settings: st }));
+  return Promise.all([pairId(code), pairKey(code)]).then(function(r){
+    return encryptBytes(r[1], payload).then(function(blob){ return req("PUT", "/pair/" + r[0], { blob: blob }); });
+  }).then(function(r){
+    if(r.status !== 200 && r.status !== 201 && !(r.json && r.json.ok)) throw mkErr(r.status === 429 ? "rate" : "server", "HTTP " + r.status);
+    return new Promise(function(resolve){
+      var iv = null;
+      var m = App.ui.modal({
+        title: t("account.share.title"), wide: true,
+        html: '<p>' + App.esc(t("account.share.text", { what: shareSummary(st) })) + '</p>' +
+          '<div style="text-align:center;margin:16px 0"><div style="font-size:2.6em;font-weight:700;letter-spacing:.12em">' + App.esc(fmtCode(code)) + '</div>' +
+          '<div class="acct-left" style="opacity:.7;margin-top:8px"></div></div>' +
+          '<p class="muted">' + App.esc(t("account.share.how")) + '</p>' +
+          '<p class="muted">' + App.esc(t("account.share.warn")) + '</p>',
+        buttons: [{ label: t("ui.close"), value: true }],
+        onClose: function(){ clearInterval(iv); resolve(); }
+      });
+      var left = m.el.querySelector(".acct-left");
+      function tick(){
+        var s2 = Math.max(0, Math.round((expires - Date.now()) / 1000));
+        left.textContent = t("account.add.expires", { time: Math.floor(s2 / 60) + ":" + (s2 % 60 < 10 ? "0" : "") + (s2 % 60) });
+        if(s2 <= 0) m.close(true);
+      }
+      iv = setInterval(tick, 1000); tick();
+    });
+  }).catch(function(e){
+    console.warn("[account] share: " + (e && e.message));
+    App.ui.toast(errText(e), 5000);
+  });
+}
+function importShared(codeRaw){
+  var code = normCode(codeRaw);
+  if(!subtle()){ App.ui.toast(t("account.err.nocrypto")); return Promise.resolve(); }
+  if(code.length !== 8){ App.ui.toast(t("account.err.badCode")); return Promise.resolve(); }
+  App.ui.toast(t("account.share.loading"), 6000);
+  return Promise.all([pairId(code), pairKey(code)]).then(function(r){
+    return req("GET", "/pair/" + r[0]).then(function(res){
+      if(res.status === 404) throw mkErr("badCode");
+      if(res.status === 429) throw mkErr("rate");
+      if(res.status !== 200 || !res.json || !res.json.blob) throw mkErr("server", "HTTP " + res.status);
+      return decryptBytes(r[1], res.json.blob).catch(function(){ throw mkErr("badCode"); });
+    });
+  }).then(function(bytes){
+    if(bytes.length === 16) throw mkErr("isLinkCode");   // es un código de "Añadir dispositivo"
+    var d = null;
+    try{ d = JSON.parse(new TextDecoder().decode(bytes)); }catch(e){}
+    if(!d || !d.faroShare || !d.settings) throw mkErr("badCode");
+    var st = {};
+    SHARE_KEYS.forEach(function(k){ if(k in d.settings) st[k] = d.settings[k]; });
+    var n = Object.keys(st).length;
+    return App.ui.confirm(t("account.share.confirmTitle"), t("account.share.confirmText", { n: n, what: shareSummary(st) || "—" }),
+      t("account.share.apply"), t("ui.cancel")).then(function(ok){
+      if(!ok) return;
+      Object.keys(st).forEach(function(k){ App.settings.set(k, st[k]); });
+      App.torbox.invalidate();
+      App.bus.emit("meta:keychange");
+      console.info("[account] configuración importada: " + Object.keys(st).join(", "));
+      App.ui.toast(t("account.share.done", { n: n }), 4000);
+      setTimeout(function(){ location.reload(); }, 2500);
+    });
+  }).catch(function(e){
+    console.warn("[account] importShared: " + (e && e.message));
+    App.ui.toast(errText(e), 6000);
+  });
+}
+function shareMenu(){
+  return App.ui.menu(t("account.share.row"), [
+    { label: t("account.share.menu.share"), value: "share" },
+    { label: t("account.share.menu.import"), value: "import" }
+  ]).then(function(v){
+    if(v === "share") return shareSettings();
+    if(v === "import") return new Promise(function(resolve){
+      App.ui.keyboard.open({ title: t("account.share.codeTitle"), placeholder: "XXXX-XXXX", max: 9,
+        onDone: function(c){ resolve(importShared(c)); }, onCancel: function(){ resolve(); } });
+    });
+  });
+}
+A.shareSettings = shareSettings;
+A.importShared = importShared;
+
+App.settingsUI.add("settings.group.account", {
+  id: "shareSettings", type: "action",
+  label: function(){ return t("account.share.row"); },
+  desc: function(){ return t("account.share.desc"); },
+  run: shareMenu
+});
+
 App.settingsUI.add("settings.group.account", {
   id: "faroAccount", type: "action",
   label: function(){ return t("account.title"); },
