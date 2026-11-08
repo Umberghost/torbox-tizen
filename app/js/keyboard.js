@@ -70,6 +70,7 @@ function render(){
     '<div class="kb-key kb-space focusable" data-a="space">' + App.esc(t("keyboard.space")) + '</div>' +
     '<div class="kb-key kb-wide focusable" data-a="del">⌫ ' + App.esc(t("keyboard.delete")) + '</div>' +
     '<div class="kb-key kb-wide focusable" data-a="clear">' + App.esc(t("keyboard.clear")) + '</div>' +
+    (canPaste() ? '<div class="kb-key kb-wide focusable" data-a="paste">' + App.esc(t("keyboard.paste")) + '</div>' : '') +
     (st.secret ? '<div class="kb-key kb-wide focusable" data-a="reveal">' + App.esc(st.reveal ? t("keyboard.hide") : t("keyboard.show")) + '</div>' : '') +
     '<div class="kb-key kb-done focusable" data-a="done">✓ ' + App.esc(t("keyboard.done")) + '</div>' +
     '</div></div>' +
@@ -90,6 +91,27 @@ function paintValue(){
   txt.textContent = shown || st.placeholder || "";
   el.querySelector(".kb-display").classList.toggle("empty", !st.value);
 }
+
+/* Pegar: Ctrl/Cmd+V (evento paste del navegador) o botón "Pegar" (API del portapapeles) */
+function canPaste(){ return !!(navigator.clipboard && navigator.clipboard.readText); }
+function insertText(txt){
+  if(!st) return;
+  txt = String(txt || "").replace(/\s+/g, " ").trim();
+  if(!txt) return;
+  if(st.max) txt = txt.slice(0, Math.max(0, st.max - st.value.length));
+  st.value += txt;
+  paintValue();
+}
+function pasteFromClipboard(){
+  navigator.clipboard.readText().then(insertText).catch(function(){
+    if(App.ui.toast) App.ui.toast(t("keyboard.pasteFail"), 4000);
+  });
+}
+document.addEventListener("paste", function(ev){
+  if(!st) return;
+  var txt = ev.clipboardData ? ev.clipboardData.getData("text") : "";
+  if(txt){ ev.preventDefault(); insertText(txt); }
+});
 
 function insert(ch){
   if(st.max && st.value.length >= st.max) return;
@@ -112,6 +134,7 @@ function press(keyEl){
   else if(a === "shift"){ st.mode = st.mode === "upper" ? "lower" : "upper"; st.autoLower = st.mode === "upper"; rerender(); }
   else if(a === "sym"){ st.mode = st.mode === "sym" ? "lower" : "sym"; st.autoLower = false; rerender(); }
   else if(a === "reveal"){ st.reveal = !st.reveal; rerender(); }
+  else if(a === "paste") pasteFromClipboard();
   else if(a === "done") finish(true);
 }
 
@@ -160,6 +183,8 @@ App.ui.keyboard = {
     // Botones de color: VERDE = hecho, ROJO = borrar
     if(k === K.GREEN){ finish(true); return true; }
     if(k === K.RED){ st.value = st.value.slice(0, -1); paintValue(); return true; }
+    // Ctrl/Cmd+V: no la gestionamos para que el navegador lance el evento "paste"
+    if(e && (e.ctrlKey || e.metaKey) && (k === 86 || String(e.key).toLowerCase() === "v")) return false;
     // Números del mando / teclado físico
     var d = App.digit(k);
     var key = e && e.key;

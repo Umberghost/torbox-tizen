@@ -1732,3 +1732,12 @@ A.add("fr", {
   "keyboard.help": "OK appuyer sur la touche · Retour annuler · Les chiffres de la télécommande et un clavier physique saisissent directement"
 });
 })();
+
+/* Teclado: pegar */
+window.App.i18n.add("en", {"keyboard.paste": "Paste", "keyboard.pasteFail": "Could not read the clipboard. Press Ctrl+V instead."});
+window.App.i18n.add("es", {"keyboard.paste": "Pegar", "keyboard.pasteFail": "No se pudo leer el portapapeles. Pulsa Ctrl+V."});
+window.App.i18n.add("ca", {"keyboard.paste": "Enganxa", "keyboard.pasteFail": "No s'ha pogut llegir el porta-retalls. Prem Ctrl+V."});
+window.App.i18n.add("gl", {"keyboard.paste": "Pegar", "keyboard.pasteFail": "Non se puido ler o portapapeis. Preme Ctrl+V."});
+window.App.i18n.add("eu", {"keyboard.paste": "Itsatsi", "keyboard.pasteFail": "Ezin izan da arbela irakurri. Sakatu Ctrl+V."});
+window.App.i18n.add("pt", {"keyboard.paste": "Colar", "keyboard.pasteFail": "Não foi possível ler a área de transferência. Prima Ctrl+V."});
+window.App.i18n.add("fr", {"keyboard.paste": "Coller", "keyboard.pasteFail": "Impossible de lire le presse-papiers. Appuyez sur Ctrl+V."});
