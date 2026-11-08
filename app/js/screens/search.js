@@ -178,14 +178,27 @@ function isCachedMark(name, title){
 function parseLangs(txt){
   var tx = String(txt || "");
   var out = [];
-  var lat = /🇲🇽|\blatino\b|\blatam\b|\blat\b|\bspanish\s*latin/i.test(tx);
-  var es = /🇪🇸|\bcastellano\b|\bespañol\b|\bespanol\b|\bspa\b|\besp\b/i.test(tx) ||
-           (/\bspanish\b/i.test(tx) && !/\bspanish\s*latin/i.test(tx));
+  /* Torrents con "MultiSub" (anime sobre todo): la lista de idiomas/banderas ([ENG][SPA]…, 🇬🇧 🇪🇸) es de
+   * SUBTÍTULOS, no de audio. Ahí solo cuentan como audio las palabras explícitas (castellano, latino, dub…). */
+  var multiSub = /\bmulti[\s._-]?subs?\b/i.test(tx);
+  var lat, es, en;
+  if(multiSub){
+    lat = /\blatino\b|\blatam\b/i.test(tx);
+    es = /\bcastellano\b|\bespañol\b|\bespanol\b/i.test(tx);
+    en = /\b(english|eng)[\s._-]*dub(bed)?\b|\bdubbed\b/i.test(tx);
+  }else{
+    lat = /🇲🇽|\blatino\b|\blatam\b|\blat\b|\bspanish\s*latin/i.test(tx);
+    es = /🇪🇸|\bcastellano\b|\bespañol\b|\bespanol\b|\bspa\b|\besp\b/i.test(tx) ||
+         (/\bspanish\b/i.test(tx) && !/\bspanish\s*latin/i.test(tx));
+    en = /🇬🇧|🇺🇸|\benglish\b|\beng\b/i.test(tx);
+  }
   if(es) out.push("es");
   if(lat) out.push("lat");
-  if(/🇬🇧|🇺🇸|\benglish\b|\beng\b/i.test(tx)) out.push("en");
-  if(/\bvose\b|\bvos\b|\bsubtitulad[oa]s?\b|\bsubs?\b/i.test(tx)) out.push("vose");
-  if(/\bmulti\b|\bdual\b|\bmulti-?audio\b|\bdual-?audio\b/i.test(tx)) out.push("multi");
+  if(en) out.push("en");
+  // "Multi-Subs" / "MultiSub" son subtítulos, no audio múltiple
+  var noSubs = tx.replace(/\bmulti[\s._-]?subs?\b/ig, " ");
+  if(/\bvose\b|\bvos\b|\bsubtitulad[oa]s?\b|\bsubs?\b|\bmulti[\s._-]?subs?\b/i.test(tx)) out.push("vose");
+  if(/\bmulti\b|\bdual\b|\bmulti-?audio\b|\bdual-?audio\b/i.test(noSubs)) out.push("multi");
   return out;
 }
 
@@ -1345,12 +1358,15 @@ function streamRow(x, i, incompatible, est){
   if(est) sizeHtml = App.esc(t("search.sizeEst", { size: App.fmtSize(est) })) + (x.size ? '<small>' + App.esc(App.fmtSize(x.size) + " " + t("search.sizeEpisode")) + '</small>' : '');
   else if(x.size) sizeHtml = App.esc(App.fmtSize(x.size)) + (x.pack ? '<small>' + App.esc(t("search.sizeEpisode")) + '</small>' : '');
   var relName = est && x.torrentName ? x.torrentName : x.release;
+  /* Título completo del torrent debajo del principal (sin recortar): es el texto del que salen las etiquetas */
+  var full = x.torrentName && x.torrentName !== relName ? x.torrentName : (x.filename && x.filename !== relName ? x.filename : "");
   return '<div class="srch-row focusable' + (incompatible ? " dim srch-incompat" : "") + '" data-act="stream" data-i="' + i + '">' +
-      '<div class="srch-main"><div class="srch-rel">' + App.esc(relName) + '</div>' +
+      '<div class="srch-main"><div class="srch-rel' + (full ? "" : " srch-rel-full") + '">' + App.esc(relName) + '</div>' +
+        (full ? '<div class="srch-full">' + App.esc(full) + '</div>' : '') +
         '<div class="srch-sub">' + (x.name ? App.esc(x.name) : "") + (x.name && meta.length ? '<span class="srch-dot">·</span>' : '') + meta.join('<span class="srch-dot">·</span>') + '</div>' +
         (x.hash ? '<div class="srch-stx" data-stx="' + App.esc(x.hash) + '">' + statusExtra(statusOf(x)) + '</div>' : '') +
+        '<div class="srch-badges">' + badges + '</div>' +
       '</div>' +
-      '<div class="srch-badges">' + badges + '</div>' +
       '<div class="srch-size">' + sizeHtml + '</div>' +
     '</div>';
 }
