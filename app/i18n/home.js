@@ -70,7 +70,7 @@ A.add("en", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Set up Trakt",
-  "trakt.notConfiguredText": "1. On trakt.tv go to Settings → Your API Apps (trakt.tv/oauth/applications) and create a new app.<br>2. Use <b>urn:ietf:wg:oauth:2.0:oob</b> as Redirect URI.<br>3. Paste the Client ID and Client Secret from your phone: {url}<br>4. Come back here and choose “Link Trakt”.",
+  "trakt.notConfiguredText": "1. On trakt.tv go to Settings → Your API Apps (trakt.tv/oauth/applications) and create a new app.<br>2. Use <b>http://localhost</b> as Redirect URI.<br>3. Paste the Client ID and Client Secret from your phone: {url}<br>4. Come back here and choose “Link Trakt”.",
   "trakt.notConfiguredNoUrl": "the phone settings page",
   "trakt.linkTitle": "Link Trakt",
   "trakt.linkText": "On your phone or PC go to <b>{url}</b> and enter this code:",
@@ -153,7 +153,7 @@ A.add("es", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Configura Trakt",
-  "trakt.notConfiguredText": "1. En trakt.tv ve a Settings → Your API Apps (trakt.tv/oauth/applications) y crea una app nueva.<br>2. Como Redirect URI usa <b>urn:ietf:wg:oauth:2.0:oob</b>.<br>3. Pega el Client ID y el Client Secret desde el móvil: {url}<br>4. Vuelve aquí y elige «Vincular Trakt».",
+  "trakt.notConfiguredText": "1. En trakt.tv ve a Settings → Your API Apps (trakt.tv/oauth/applications) y crea una app nueva.<br>2. Como Redirect URI usa <b>http://localhost</b>.<br>3. Pega el Client ID y el Client Secret desde el móvil: {url}<br>4. Vuelve aquí y elige «Vincular Trakt».",
   "trakt.notConfiguredNoUrl": "la web de ajustes del móvil",
   "trakt.linkTitle": "Vincular Trakt",
   "trakt.linkText": "En el móvil o el PC entra en <b>{url}</b> e introduce este código:",
@@ -236,7 +236,7 @@ A.add("ca", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Configura Trakt",
-  "trakt.notConfiguredText": "1. A trakt.tv ves a Settings → Your API Apps (trakt.tv/oauth/applications) i crea una app nova.<br>2. Fes servir <b>urn:ietf:wg:oauth:2.0:oob</b> com a Redirect URI.<br>3. Enganxa el Client ID i el Client Secret des del mòbil: {url}<br>4. Torna aquí i tria “Vincula Trakt”.",
+  "trakt.notConfiguredText": "1. A trakt.tv ves a Settings → Your API Apps (trakt.tv/oauth/applications) i crea una app nova.<br>2. Fes servir <b>http://localhost</b> com a Redirect URI.<br>3. Enganxa el Client ID i el Client Secret des del mòbil: {url}<br>4. Torna aquí i tria “Vincula Trakt”.",
   "trakt.notConfiguredNoUrl": "la pàgina d'ajustos del mòbil",
   "trakt.linkTitle": "Vincula Trakt",
   "trakt.linkText": "Al mòbil o al PC ves a <b>{url}</b> i introdueix aquest codi:",
@@ -319,7 +319,7 @@ A.add("gl", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Configura Trakt",
-  "trakt.notConfiguredText": "1. En trakt.tv vai a Settings → Your API Apps (trakt.tv/oauth/applications) e crea unha app nova.<br>2. Usa <b>urn:ietf:wg:oauth:2.0:oob</b> como Redirect URI.<br>3. Pega o Client ID e o Client Secret dende o móbil: {url}<br>4. Volve aquí e escolle “Vincular Trakt”.",
+  "trakt.notConfiguredText": "1. En trakt.tv vai a Settings → Your API Apps (trakt.tv/oauth/applications) e crea unha app nova.<br>2. Usa <b>http://localhost</b> como Redirect URI.<br>3. Pega o Client ID e o Client Secret dende o móbil: {url}<br>4. Volve aquí e escolle “Vincular Trakt”.",
   "trakt.notConfiguredNoUrl": "a páxina de axustes do móbil",
   "trakt.linkTitle": "Vincular Trakt",
   "trakt.linkText": "No móbil ou no PC vai a <b>{url}</b> e introduce este código:",
@@ -402,7 +402,7 @@ A.add("eu", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Konfiguratu Trakt",
-  "trakt.notConfiguredText": "1. trakt.tv-n joan Settings → Your API Apps (trakt.tv/oauth/applications) atalera eta sortu aplikazio berri bat.<br>2. Erabili <b>urn:ietf:wg:oauth:2.0:oob</b> Redirect URI gisa.<br>3. Itsatsi Client ID eta Client Secret telefonotik: {url}<br>4. Itzuli hona eta aukeratu “Lotu Trakt”.",
+  "trakt.notConfiguredText": "1. trakt.tv-n joan Settings → Your API Apps (trakt.tv/oauth/applications) atalera eta sortu aplikazio berri bat.<br>2. Erabili <b>http://localhost</b> Redirect URI gisa.<br>3. Itsatsi Client ID eta Client Secret telefonotik: {url}<br>4. Itzuli hona eta aukeratu “Lotu Trakt”.",
   "trakt.notConfiguredNoUrl": "telefonoko ezarpenen orria",
   "trakt.linkTitle": "Lotu Trakt",
   "trakt.linkText": "Telefonoan edo PCan joan <b>{url}</b> helbidera eta sartu kode hau:",
@@ -485,7 +485,7 @@ A.add("pt", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Configurar o Trakt",
-  "trakt.notConfiguredText": "1. Em trakt.tv vá a Settings → Your API Apps (trakt.tv/oauth/applications) e crie uma nova app.<br>2. Use <b>urn:ietf:wg:oauth:2.0:oob</b> como Redirect URI.<br>3. Cole o Client ID e o Client Secret a partir do telemóvel: {url}<br>4. Volte aqui e escolha “Ligar o Trakt”.",
+  "trakt.notConfiguredText": "1. Em trakt.tv vá a Settings → Your API Apps (trakt.tv/oauth/applications) e crie uma nova app.<br>2. Use <b>http://localhost</b> como Redirect URI.<br>3. Cole o Client ID e o Client Secret a partir do telemóvel: {url}<br>4. Volte aqui e escolha “Ligar o Trakt”.",
   "trakt.notConfiguredNoUrl": "a página de definições do telemóvel",
   "trakt.linkTitle": "Ligar o Trakt",
   "trakt.linkText": "No telemóvel ou no PC vá a <b>{url}</b> e introduza este código:",
@@ -568,7 +568,7 @@ A.add("fr", {
 
   "trakt.title": "Trakt",
   "trakt.notConfiguredTitle": "Configurer Trakt",
-  "trakt.notConfiguredText": "1. Sur trakt.tv, allez dans Settings → Your API Apps (trakt.tv/oauth/applications) et créez une nouvelle app.<br>2. Utilisez <b>urn:ietf:wg:oauth:2.0:oob</b> comme Redirect URI.<br>3. Collez le Client ID et le Client Secret depuis votre téléphone : {url}<br>4. Revenez ici et choisissez « Associer Trakt ».",
+  "trakt.notConfiguredText": "1. Sur trakt.tv, allez dans Settings → Your API Apps (trakt.tv/oauth/applications) et créez une nouvelle app.<br>2. Utilisez <b>http://localhost</b> comme Redirect URI.<br>3. Collez le Client ID et le Client Secret depuis votre téléphone : {url}<br>4. Revenez ici et choisissez « Associer Trakt ».",
   "trakt.notConfiguredNoUrl": "la page de réglages du téléphone",
   "trakt.linkTitle": "Associer Trakt",
   "trakt.linkText": "Sur votre téléphone ou votre PC, allez sur <b>{url}</b> et saisissez ce code :",

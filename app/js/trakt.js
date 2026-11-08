@@ -8,7 +8,9 @@
 
 var App = window.App;
 var API = "https://api.trakt.tv";
-var REDIRECT = "urn:ietf:wg:oauth:2.0:oob";
+/* El inicio de sesión es por código de dispositivo (no usa redirección). Solo la renovación del token
+ * envía redirect_uri: las apps "Development" de Trakt solo admiten localhost, las antiguas el URN oob. */
+var REDIRECTS = ["http://localhost", "urn:ietf:wg:oauth:2.0:oob"];
 var SCROBBLE_EVERY = 5 * 60 * 1000;   // como mucho cada 5 min durante la reproducción
 
 function S(k){ return App.settings.get(k); }
@@ -57,10 +59,16 @@ function ensureToken(){
   if(!a) return Promise.reject(new Error("not linked"));
   if(a.expires_at && a.expires_at - Date.now() > 24 * 3600 * 1000) return Promise.resolve(a);
   if(refreshing) return refreshing;
-  refreshing = rawCall("/oauth/token", { method: "POST", body: {
-    refresh_token: a.refresh_token, client_id: clientId(), client_secret: clientSecret(),
-    redirect_uri: REDIRECT, grant_type: "refresh_token"
-  }}).then(function(j){
+  var tryRefresh = function(i){
+    return rawCall("/oauth/token", { method: "POST", body: {
+      refresh_token: a.refresh_token, client_id: clientId(), client_secret: clientSecret(),
+      redirect_uri: REDIRECTS[i], grant_type: "refresh_token"
+    }}).catch(function(e){
+      if(i + 1 < REDIRECTS.length && (e.status === 400 || e.status === 401)) return tryRefresh(i + 1);
+      throw e;
+    });
+  };
+  refreshing = tryRefresh(0).then(function(j){
     saveToken(j); refreshing = null;
     console.info("[trakt] token renovado");
     return auth();
