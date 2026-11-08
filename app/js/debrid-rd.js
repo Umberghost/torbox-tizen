@@ -205,6 +205,13 @@ tb.link = function(source){ return source === "rd" ? RD.link.apply(RD, arguments
 tb.control = function(source){ return source === "rd" ? RD.control.apply(RD, arguments) : O.control.apply(tb, arguments); };
 tb.checkCached = function(){ return hasTB() ? O.checkCached.apply(tb, arguments) : Promise.resolve({}); };
 tb.addMagnet = function(){ return addToRD() ? RD.addMagnet.apply(RD, arguments) : O.addMagnet.apply(tb, arguments); };
+/* addMagnetTo("RD"|"TB"|"", magnet, name): manda a la cuenta que indica la fuente del add-on ("[RD⬇️]"→RD);
+ * si esa cuenta no está configurada (o no se sabe), a la cuenta destino de siempre. */
+tb.addMagnetTo = function(svc, magnet, name){
+  if(svc === "RD" && hasRDt()) return RD.addMagnet(magnet, name);
+  if(svc === "TB" && hasTB()) return O.addMagnet.call(tb, magnet, name);
+  return tb.addMagnet(magnet, name);
+};
 tb.addLink = function(link){
   // Usenet y descargas web solo existen en TorBox; los magnets van a la cuenta destino
   if(addToRD() && tb.linkKind(link) === "torrents") return RD.addLink.apply(RD, arguments);

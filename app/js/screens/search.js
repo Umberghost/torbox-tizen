@@ -231,6 +231,11 @@ function packCovers(x, season){
 }
 
 /* Hash del torrent: infoHash o, en add-ons con debrid (Torrentio), el de la URL de resolución */
+/* Servicio debrid que indica el add-on en el nombre: "[TB+]", "[RD download]", "[RD⬇️] Comet"… → "TB", "RD" */
+function debridTag(name){
+  var m = String(name || "").match(/\[(TB|RD|AD|PM|DL|ED|OC|PO|PKP|EN)(?![A-Za-z])/i);
+  return m ? m[1].toUpperCase() : "";
+}
 function hashFromUrl(url){
   var m = String(url || "").match(/\/([a-f0-9]{40})(?=[\/?#]|$)/i);
   return m ? m[1].toLowerCase() : "";
@@ -269,6 +274,7 @@ function normStream(st, idx){
     release: release,
     url: st.url && /^https?:/i.test(st.url) ? st.url : "",
     hash: hash,
+    svc: debridTag(name),
     fileIdx: st.fileIdx,
     quality: q.res, tags: q.tags,
     size: size,
@@ -368,15 +374,18 @@ function fetchStreams(type, id, force){
   p.catch(function(){ if(streamCache[ck] && streamCache[ck].p === p) delete streamCache[ck]; });
   return p;
 }
-/* Fusiona listas de varios add-ons; deduplica por infoHash (o url si no hay hash) entre add-ons distintos */
+/* Fusiona listas de varios add-ons; deduplica por infoHash (o url si no hay hash) entre add-ons distintos,
+ * pero solo dentro del MISMO servicio debrid: la versión RD y la TB de un torrent son filas distintas
+ * (cada una con su enlace y su estado de caché). Las fuentes sin servicio se unen a cualquiera. */
 function mergeStreams(lists){
-  var out = [], seen = {};
+  var out = [], seen = {}, byHash = {};
   lists.forEach(function(L){
     var mine = {};
     L.list.forEach(function(x){
       x.addon = L.name; x.addons = [L.name];
-      var k = x.hash ? "h:" + x.hash : (x.url ? "u:" + x.url : "");
+      var k = x.hash ? "h:" + x.hash + "|" + (x.svc || "") : (x.url ? "u:" + x.url : "");
       var e = k ? seen[k] : null;
+      if(!e && x.hash && !x.svc) e = byHash[x.hash] || null;
       if(!e){
         out.push(x);
         if(k) mine[k] = x;
@@ -392,7 +401,7 @@ function mergeStreams(lists){
       if(!e.provider && x.provider) e.provider = x.provider;
       if(e.fileIdx === undefined && x.fileIdx !== undefined) e.fileIdx = x.fileIdx;
     });
-    for(var k2 in mine) seen[k2] = mine[k2];
+    for(var k2 in mine){ seen[k2] = mine[k2]; if(mine[k2].hash && !byHash[mine[k2].hash]) byHash[mine[k2].hash] = mine[k2]; }
   });
   return out;
 }
@@ -444,10 +453,11 @@ function fetchStreamsRaw(bases, type, id){
     ok.forEach(function(r){ warnings = warnings.concat(r.warnings || []); });
     var list = mergeStreams(ok);
     // Marcar caché con TorBox para los que solo traen infoHash
-    var hashes = list.filter(function(x){ return x.hash && !x.cached; }).map(function(x){ return x.hash; });
+    // (solo las que el add-on no ha atribuido a un servicio: la caché de TorBox no dice nada de RD)
+    var hashes = list.filter(function(x){ return x.hash && !x.cached && !x.svc; }).map(function(x){ return x.hash; });
     var chk = hashes.length && App.torbox.checkCached ? App.torbox.checkCached(hashes).catch(function(){ return {}; }) : Promise.resolve({});
     return chk.then(function(set){
-      list.forEach(function(x){ if(x.hash && set[x.hash]){ x.cached = true; x.uncachedDebrid = false; } });
+      list.forEach(function(x){ if(x.hash && !x.svc && set[x.hash]){ x.cached = true; x.uncachedDebrid = false; } });
       var hide = App.caps && App.caps.hideUnsupported ? App.caps.hideUnsupported() : false;
       var visible = [], hidden = [];
       list.forEach(function(x){ (hide && x.compatible === false ? hidden : visible).push(x); });
@@ -1444,7 +1454,9 @@ function guardPack(x, fn){
 
 function addToTorbox(x){
   if(!x.hash){ App.ui.toast(t("search.noHash")); return Promise.resolve(); }
-  return App.torbox.addMagnet(magnetOf(x), (x.pack && x.torrentName) || x.filename || undefined).then(function(){
+  var nm = (x.pack && x.torrentName) || x.filename || undefined;
+  var add = App.torbox.addMagnetTo ? App.torbox.addMagnetTo(x.svc, magnetOf(x), nm) : App.torbox.addMagnet(magnetOf(x), nm);
+  return add.then(function(){
     App.torbox.invalidate();
     if(!x.cached) trackDownload(x);
     App.ui.toast(x.cached ? t("search.addedCached") : t("search.added"), 4500);
@@ -1491,7 +1503,8 @@ function playStream(x){
 /* Fuente sin caché vía debrid: pedir al add-on que la mande a TorBox (o añadir el magnet) */
 function sendToDebrid(x){
   var p;
-  if(x.hash) p = App.torbox.addMagnet(magnetOf(x), x.filename || undefined);
+  if(x.hash) p = App.torbox.addMagnetTo ? App.torbox.addMagnetTo(x.svc, magnetOf(x), x.filename || undefined)
+                                        : App.torbox.addMagnet(magnetOf(x), x.filename || undefined);
   else p = App.net.fetch(x.url, { method: "GET" }).then(function(r){
     // Solo interesa que el add-on reciba la petición; no descargamos el vídeo de aviso
     try{ if(r.body && r.body.cancel) r.body.cancel(); }catch(e){}
