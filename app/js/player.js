@@ -128,7 +128,7 @@ function showOsd(ms){
   var was = osdVisible();
   els.plOsd.classList.remove("hide");
   root.classList.add("osd-on");
-  if(!was){ P.ctlId = "pp"; P.barTouched = false; P._tagT = 0; }
+  if(!was){ P.ctlId = "pp"; P.barTouched = false; P.barActive = false; P._tagT = 0; }
   clearTimeout(P.osdT);
   renderBar();
   refreshTags();
@@ -136,7 +136,9 @@ function showOsd(ms){
     P.osdT = setTimeout(hideOsd, ms || 5000);
   }
 }
-function hideOsd(){ if(root){ clearTimeout(P.osdT); els.plOsd.classList.add("hide"); root.classList.remove("osd-on"); } }
+function hideOsd(){ if(root){ clearTimeout(P.osdT); P.barActive = false; els.plOsd.classList.add("hide"); root.classList.remove("osd-on"); } }
+/* La barra de botones solo recibe ◄► después de entrar en ella con ▼ u OK; antes ◄► siempre avanzan/retroceden */
+function enterBar(){ showOsd(); P.barActive = true; renderBar(); }
 
 /* ---- Títulos (eyebrow pequeño + título grande) ---- */
 function pad2(n){ n = Number(n); return n < 10 ? "0" + n : String(n); }
@@ -1402,7 +1404,7 @@ function renderBar(){
   items.forEach(function(it, i){ if(it.id === P.ctlId) idx = i; });
   if(idx < 0){ idx = 0; items.forEach(function(it, i){ if(it.id === "pp") idx = i; }); P.ctlId = items[idx] ? items[idx].id : "pp"; }
   var l = "", r = "";
-  items.forEach(function(it, i){ var h = btnHtml(it, i === idx); if(it.grp === "l") l += h; else r += h; });
+  items.forEach(function(it, i){ var h = btnHtml(it, i === idx && !!P.barActive); if(it.grp === "l") l += h; else r += h; });
   els.plPanel.innerHTML = '<div class="pl-grp">' + l + '</div><div class="pl-grp">' + r + '</div>';
 }
 function barKey(k){
@@ -1516,14 +1518,14 @@ function onKey(k){
   switch(k){
     case K.OK:
       if(P.skipCur && (!vis || !P.barTouched) && doSkip()) return true;
-      if(!vis){ showOsd(); return true; }
+      if(!vis || !P.barActive){ enterBar(); return true; }
       if(P.started && barKey(k)) return true;
       togglePause(); return true;
     case K.LEFT: case K.RIGHT:
-      if(vis){ if(barKey(k)) return true; }
+      if(vis && P.barActive){ if(barKey(k)) return true; }
       seekBy(k === K.LEFT ? -10 : 10); return true;
     case K.UP: if(vis) hideOsd(); else showOsd(); return true;
-    case K.DOWN: showOsd(); return true;
+    case K.DOWN: enterBar(); return true;
     case K.PLAYPAUSE: togglePause(); return true;
     case K.PLAY: if(P.paused) togglePause(); else showOsd(); return true;
     case K.PAUSE: if(!P.paused) togglePause(); else showOsd(); return true;
