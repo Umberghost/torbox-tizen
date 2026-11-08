@@ -39,6 +39,7 @@ sola) y trae su propio servicio (proxy + web del móvil), así que no necesita T
 4. Vuelve a poner Host PC IP = 127.0.0.1 y reinicia.
 
 ## Real-Debrid
-Además de TorBox, la app funciona con **Real-Debrid**: elige el servicio en la pantalla inicial (◄►) o en
-Ajustes → Cuenta, y pega tu token de real-debrid.com/apitoken. Para Buscar, configura Torrentio con tu cuenta de
+La app funciona con **TorBox y Real-Debrid a la vez**: configura uno en la pantalla inicial (◄►) y el otro en
+Ajustes → Integraciones (token de real-debrid.com/apitoken). La biblioteca y las descargas muestran ambas cuentas;
+"Añadir torrents nuevos a" elige a cuál van los torrents nuevos. Para Buscar, configura Torrentio con tu cuenta de
 Real-Debrid. Limitaciones: solo torrents (sin Usenet ni descargas web), sin pausar y sin consulta de caché.

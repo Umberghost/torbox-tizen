@@ -575,7 +575,10 @@ var tb = { byHash: {}, timer: null, busy: false };
 function refreshTorbox(){
   if(tb.busy || !App.torbox.hasToken()) return;
   tb.busy = true;
-  App.torbox.list("torrents", { all: true, fresh: true }).then(function(items){
+  // Torrents de todas las cuentas configuradas (TorBox y/o Real-Debrid)
+  var srcs = App.torbox.SOURCES.filter(function(x){ return x === "torrents" || x === "rd"; });
+  Promise.all(srcs.map(function(x){ return App.torbox.list(x, { all: true, fresh: true }).catch(function(){ return []; }); }))
+  .then(function(ls){ var items = []; ls.forEach(function(l){ items = items.concat(l || []); }); return items; }).then(function(items){
     var m = {};
     (items || []).forEach(function(it){ if(it && it.hash) m[String(it.hash).toLowerCase()] = it; });
     tb.byHash = m;

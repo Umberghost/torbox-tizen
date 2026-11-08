@@ -36,6 +36,9 @@
 .kb-help{color:var(--muted);font-size:19px;text-align:center;margin-top:18px}
 
 /* ================= Ajustes ================= */
+.set-tabs{position:sticky;top:-8px;z-index:5;background:var(--bg);margin:0 0 6px;padding:8px 0 12px;flex-wrap:wrap}
+.set-tab{font-size:23px;padding:10px 24px}
+.set-tab.active{border-color:var(--ghost)}
 .set-group{color:var(--accent);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:34px 0 10px 6px}
 .set .set-row{
   padding:18px 28px;gap:30px;margin:8px 0;border-radius:14px;background:var(--surface);

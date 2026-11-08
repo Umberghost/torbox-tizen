@@ -1,9 +1,10 @@
-/* debrid-rd.js — compatibilidad con Real-Debrid.
+/* debrid-rd.js — compatibilidad con Real-Debrid, A LA VEZ que TorBox.
  *
- * Ajuste `debridProvider` ("torbox" | "realdebrid") y `rdToken` (real-debrid.com/apitoken).
- * Con Real-Debrid activo, los métodos de App.torbox se redirigen a este adaptador, que
- * devuelve los datos con la MISMA forma que TorBox (items con files[], download_finished,
- * progress 0–1…). Así Biblioteca, Descargas, Buscar, Continuar, Seguir series, etc. no cambian.
+ * Real-Debrid es una fuente más ("rd") junto a torrents/usenet/webdl de TorBox: App.torbox.SOURCES
+ * incluye las de cada cuenta configurada (torboxToken y/o rdToken) y list/link/control se enrutan por
+ * la fuente de cada item. Los datos de Real-Debrid se devuelven con la MISMA forma que TorBox
+ * (files[], download_finished, progress 0–1…), así que las pantallas no cambian.
+ * `debridProvider` ("torbox" | "realdebrid") = cuenta a la que se AÑADEN los torrents nuevos.
  *
  * API: https://api.real-debrid.com/rest/1.0 (Bearer token, CORS abierto).
  * Limitaciones de Real-Debrid: sin Usenet, sin pausar/reanudar, y desde nov. 2024 no ofrece
@@ -21,10 +22,18 @@ App.settings.define("rdToken", "");
 function isRD(){ return App.settings.get("debridProvider") === "realdebrid"; }
 function rdToken(){ return App.settings.get("rdToken") || ""; }
 
+function hasTB(){ return !!(App.settings.get("torboxToken") || ""); }
+function hasRDt(){ return !!rdToken(); }
+/* Cuenta destino para añadir: la elegida si está configurada; si no, la que haya */
+function addToRD(){ return (isRD() && hasRDt()) || (!hasTB() && hasRDt()); }
+
 App.debrid = {
-  provider: function(){ return isRD() ? "realdebrid" : "torbox"; },
-  name: function(){ return isRD() ? "Real-Debrid" : "TorBox"; },
-  isRD: isRD
+  provider: function(){ return addToRD() ? "realdebrid" : "torbox"; },
+  name: function(){ return addToRD() ? "Real-Debrid" : "TorBox"; },
+  isRD: isRD,
+  hasTorbox: hasTB,
+  hasRD: hasRDt,
+  rdAccount: function(){ return RD.account().then(function(j){ return j.data; }); }
 };
 
 /* ---------- Llamadas ---------- */
@@ -76,7 +85,7 @@ function toItem(t, info){
     progress: (Number(t.progress) || 0) / 100, download_speed: t.speed || 0,
     eta: (t.speed && t.bytes && t.progress < 100) ? Math.round(t.bytes * (1 - t.progress / 100) / t.speed) : 0,
     seeds: t.seeders || 0, created_at: added, updated_at: t.ended || added,
-    _source: "torrents", _rd: true
+    _source: "rd", _rd: true
   };
 }
 
@@ -106,7 +115,7 @@ var RD = {
   invalidate: function(){ listCache = null; },
   list: function(source, opts){
     opts = opts || {};
-    if(source !== "torrents") return Promise.resolve([]);   // Real-Debrid: solo torrents
+    if(source !== "rd" || !hasRDt()) return Promise.resolve([]);
     if(listCache && Date.now() - listCache.t < 60000 && !opts.fresh){
       return Promise.resolve(opts.all ? listCache.all : listCache.all.filter(function(d){ return d.download_finished && d.files.length; }));
     }
@@ -175,27 +184,40 @@ var RD = {
   }
 };
 
-/* ---------- Redirección de App.torbox según el servicio elegido ---------- */
-["hasToken", "invalidate", "list", "link", "checkCached", "addMagnet", "addLink", "control"].forEach(function(m){
-  var orig = tb[m];
-  tb[m] = function(){ return (isRD() ? RD[m] : orig).apply(tb, arguments); };
+/* ---------- Enrutado: Real-Debrid es la fuente "rd"; lo demás sigue en TorBox ---------- */
+tb.SOURCE_LABEL.rd = "Real-Debrid";
+var TB_SOURCES = tb.SOURCES.slice();
+Object.defineProperty(tb, "SOURCES", {
+  configurable: true,
+  get: function(){
+    var out = hasTB() ? TB_SOURCES.slice() : [];
+    if(hasRDt()) out.push("rd");
+    return out.length ? out : TB_SOURCES.slice();
+  }
 });
-tb.addUsenet = (function(orig){
-  return function(){ return isRD() ? Promise.reject(new Error(App.t("rd.onlyTorrents"))) : orig.apply(tb, arguments); };
-})(tb.addUsenet);
-tb.addWeb = (function(orig){
-  return function(){ return isRD() ? Promise.reject(new Error(App.t("rd.onlyTorrents"))) : orig.apply(tb, arguments); };
-})(tb.addWeb);
-tb.allLibrary = (function(orig){
-  return function(opts){ return isRD() ? RD.list("torrents", opts) : orig.apply(tb, arguments); };
-})(tb.allLibrary);
-tb.api = (function(orig){
-  return function(path){
-    if(isRD() && /^\/user\/me/.test(String(path))) return RD.account();
-    if(isRD()) return Promise.reject(new Error(App.t("rd.notSupported")));
-    return orig.apply(tb, arguments);
-  };
-})(tb.api);
+var O = {};
+["hasToken", "invalidate", "list", "link", "checkCached", "addMagnet", "addLink", "control", "addUsenet", "addWeb", "api"]
+  .forEach(function(m){ O[m] = tb[m]; });
+tb.hasToken = function(){ return hasTB() || hasRDt(); };
+tb.invalidate = function(){ RD.invalidate(); return O.invalidate.apply(tb, arguments); };
+tb.list = function(source){ return source === "rd" ? RD.list.apply(RD, arguments) : O.list.apply(tb, arguments); };
+tb.link = function(source){ return source === "rd" ? RD.link.apply(RD, arguments) : O.link.apply(tb, arguments); };
+tb.control = function(source){ return source === "rd" ? RD.control.apply(RD, arguments) : O.control.apply(tb, arguments); };
+tb.checkCached = function(){ return hasTB() ? O.checkCached.apply(tb, arguments) : Promise.resolve({}); };
+tb.addMagnet = function(){ return addToRD() ? RD.addMagnet.apply(RD, arguments) : O.addMagnet.apply(tb, arguments); };
+tb.addLink = function(link){
+  // Usenet y descargas web solo existen en TorBox; los magnets van a la cuenta destino
+  if(addToRD() && tb.linkKind(link) === "torrents") return RD.addLink.apply(RD, arguments);
+  if(!hasTB()) return RD.addLink.apply(RD, arguments);
+  return O.addLink.apply(tb, arguments);
+};
+tb.addUsenet = function(){ return hasTB() ? O.addUsenet.apply(tb, arguments) : Promise.reject(new Error(App.t("rd.onlyTorrents"))); };
+tb.addWeb = function(){ return hasTB() ? O.addWeb.apply(tb, arguments) : Promise.reject(new Error(App.t("rd.onlyTorrents"))); };
+tb.api = function(path){
+  if(!hasTB() && /^\/user\/me/.test(String(path))) return RD.account();
+  if(!hasTB()) return Promise.reject(new Error(App.t("rd.notSupported")));
+  return O.api.apply(tb, arguments);
+};
 
 App.bus.on("settings:change", function(c){
   if(c && (c.key === "debridProvider" || c.key === "rdToken")){ RD.invalidate(); tb.invalidate(); infoCache = {}; }

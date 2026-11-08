@@ -64,7 +64,7 @@ function checkVersion(){
 /* ---------- Estado de la cuenta TorBox (solo lectura) ---------- */
 var acct = { data: null, usage: null, error: "", loading: false, at: 0 };
 function fetchAccount(force){
-  if(!App.torbox.hasToken()){ acct.data = null; return; }
+  if(!hasTB() || !App.torbox.hasToken()){ acct.data = null; return; }
   if(acct.loading || (!force && Date.now() - acct.at < 300000 && acct.data)) return;
   acct.loading = true; acct.error = "";
   App.torbox.api("/user/me?settings=false").then(function(j){
@@ -81,6 +81,20 @@ function fetchAccount(force){
     });
   }).catch(function(e){ acct.error = e.message || "error"; console.warn("[settings] user/me", acct.error); })
     .then(function(){ acct.loading = false; if(App.current() === "settings" && s.grid) render(); });
+}
+function hasTB(){
+  if(App.debrid && App.debrid.hasTorbox) return !!App.debrid.hasTorbox();
+  return App.torbox.hasToken();
+}
+function hasRDacc(){ return !!(App.debrid && App.debrid.hasRD && App.debrid.hasRD()); }
+var rdAcct = { data: null, error: "", loading: false, at: 0 };
+function fetchRD(force){
+  if(!hasRDacc() || !App.debrid.rdAccount){ rdAcct.data = null; return; }
+  if(rdAcct.loading || (!force && Date.now() - rdAcct.at < 300000 && rdAcct.data)) return;
+  rdAcct.loading = true; rdAcct.error = "";
+  Promise.resolve(App.debrid.rdAccount()).then(function(d){ rdAcct.data = d || {}; rdAcct.at = Date.now(); })
+    .catch(function(e){ rdAcct.error = (e && e.message) || "error"; console.warn("[settings] rdAccount", rdAcct.error); })
+    .then(function(){ rdAcct.loading = false; if(App.current() === "settings" && s.grid) render(); });
 }
 function fmtDate(v){
   var d = new Date(v);
@@ -138,10 +152,42 @@ function showAccount(){
   });
 }
 
+function showRD(){
+  fetchRD(true);
+  var d = rdAcct.data || {}, r = [];
+  r.push([t("settings.acct.plan"), d.plan ? planName(d.plan) : "—"]);
+  if(d.username) r.push([t("settings.acct.user"), String(d.username)]);
+  if(d.premium_expires_at) r.push([t("settings.acct.expiry"), acctExpiry(d) || String(d.premium_expires_at)]);
+  if(rdAcct.error) r.push([t("settings.acct.error"), rdAcct.error]);
+  App.ui.modal({
+    title: t("settings.acct.rdTitle"),
+    html: '<div class="set-diag">' + r.map(function(x){
+      return '<div class="set-diag-row"><b>' + App.esc(x[0]) + '</b><span>' + App.esc(x[1]) + '</span></div>';
+    }).join("") + '</div>',
+    buttons: [{ label: t("ui.close"), value: true }]
+  });
+}
+/* Tarjeta de Real-Debrid (plan / caducidad / usuario) */
+function rdCardHtml(i){
+  var d = rdAcct.data, h = '<div class="row set-acct-card focusable" data-i="' + i + '">';
+  h += '<div class="set-acct-main"><div class="set-acct-eyebrow">Real-Debrid</div>';
+  if(!d){
+    h += '<div class="set-acct-plan">' + App.esc(rdAcct.error ? t("settings.acct.error") : t("settings.acct.loading")) + '</div>' +
+         '<div class="set-acct-exp">' + App.esc(t("settings.acct.rdDesc")) + '</div></div>';
+    return h + '</div>';
+  }
+  var exp = acctExpiry(d);
+  h += '<div class="set-acct-plan">' + App.esc(d.plan ? planName(d.plan) : "—") + '</div>' +
+       '<div class="set-acct-exp">' + App.esc(exp || t("settings.acct.rdDesc")) + '</div></div>';
+  h += '<div class="set-acct-stats">';
+  if(d.username) h += '<div class="set-acct-stat"><b class="num">' + App.esc(String(d.username)) + '</b><span>' + App.esc(t("settings.acct.user")) + '</span></div>';
+  return h + '</div></div>';
+}
+
 /* Tarjeta destacada de cuenta (plan / caducidad / uso) */
 function acctCardHtml(i){
   var d = acct.data, h = '<div class="row set-acct-card focusable" data-i="' + i + '">';
-  h += '<div class="set-acct-main"><div class="set-acct-eyebrow">' + App.esc(t("settings.v2.acctCard")) + '</div>';
+  h += '<div class="set-acct-main"><div class="set-acct-eyebrow">TorBox</div>';
   if(!App.torbox.hasToken() || !d){
     h += '<div class="set-acct-plan">' + App.esc(acctValue()) + '</div><div class="set-acct-exp">' + App.esc(t("settings.acct.desc")) + '</div></div>';
     return h + '</div>';
@@ -221,8 +267,9 @@ function traktAction(){
 function rows(){
   var langOpts = App.i18n.LANGS.map(function(l){ return { label: l.label, value: l.code }; });
   var r = [
-    { group: t("settings.group.account") },
+    { group: t("settings.group.account"), gkey: "settings.group.account" },
     { id: "accountStatus", type: "action", label: t("settings.acct.title"), desc: acctDesc(), value: acctValue, run: showAccount },
+    { id: "accountRD", type: "action", label: t("settings.acct.rdTitle"), desc: "", value: function(){ return rdAcct.data && rdAcct.data.plan ? planName(rdAcct.data.plan) : "—"; }, run: showRD },
     { id: "torboxToken", type: "secret", label: t("settings.torboxToken"),
       desc: t("settings.torboxToken.desc"),
       value: function(){ return mask(S.get("torboxToken")); },
@@ -232,13 +279,13 @@ function rows(){
       value: function(){ return mask(S.get("tmdbKey")); },
       after: function(){ App.bus.emit("meta:keychange"); } },
 
-    { group: t("settings.group.language") },
+    { group: t("settings.group.language"), gkey: "settings.group.language" },
     { id: "uiLanguage", type: "menu", label: t("settings.uiLanguage"), desc: t("settings.uiLanguage.desc"),
       options: langOpts },
     { id: "contentLanguage", type: "menu", label: t("settings.contentLanguage"), desc: t("settings.contentLanguage.desc"),
       options: [{ label: t("settings.contentLanguage.auto"), value: "auto" }].concat(langOpts) },
 
-    { group: t("settings.group.search") },
+    { group: t("settings.group.search"), gkey: "settings.group.search" },
     { id: "stremioAddon", type: "text", label: t("settings.stremioAddon"),
       desc: t("settings.stremioAddon.desc"),
       value: function(){ var v = S.get("stremioAddon") || ""; return v ? v.replace(/^https?:\/\//, "").slice(0, 28) + "…" : t("settings.notSet"); } },
@@ -255,13 +302,13 @@ function rows(){
     { id: "forgetFormats", type: "action", label: t("settings.forgetFormats"), desc: t("settings.forgetFormats.desc"),
       run: function(){ if(App.caps && App.caps.forget) App.caps.forget(); App.ui.toast(t("settings.forgetFormats.done")); } },
 
-    { group: t("settings.group.library") },
+    { group: t("settings.group.library"), gkey: "settings.group.library" },
     { id: "defaultSource", type: "menu", label: t("settings.defaultSource"),
       desc: t("settings.defaultSource.desc"),
       options: [{ label: t("settings.source.all"), value: "all" }, { label: "Torrents", value: "torrents" },
                 { label: "Usenet", value: "usenet" }, { label: "Web", value: "webdl" }] },
 
-    { group: t("settings.group.playback") },
+    { group: t("settings.group.playback"), gkey: "settings.group.playback" },
     { id: "autoplayNext", type: "bool", label: t("settings.autoplayNext"), desc: t("settings.autoplayNext.desc") },
     { id: "subLang", type: "menu", label: t("settings.subLang"), desc: t("settings.subLang.desc"), options: trackLangs() },
     { id: "audioLang", type: "menu", label: t("settings.audioLang"), desc: t("settings.audioLang.desc"), options: trackLangs() },
@@ -271,7 +318,7 @@ function rows(){
     { id: "openSubs", type: "bool", label: t("settings.openSubs"), desc: t("settings.openSubs.desc") },
     { id: "notifyReady", type: "bool", label: t("settings.notifyReady"), desc: t("settings.notifyReady.desc") },
 
-    { group: "Trakt" },
+    { group: "Trakt", gkey: "settings.group.trakt" },
     { id: "traktLink", type: "action", label: t("settings.trakt.link"), desc: t("settings.trakt.link.desc"),
       value: traktValue, run: traktAction },
     { id: "traktClientId", type: "secret", label: t("settings.traktClientId"), desc: t("settings.traktClientId.desc"),
@@ -279,12 +326,13 @@ function rows(){
     { id: "traktClientSecret", type: "secret", label: t("settings.traktClientSecret"), desc: "",
       value: function(){ return mask(S.get("traktClientSecret")); } },
 
-    { group: t("settings.group.live") },
+    { group: t("settings.group.live"), gkey: "settings.group.live" },
     { id: "liveListUrl", type: "text", label: t("settings.liveListUrl"),
       desc: t("settings.liveListUrl.desc"),
       value: function(){ return S.get("liveListUrl"); },
       after: function(){ App.store.remove("live_cache"); } }
   ];
+  r.push({ group: "", gkey: "settings.group.apps" });
   APPS.forEach(function(a){
     r.push({ id: "app:" + a.id, type: "appid", app: a, label: t("settings.appId", {app: a.label}),
       desc: t("settings.appId.desc"),
@@ -304,14 +352,14 @@ function rows(){
       rowsG.push(o);
     });
     var gi = -1;
-    for(var i = 0; i < r.length; i++){ if(r[i].group !== undefined && r[i].group === label){ gi = i; break; } }
-    if(gi < 0){ r.push({ group: label }); r.push.apply(r, rowsG); return; }
+    for(var i = 0; i < r.length; i++){ if(r[i].group !== undefined && (r[i].gkey === g || r[i].group === label)){ gi = i; break; } }
+    if(gi < 0){ r.push({ group: label, gkey: g }); r.push.apply(r, rowsG); return; }
     var end = gi + 1;
     while(end < r.length && r[end].group === undefined) end++;
     Array.prototype.splice.apply(r, [end, 0].concat(rowsG));
   });
   r.push(
-    { group: t("settings.group.data") },
+    { group: t("settings.group.data"), gkey: "settings.group.data" },
     { id: "diagnostics", type: "action", label: t("settings.diag.title"), desc: t("settings.diag.desc"), run: showDiag },
     { id: "clearHistory", type: "action", label: t("settings.clearHistory"),
       desc: t("settings.clearHistory.desc"),
@@ -338,7 +386,64 @@ function rows(){
         });
       } }
   );
-  return r;
+  return tagRows(r);
+}
+
+/* ---------- Pestañas ---------- */
+var TABS = ["integrations", "playback", "search", "home", "live", "appearance", "general", "system"];
+var TAB_BY_ID = {
+  integrations: ["accountStatus", "accountRD", "torboxToken", "rdToken", "debridProvider", "rotateKey", "stremioAddon", "stremioAddonsList",
+    "tmdbKey", "omdbKey", "traktLink", "traktClientId", "traktClientSecret", "ntfyTopic", "ntfyTest", "notifyReady", "syncUrl"],
+  playback: ["autoplayNext", "subLang", "audioLang", "subSize", "openSubs", "playerSpeed", "resumeRewind", "skipIntroAuto", "subDelay"],
+  search: ["autoPlayBest", "prefQuality", "maxSizeGB", "prefAudio", "hideUnsupported", "forgetFormats", "followAuto", "followList", "followNow"],
+  home: ["defaultSource", "hideWatchedHome", "homeClearFilters"],
+  live: ["liveListUrl", "liveExtraLists", "liveHidden", "liveOrder"],
+  appearance: ["theme", "uiScale", "screensaver", "navSounds"],
+  general: ["uiLanguage", "contentLanguage", "profile"],
+  system: ["diagnostics", "sysInfo", "localStats", "statsView", "pinVer", "clearHistory", "clearMeta", "clearLive", "logout"]
+};
+var TAB_BY_GROUP = {
+  "settings.group.account": "integrations", "settings.group.notify": "integrations", "settings.group.trakt": "integrations",
+  "settings.group.apps": "integrations", "settings.group.language": "general", "settings.group.search": "search",
+  "settings.group.library": "home", "settings.group.home": "home", "settings.group.playback": "playback",
+  "settings.group.player": "playback", "settings.group.live": "live", "settings.group.appearance": "appearance",
+  "settings.group.system": "system", "settings.group.data": "system"
+};
+var SUBS = ["streaming", "search", "meta", "trakt", "notify", "apps"];
+var SUB_BY_ID = {
+  accountStatus: "streaming", accountRD: "streaming", torboxToken: "streaming", rdToken: "streaming", debridProvider: "streaming", rotateKey: "streaming",
+  stremioAddon: "search", stremioAddonsList: "search", tmdbKey: "meta", omdbKey: "meta",
+  traktLink: "trakt", traktClientId: "trakt", traktClientSecret: "trakt",
+  ntfyTopic: "notify", ntfyTest: "notify", notifyReady: "notify", syncUrl: "notify"
+};
+var SUB_BY_GROUP = { "settings.group.account": "streaming", "settings.group.notify": "notify", "settings.group.trakt": "trakt",
+  "settings.group.apps": "apps", "settings.group.search": "search" };
+function tabOf(row){
+  for(var k in TAB_BY_ID) if(TAB_BY_ID[k].indexOf(row.id) >= 0) return k;
+  if(String(row.id).indexOf("app:") === 0) return "integrations";
+  return TAB_BY_GROUP[row._gkey] || "system";
+}
+function subOf(row){
+  if(String(row.id).indexOf("app:") === 0) return "apps";
+  return SUB_BY_ID[row.id] || SUB_BY_GROUP[row._gkey] || "streaming";
+}
+/* Quita los marcadores de grupo y etiqueta cada fila con su pestaña / subtítulo */
+function tagRows(list){
+  var out = [], gk = "";
+  list.forEach(function(row){
+    if(row.group !== undefined){ gk = row.gkey || ""; return; }
+    row._gkey = gk; row._tab = tabOf(row);
+    if(row._tab === "integrations") row._sub = subOf(row);
+    out.push(row);
+  });
+  out.forEach(function(row, i){ row._ord = i; });
+  out.forEach(function(row){ row._key = (row._tab === "integrations" ? SUBS.indexOf(row._sub) * 10000 : 0) + row._ord; });
+  out.sort(function(a, b){ return a._key - b._key; });
+  return out;
+}
+function curTab(){
+  var v = App.store.get("settingsTab", "integrations");
+  return TABS.indexOf(v) >= 0 ? v : "integrations";
 }
 
 function valueText(row){
@@ -351,13 +456,26 @@ function valueText(row){
 
 var s = { el: null, grid: null, rows: [] };
 
-function render(){
+function render(focusTab){
   var idx = s.grid ? s.grid.index : 0;
   s.rows = rows();
-  var html = '<div class="scroll set">';
+  var tab = curTab();
+  var html = '<div class="scroll set"><div class="chips set-tabs">';
+  TABS.forEach(function(k){
+    html += '<div class="chip set-tab focusable' + (k === tab ? ' active' : '') + '" data-tab="' + k + '">' + App.esc(t("settings.tab." + k)) + '</div>';
+  });
+  html += '</div>';
+  var lastSub = null;
   s.rows.forEach(function(row, i){
-    if(row.group){ html += '<div class="section-title set-group">' + App.esc(row.group) + '</div>'; return; }
+    if(row._tab !== tab) return;
+    if(row.id === "accountStatus" && !(hasTB() || !hasRDacc())) return;
+    if(row.id === "accountRD" && !hasRDacc()) return;
+    if(tab === "integrations" && row._sub !== lastSub){
+      lastSub = row._sub;
+      html += '<div class="section-title set-group">' + App.esc(t("settings.sub." + row._sub)) + '</div>';
+    }
     if(row.id === "accountStatus"){ html += acctCardHtml(i); return; }
+    if(row.id === "accountRD"){ html += rdCardHtml(i); return; }
     var v = valueText(row);
     html += '<div class="row set-row focusable' + (row.danger ? ' set-danger' : '') + '" data-i="' + i + '">' +
       '<div class="set-text"><div class="set-label">' + App.esc(row.label) + '</div>' +
@@ -367,17 +485,31 @@ function render(){
         : '<div class="set-value">' + App.esc(v) + '</div>') +
     '</div>';
   });
-  var newer = verState.latest && cmpVer(App.version, verState.latest) < 0;
-  html += '<div class="set-footer">' +
-    '<div>' + App.esc(t("settings.footer", {v: App.version})) +
-      (newer ? ' <span class="set-new">' + App.esc(t("settings.newVersion", {v: verState.latest})) + '</span>' : '') + '</div>' +
-    '</div></div>';
-  var sc = s.el.querySelector(".scroll"), top = sc ? sc.scrollTop : 0;
+  if(tab === "system"){
+    var newer = verState.latest && cmpVer(App.version, verState.latest) < 0;
+    html += '<div class="set-footer">' +
+      '<div>' + App.esc(t("settings.footer", {v: App.version})) +
+        (newer ? ' <span class="set-new">' + App.esc(t("settings.newVersion", {v: verState.latest})) + '</span>' : '') + '</div>' +
+      '</div>';
+  }
+  html += '</div>';
+  var sc = s.el.querySelector(".scroll"), top = (sc && !focusTab) ? sc.scrollTop : 0;
   s.el.innerHTML = html;
   sc = s.el.querySelector(".scroll"); if(sc) sc.scrollTop = top;
-  s.grid = new App.ui.FocusGrid(s.el, { onSelect: onSelect });
-  s.grid.index = Math.min(idx, s.grid.items.length - 1); s.grid.paint();
+  s.grid = new App.ui.FocusGrid(s.el, { onSelect: onSelect, onFocus: onFocus });
+  s.grid.index = focusTab ? TABS.indexOf(tab) : Math.min(idx, s.grid.items.length - 1);
+  s.grid.paint();
   if(document.body.classList.contains("zone-header")) s.grid.blur();
+}
+
+function setTab(k){
+  if(k === curTab()) return;
+  App.store.set("settingsTab", k);
+  render(true);
+}
+/* ◄► sobre una pestaña la activa al enfocarla */
+function onFocus(i, el){
+  if(el && el.getAttribute("data-tab")) setTab(el.getAttribute("data-tab"));
 }
 
 function resetRow(row){
@@ -385,7 +517,7 @@ function resetRow(row){
   else if(row && row.type === "appid"){ setAppId(row.app.id, ""); render(); App.ui.toast(t("settings.resetDone")); }
 }
 
-function rowAt(el){ return s.rows[Number(el.getAttribute("data-i"))]; }
+function rowAt(el){ var i = el.getAttribute("data-i"); return i === null ? null : s.rows[Number(i)]; }
 
 function edit(row){
   if(row.type === "bool"){ S.set(row.id, !S.get(row.id)); render(); return; }
@@ -434,16 +566,20 @@ function edit(row){
   }
 }
 
-function onSelect(i, el){ var row = rowAt(el); if(row) edit(row); }
+function onSelect(i, el){
+  var tb = el.getAttribute("data-tab");
+  if(tb){ setTab(tb); if(s.grid && s.grid.items.length > TABS.length) s.grid.focus(TABS.length); return; }
+  var row = rowAt(el); if(row) edit(row);
+}
 
 App.screens.register({
   id: "settings", label: t("nav.settings"), nav: true, order: 60,
-  get hint(){ return t("settings.v2.hint"); },
+  get hint(){ return t("settings.tabs.hint"); },
   mount: function(el){
     s.el = el;
     App.bus.on("settings:change", function(){ if(App.current() === "settings" && s.grid) render(); });
   },
-  show: function(){ render(); checkVersion(); fetchAccount(false); },
+  show: function(){ render(); checkVersion(); fetchAccount(false); fetchRD(false); },
   focus: function(){ if(s.grid){ s.grid.refresh(); s.grid.focus(s.grid.index, true); } },
   blur: function(){ if(s.grid) s.grid.blur(); },
   actions: function(){
@@ -453,6 +589,7 @@ App.screens.register({
     if(RESETTABLE.indexOf(row.id) >= 0 || row.type === "appid")
       out.push({ label: t("settings.act.reset"), run: function(){ resetRow(row); } });
     if(row.id === "accountStatus") out.push({ label: t("settings.act.refreshAcct"), run: function(){ fetchAccount(true); render(); } });
+    if(row.id === "accountRD") out.push({ label: t("settings.act.refreshAcct"), run: function(){ fetchRD(true); render(); } });
     return out;
   },
   onKey: function(k){

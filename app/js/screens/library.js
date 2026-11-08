@@ -679,7 +679,10 @@ var lib = {
 
   render: function(restore){
     var el = this.el, model = state.model, self = this;
-    var chips = [["all", App.t("library.chipAll")], ["torrents", "Torrents"], ["usenet", "Usenet"], ["webdl", "Web"]];
+    // Una pastilla por cada fuente de las cuentas configuradas (TorBox: Torrents/Usenet/Web; Real-Debrid)
+    var chips = [["all", App.t("library.chipAll")]].concat(App.torbox.SOURCES.map(function(src){
+      return [src, App.torbox.SOURCE_LABEL[src] || src];
+    }));
     var html = '<div class="scroll lib-scroll">' +
       '<div class="chips lib-chips">' + chips.map(function(c){
         return '<div class="chip focusable' + (state.filter === c[0] ? ' active' : '') + '" data-kind="chip" data-src="' + c[0] + '">' + c[1] + '</div>';

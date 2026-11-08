@@ -266,7 +266,7 @@ function controlOp(d, v){
 function itemActions(d){
   var st = status(d), out = [];
   if(st.key === "done" && (d.files || []).some(App.isVideo)) out.push({ label: "▶ " + t("downloads.play"), run: function(){ playItem(d); } });
-  if(d._source !== "webdl" && st.key !== "done"){
+  if(d._source !== "webdl" && d._source !== "rd" && st.key !== "done"){
     if(st.key === "paused") out.push({ label: t("downloads.resume"), run: function(){ controlOp(d, "resume"); } });
     else out.push({ label: t("downloads.pause"), run: function(){ controlOp(d, "pause"); } });
   }

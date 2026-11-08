@@ -14,8 +14,11 @@ sistema cerrado (sin ADB), así que todo entra por red/APIs web.
   la etiqueta vX.Y.Z más alta (ya existían v2.1–v2.5). Siguientes versiones: v3.x.
 - Rediseño 2.0 (rail lateral, foco blanco, barra "Mantén OK", guía TDT principal) — spec en ARCHITECTURE.md y
   maquetas en `design/`. Interfaz en 7 idiomas (en, es, ca, gl, eu, pt, fr).
-- **Real-Debrid** (v3.1): `js/debrid-rd.js` redirige los métodos de `App.torbox` cuando `debridProvider` = "realdebrid"
-  (token `rdToken`), devolviendo datos con la forma de TorBox. Sin Usenet/web, sin pausar, sin consulta de caché.
+- **TorBox + Real-Debrid a la vez** (v3.2): `js/debrid-rd.js` añade la fuente "rd" a `App.torbox.SOURCES` (getter según
+  tokens) y enruta list/link/control por fuente; `debridProvider` = cuenta destino de los torrents nuevos.
+  Real-Debrid: sin Usenet/web, sin pausar, sin consulta de caché.
+- Ajustes en pestañas (Integraciones, Reproducción, Búsqueda, Inicio y biblioteca, TV, Apariencia, General, Sistema):
+  filas asignadas por id/grupo en settings.js; lo no mapeado cae en Sistema.
 - Publicar: `python tools/bundle.py` (app/dist) + `python tizen-app/build.py` (wgt) + commit + tag + push.
 - El push con `.github/workflows/android.yml` exige que `gh` tenga el scope `workflow`.
 

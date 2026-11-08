@@ -59,7 +59,7 @@ function check(){
   if(busy){ schedule(); return; }
   busy = true;
   var needAll = l.some(function(e){ return !e.hash; });
-  var sources = needAll ? App.torbox.SOURCES : ["torrents"];
+  var sources = needAll ? App.torbox.SOURCES : App.torbox.SOURCES.filter(function(x){ return x === "torrents" || x === "rd"; });
   Promise.all(sources.map(function(src){
     return App.torbox.list(src, { all: true, fresh: true }).catch(function(){ return []; });
   })).then(function(lists){
