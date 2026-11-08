@@ -54,9 +54,7 @@ function FocusGrid(container, opts){
       if(i < 0) return;
       ev.preventDefault();
       if(document.body.classList.contains("zone-header") && App.focusContent) App.focusContent();
-      /* táctil: tocar no debe recentrar la página (salto brusco); la rueda/D-pad sí */
-      ui._noScroll = document.body.classList.contains("touch");
-      try{ g.focus(i); }finally{ ui._noScroll = false; }
+      g.focus(i);
       if(el.tagName === "INPUT"){ el.focus(); return; }
       if(g.opts.onSelect) g.opts.onSelect(i, el);
     });
@@ -78,7 +76,7 @@ FocusGrid.prototype.focus = function(i, silent){
   this.index = Math.max(0, Math.min(i, this.items.length - 1));
   this.paint();
   var el = this.items[this.index];
-  if(!ui._noScroll) scrollIntoViewSmart(el);
+  scrollIntoViewSmart(el);
   if(!silent && this.opts.onFocus) this.opts.onFocus(this.index, el);
 };
 FocusGrid.prototype.blur = function(){
@@ -148,14 +146,6 @@ ui.modal = function(opts){
       '<div class="modal-buttons">'+btns+'</div>'+
     '</div>';
   document.body.appendChild(el);
-  /* Ratón/táctil: pulsar fuera del cuadro cierra (como Atrás). Solo fuera de la TV. */
-  if(!App.isTizen()){
-    el.addEventListener("click", function(ev){
-      if(ev.target !== el) return;
-      var top = stack[stack.length - 1];
-      if(top && top.el === el) closeTop(top.cancelValue === undefined ? null : top.cancelValue);
-    });
-  }
   var grid = new FocusGrid(el.querySelector(".modal-buttons"), {
     onEdge: function(){ return true; },
     onSelect: function(i){ closeTop((opts.buttons || [{value:true}])[i].value); }
@@ -211,7 +201,6 @@ ui.toast = function(msg, ms){
     document.body.appendChild(toastEl);
   }
   toastEl.textContent = msg;
-  toastEl.setAttribute("role", "status");
   toastEl.classList.add("on");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ toastEl.classList.remove("on"); }, ms || 3000);

@@ -118,7 +118,6 @@ function build(){
    "plThumb","plSeekTxt","plSkip","plSleep","plRecap","plPanel","plTags","plSegs","plLine"]
     .forEach(function(id){ els[id] = document.getElementById(id); });
   els.subSpan = els.plSub.querySelector("span");
-  if(!App.isTizen()) initPointer();   // ratón / táctil: nunca en la TV
 }
 
 function setClass(on, cls, el){ (el || root).classList.toggle(cls, !!on); }
@@ -929,20 +928,11 @@ function subMenu(){
 function audioMenu(){
   if(!P.engine) return;
   var tr = P.engine.tracks();
-  /* Siempre abre el menú: el aviso de la barra inferior queda oculto tras el reproductor y parecía que no hacía nada */
-  var items = tr.audio.map(function(a){ return { label: a.label, value: a.index, selected: !!a.current }; });
-  var pc = !App.isTizen() && P.opts && P.opts.url && !P.opts.live;
-  if(!items.length) items.push({ label: App.t("player.audioCurrent"), value: "none", selected: true });
-  if(tr.audio.length < 2) items.push({ label: App.t(tr.audio.length ? "player.audioOne" : (pc ? "player.audioWhyPc" : "player.audioNoSwitch")), value: "none" });
-  if(tr.audio.length < 2 && pc) items.push({ label: App.t("player.copyLink"), value: "copy" });
-  App.ui.menu(App.t("player.audioTitle"), items).then(function(v){
-    if(v === null || !P.active || v === "none") return;
-    if(v === "copy"){
-      var url = P.opts.url, done = function(){ App.ui.toast(App.t("player.linkCopied"), 9000); };
-      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function(){ window.prompt("URL", url); });
-      else window.prompt("URL", url);
-      return;
-    }
+  if(tr.audio.length < 2){ App.hint(tr.audio.length ? App.t("player.audioOne") : App.t("player.audioNoSwitch")); return; }
+  App.ui.menu(App.t("player.audioTitle"), tr.audio.map(function(a){
+    return { label: a.label, value: a.index, selected: !!a.current };
+  })).then(function(v){
+    if(v === null || !P.active) return;
     if(P.engine.selectAudio(Number(v))) App.hint(App.t("player.audioChanged"));
     else App.hint(App.t("player.audioFail"));
   });
@@ -1367,9 +1357,7 @@ var SVG = {
   ff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
-  next: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4l11 8-11 8z"/><rect x="17" y="4" width="3" height="16" rx="1"/></svg>',
-  fsIn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
-  fsOut: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'
+  next: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4l11 8-11 8z"/><rect x="17" y="4" width="3" height="16" rx="1"/></svg>'
 };
 function nextLabel(o){
   var m = (o && o.meta) || {};
@@ -1387,12 +1375,9 @@ function allItems(){
   add({ id: "audio", grp: "r", txt: App.t("player.ctl.audio"), label: App.t("player.ctl.audio"), run: audioMenu });
   add({ id: "subs", grp: "r", txt: App.t("player.ctl.subs"), label: App.t("player.ctl.subs"), run: subMenu });
   add({ id: "speed", grp: "r", txt: App.t("player.v2.speed", { v: P.speed || 1 }), label: App.t("player.ctl.speed"), run: speedMenu }, !live);
-  var cmp = !App.isTizen() && document.body.classList.contains("mobile");   // móvil: lo secundario va al menú ···
-  add({ id: "zoom", grp: "r", txt: App.t("player.v2.picture"), label: App.t("player.ctl.zoom"), run: zoomMenu, more: cmp });
-  add({ id: "sleep", grp: "r", txt: App.t("player.v2.sleepIn"), label: App.t("player.ctl.sleep"), run: sleepMenu, more: cmp });
-  add({ id: "info", grp: "r", ic: "i", sq: true, label: App.t("player.ctl.info"), run: infoPanel, more: cmp });
-  add({ id: "fs", grp: "r", ic: fsEl() ? SVG.fsOut : SVG.fsIn, sq: true, label: App.t(fsEl() ? "player.ctl.fsExit" : "player.ctl.fs"), run: toggleFs },
-    !App.isTizen() && fsSupported());
+  add({ id: "zoom", grp: "r", txt: App.t("player.v2.picture"), label: App.t("player.ctl.zoom"), run: zoomMenu });
+  add({ id: "sleep", grp: "r", txt: App.t("player.v2.sleepIn"), label: App.t("player.ctl.sleep"), run: sleepMenu });
+  add({ id: "info", grp: "r", ic: "i", sq: true, label: App.t("player.ctl.info"), run: infoPanel });
   add({ id: "replay", more: true, label: App.t("player.ctl.replay"), run: function(){
     if(!P.started) return;
     P.engine.seek(Math.max(0, curTime() - 10));
@@ -1453,158 +1438,6 @@ function actions(){
   return allItems().map(function(it){ return { label: it.label, run: it.run }; });
 }
 
-/* ================= PC / móvil (ratón y táctil): pantalla completa, gestos, barra, atajos =================
- * Todo esto solo se activa fuera de la TV (!App.isTizen()); en Tizen no se registra ningún manejador.
- * Atajos de teclado en PC: Espacio = play/pausa, F = pantalla completa, M = silencio (main.js la convierte en K.MENU,
- * así que aquí K.MENU = silencio), ◄► ±10 s, ▼/Intro = barra de botones, Esc = atrás/cerrar. */
-function fsEl(){ return document.fullscreenElement || document.webkitFullscreenElement || null; }
-function fsSupported(){ var d = document.documentElement; return !!(d.requestFullscreen || d.webkitRequestFullscreen); }
-function isTouchUi(){ var c = document.body.classList; return c.contains("touch") || c.contains("mobile"); }
-function exitFs(){
-  if(!fsEl()) return;
-  try{ var r = (document.exitFullscreen || document.webkitExitFullscreen).call(document); if(r && r.catch) r.catch(function(){}); }catch(e){}
-}
-/* Se pone en pantalla completa el documento (no solo #player) para que los menús/modales sigan visibles */
-function toggleFs(){
-  if(App.isTizen()) return;
-  if(fsEl()){ exitFs(); return; }
-  var d = document.documentElement, req = d.requestFullscreen || d.webkitRequestFullscreen;
-  if(!req) return;
-  function lock(){
-    try{
-      if(isTouchUi() && window.screen && screen.orientation && screen.orientation.lock){
-        var q = screen.orientation.lock("landscape"); if(q && q.catch) q.catch(function(){});
-      }
-    }catch(e){}
-  }
-  try{ var pr = req.call(d); if(pr && pr.then) pr.then(lock, function(){}); else lock(); }catch(e){}
-}
-function toggleMute(){
-  if(!els.plVideo || P.engineName !== "video") return;
-  els.plVideo.muted = !els.plVideo.muted;
-  App.hint(App.t(els.plVideo.muted ? "player.muted" : "player.unmuted"));
-}
-function onFsChange(){
-  if(!fsEl()){ try{ if(window.screen && screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){} }
-  if(P.active) renderBar();
-}
-if(!App.isTizen()){
-  document.addEventListener("fullscreenchange", onFsChange);
-  document.addEventListener("webkitfullscreenchange", onFsChange);
-}
-
-function flashSkip(dir){
-  var el = els.plDt; if(!el) return;
-  el.textContent = (dir < 0 ? "−10" : "+10");
-  el.className = "pl-dt on " + (dir < 0 ? "l" : "r");
-  clearTimeout(P._dtT);
-  P._dtT = setTimeout(function(){ el.className = "pl-dt"; }, 550);
-}
-function scrubTo(bar, x){
-  var r = bar.getBoundingClientRect();
-  var ratio = r.width > 0 ? Math.max(0, Math.min(1, (x - r.left) / r.width)) : 0;
-  clearTimeout(P.seekT); P.seekT = null;
-  P.seekTarget = Math.max(0, Math.min(Math.max(0, P.dur - 2), ratio * P.dur));
-  els.plSeekTxt.textContent = App.fmtTime(P.seekTarget) + " / " + App.fmtTime(P.dur);
-  els.plThumb.style.display = P.still ? "block" : "none";
-  els.plSeek.classList.add("on");
-  clearTimeout(P.osdT);
-  updateUi();
-}
-function mouseMs(){ return 3000; }
-function mouseHide(){
-  if(!P.active) return;
-  var hov = root.querySelector(".pl-b:hover,.pl-bar:hover,.pl-x:hover");
-  if(hov){ P.osdT = setTimeout(mouseHide, 1500); return; }
-  hideOsd();
-}
-function initPointer(){
-  var dt = document.createElement("div"); dt.className = "pl-dt"; root.appendChild(dt); els.plDt = dt;
-  var xb = document.createElement("button"); xb.className = "pl-x"; xb.setAttribute("aria-label", App.t("player.ctl.close"));
-  xb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
-  els.plOsd.appendChild(xb);
-  xb.addEventListener("click", function(){ stop(); });
-  els.plSkip.addEventListener("click", function(){ doSkip(); });
-
-  // botones de la barra: toque / clic
-  els.plPanel.addEventListener("click", function(e){
-    var btn = e.target.closest ? e.target.closest("button") : null;
-    if(!btn || !P.active) return;
-    var idx = Array.prototype.indexOf.call(els.plPanel.querySelectorAll("button"), btn);
-    var it = (P.barItems || [])[idx];
-    if(!it) return;
-    P.ctlId = it.id; P.barTouched = true;
-    it.run();
-    if(P.active){ if(it.keep) showOsd(); else renderBar(); }
-  });
-
-  // barra de progreso: clic/toque y arrastre
-  var bar = root.querySelector(".pl-bar"), scrub = null;
-  bar.addEventListener("pointerdown", function(e){
-    if(!P.active || !P.started || (P.opts && P.opts.live) || !(P.dur > 0)) return;
-    if(e.pointerType === "mouse" && e.button !== 0) return;
-    e.preventDefault(); e.stopPropagation();
-    try{ bar.setPointerCapture(e.pointerId); }catch(er){}
-    scrub = e.pointerId; scrubTo(bar, e.clientX);
-  });
-  bar.addEventListener("pointermove", function(e){ if(scrub === e.pointerId) scrubTo(bar, e.clientX); });
-  function endScrub(e, commit){
-    if(scrub !== e.pointerId) return;
-    scrub = null;
-    var target = P.seekTarget;
-    els.plSeek.classList.remove("on");
-    if(commit && P.engine && target !== null){ P.engine.seek(target); setTimeout(saveNow, 1500); }
-    setTimeout(function(){ P.seekTarget = null; if(P.active) updateUi(); }, 450);
-    if(P.active) showOsd(mouseMs());
-  }
-  bar.addEventListener("pointerup", function(e){ endScrub(e, true); });
-  bar.addEventListener("pointercancel", function(e){ endScrub(e, false); });
-
-  // toques / clics sobre el vídeo
-  var down = null, tap = { timer: null, t: 0, x: 0 }, chain = { t: 0, dir: 0 };
-  function ui(t){ return !!(t.closest && t.closest(".pl-b,.pl-bar,.pl-x,.pl-skip,.pl-recap,.pl-countdown")); }
-  root.addEventListener("pointerdown", function(e){
-    if(!P.active || (e.pointerType === "mouse" && e.button !== 0) || ui(e.target)){ down = null; return; }
-    down = { x: e.clientX, y: e.clientY, t: Date.now() };
-  });
-  root.addEventListener("pointercancel", function(){ down = null; });
-  root.addEventListener("pointerup", function(e){
-    if(!down || !P.active) return;
-    var d = down; down = null;
-    if(Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12 || Date.now() - d.t > 500) return;
-    if(P.recap || P.countdown) return;
-    var touch = e.pointerType !== "mouse", now = Date.now(), w = root.clientWidth || 1;
-    var dir = e.clientX < w / 3 ? -1 : e.clientX > w * 2 / 3 ? 1 : 0;
-    function seekTap(dr){ if(P.opts && P.opts.live) return; flashSkip(dr); seekBy(dr * 10); chain.t = now; chain.dir = dr; }
-    if(touch && dir && chain.dir === dir && now - chain.t < 550){ seekTap(dir); return; }   // toques seguidos siguen saltando
-    if(tap.timer && now - tap.t < 320 && Math.abs(e.clientX - tap.x) < 90){
-      clearTimeout(tap.timer); tap.timer = null;
-      if(!touch) toggleFs();
-      else if(dir) seekTap(dir);
-      else togglePause();
-      return;
-    }
-    tap.t = now; tap.x = e.clientX;
-    tap.timer = setTimeout(function(){
-      tap.timer = null;
-      if(!P.active) return;
-      if(touch){ if(osdVisible()) hideOsd(); else showOsd(); }
-      else togglePause();
-    }, 280);
-  });
-
-  // ratón: mostrar OSD al mover y ocultarlo (con el cursor) tras unos segundos
-  var lx = -1, ly = -1;
-  root.addEventListener("pointermove", function(e){
-    if(!P.active || e.pointerType !== "mouse") return;
-    if(Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly) < 3) return;
-    lx = e.clientX; ly = e.clientY;
-    if(scrub !== null) return;
-    if(!osdVisible()) showOsd(mouseMs());
-    else if(!P.paused || (P.opts && P.opts.live)){ clearTimeout(P.osdT); P.osdT = setTimeout(mouseHide, mouseMs()); }
-  });
-}
-
 /* ================= API pública ================= */
 function play(opts){
   if(opts && !opts.url && opts.urls && opts.urls.length) opts.url = opts.urls[0];
@@ -1639,7 +1472,6 @@ function play(opts){
 
 function stop(){
   var o = P.opts;
-  if(!App.isTizen()) exitFs();
   var closePos = (P.active && P.engine && P.started) ? curTime() : 0, closeDur = P.dur || 0;
   if(P.active) saveNow();
   clearTimers();
@@ -1679,13 +1511,6 @@ function onKey(k){
   if(P.recap){ closeRecap(false); return true; }
 
   var vis = osdVisible();
-
-  // PC: Espacio = play/pausa, F = pantalla completa, M (llega como K.MENU) = silencio
-  if(!App.isTizen()){
-    if(k === 32){ if(P.started) togglePause(); return true; }
-    if(k === 70){ toggleFs(); return true; }
-    if(k === K.MENU){ toggleMute(); showOsd(); return true; }
-  }
 
   if(k === K.STOP){ stop(); return true; }
   if(App.isBack(k)){ if(vis) hideOsd(); else stop(); return true; }

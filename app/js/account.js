@@ -285,9 +285,11 @@ function applyItems(apply){
     }else if(p.base === "history" && p.prof === cur && App.history && App.history.save){
       var d = it.d || {};
       Object.keys(d).forEach(function(key){
-        var r = d[key];
-        if(r) App.history.applyRemote({ key: key, pos: r.pos, dur: r.dur, updated: r.updated, title: r.title, subtitle: r.subtitle,
-          poster: r.poster, watched: r.watched, meta: r.meta, removed: r.removed });
+        var r = d[key], c = App.history.get(key);
+        if(!r || (c && (c.updated || 0) >= (r.updated || 0))) return;
+        var e = App.history.save({ key: key, pos: r.pos || 0, dur: r.dur || 0, title: r.title, subtitle: r.subtitle,
+          poster: r.poster, watched: !!r.watched, meta: r.meta });
+        if(e) e.updated = r.updated || e.updated;
       });
     }else{
       rawWrite(raw, it.d);

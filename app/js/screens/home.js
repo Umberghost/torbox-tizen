@@ -983,9 +983,6 @@ function actionsList(){
       } });
     }
     list.push({ label: App.t("home.actSeen"), run: function(){ markSeen(it); } });
-    if(it.kind === "cw" && App.history) list.push({ label: App.t("library.act.dropContinue"), run: function(){
-      App.history.remove(it.entry.key); App.ui.toast(App.t("library.droppedContinue"));
-    } });
   }
   list.push({ label: App.t("home.actSurprise"), run: surprise });
   list.push({ label: App.t("home.actFilters"), run: openFilters });

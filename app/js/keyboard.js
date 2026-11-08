@@ -108,7 +108,7 @@ function pasteFromClipboard(){
   });
 }
 document.addEventListener("paste", function(ev){
-  if(!st || st.native) return;   // en el diálogo nativo el <input> recibe el pegado solo
+  if(!st) return;
   var txt = ev.clipboardData ? ev.clipboardData.getData("text") : "";
   if(txt){ ev.preventDefault(); st.physical = true; insertText(txt); }
 });
@@ -148,56 +148,12 @@ function finish(ok){
   }catch(e){ console.error("[keyboard]", e); }
 }
 
-/* ---- PC / móvil: diálogo compacto con un <input> nativo (teclado del móvil, pegar, autocompletar) ---- */
-function openNative(opts){
-  st = {
-    native: true, value: String(opts.value || ""), secret: !!opts.secret, max: opts.max || 0,
-    onDone: opts.onDone, onCancel: opts.onCancel
-  };
-  el = document.createElement("div");
-  el.className = "kb-backdrop kb-native";
-  el.innerHTML = '<form class="kb-panel kb-nat-panel" autocomplete="off">' +
-    (opts.title ? '<div class="kb-title">' + App.esc(opts.title) + '</div>' : '') +
-    '<div class="kb-nat-field"><input class="kb-nat-input" type="' + (st.secret ? "password" : "text") + '" enterkeyhint="done"' +
-      ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"' +
-      (st.max ? ' maxlength="' + st.max + '"' : '') +
-      ' placeholder="' + App.esc(opts.placeholder || "") + '">' +
-    (st.secret ? '<button type="button" class="kb-nat-eye">' + App.esc(t("keyboard.show")) + '</button>' : '') +
-    '</div>' +
-    '<div class="kb-nat-btns"><button type="button" class="kb-nat-cancel">' + App.esc(t("ui.cancel")) + '</button>' +
-    '<button type="submit" class="kb-nat-done">✓ ' + App.esc(t("keyboard.done")) + '</button></div></form>';
-  document.body.appendChild(el);
-  var inp = el.querySelector(".kb-nat-input");
-  inp.value = st.value;
-  var cur = st;
-  el.addEventListener("mousedown", function(ev){ if(ev.target === el) ev.preventDefault(); });
-  el.addEventListener("click", function(ev){ if(ev.target === el && st === cur) finish(false); });
-  inp.addEventListener("keydown", function(ev){
-    if(ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); if(st === cur) finish(false); }
-    else if(ev.key === "Enter"){ ev.preventDefault(); ev.stopPropagation(); if(st === cur){ cur.value = inp.value; finish(true); } }
-  });
-  el.querySelector("form").addEventListener("submit", function(ev){
-    ev.preventDefault();
-    if(st === cur){ cur.value = inp.value; finish(true); }
-  });
-  el.querySelector(".kb-nat-cancel").addEventListener("click", function(){ if(st === cur) finish(false); });
-  var eye = el.querySelector(".kb-nat-eye");
-  if(eye) eye.addEventListener("click", function(){
-    var show = inp.type === "password";
-    inp.type = show ? "text" : "password";
-    eye.textContent = t(show ? "keyboard.hide" : "keyboard.show");
-    inp.focus();
-  });
-  setTimeout(function(){ try{ inp.focus(); inp.select(); }catch(e){} }, 30);
-}
-
 App.ui = App.ui || {};
 App.ui.keyboard = {
   /* opts: {title, value, placeholder, secret, max, onDone(value), onCancel()} */
   open: function(opts){
     opts = opts || {};
     if(st) finish(false);
-    if(!App.isTizen()){ openNative(opts); return; }
     st = {
       title: opts.title || "", value: String(opts.value || ""), placeholder: opts.placeholder || "",
       secret: !!opts.secret, reveal: false, max: opts.max || 0,
@@ -217,11 +173,6 @@ App.ui.keyboard = {
   close: function(){ if(st) finish(false); },
   onKey: function(k, e){
     if(!st) return false;
-    if(st.native){
-      // el <input> recibe las teclas; solo Esc/Atrás cancelan (Intro lo gestiona el propio campo)
-      if(k === K.BACK || k === K.BACK_LG || k === K.ESC){ finish(false); return true; }
-      return false;
-    }
     // Atrás del mando / Escape → cancelar
     if(k === K.BACK || k === K.BACK_LG || k === K.ESC){ finish(false); return true; }
     // Backspace físico → borrar
