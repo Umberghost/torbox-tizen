@@ -331,6 +331,14 @@ function dispatchKey(e){
     if(App.ui.keyboard.onKey(k, e) !== false) e.preventDefault();
     return;
   }
+  /* PC/móvil con teclado: R/G/Y/B = botones de color, I = Info, M = menú (sin modificadores ni campo de texto) */
+  if(!App.isTizen() && !(e.ctrlKey || e.metaKey || e.altKey)){
+    var ae0 = document.activeElement;
+    if(!(ae0 && (ae0.tagName === "INPUT" || ae0.tagName === "TEXTAREA"))){
+      var PCK = { 82: K.RED, 71: K.GREEN, 89: K.YELLOW, 66: K.BLUE, 73: K.INFO, 77: K.MENU };
+      if(PCK[k]) k = PCK[k];
+    }
+  }
   // 2) Modal
   if(App.ui.isModalOpen()){
     App.ui.modalKey(k, e); e.preventDefault(); return;
@@ -549,6 +557,23 @@ function boot(){
       onKeyDown({ keyCode: K.ESC, preventDefault: function(){}, stopPropagation: function(){} });
     });
     document.body.appendChild(bb);
+    /* Clic derecho = menú de opciones (como mantener OK) */
+    document.addEventListener("contextmenu", function(ev){
+      var tg = ev.target;
+      if(tg && (tg.tagName === "INPUT" || tg.tagName === "TEXTAREA")) return;
+      ev.preventDefault();
+      if(App.player && App.player.isActive && App.player.isActive()) return;
+      App.openMenu();
+    });
+    /* Aviso único con los atajos del teclado del PC */
+    var tipKey = "pcKeysTip1";
+    var shown = false;
+    try{ shown = localStorage.getItem(tipKey) === "1"; }catch(e){}
+    var coarse = false; try{ coarse = window.matchMedia("(pointer: coarse)").matches; }catch(e){}
+    if(!shown && !coarse){
+      setTimeout(function(){ App.ui.toast(App.t("main.pcKeys"), 12000); }, 2500);
+      try{ localStorage.setItem(tipKey, "1"); }catch(e){}
+    }
   }
   App.bus.emit("app:ready");
   /* Avisa al cargador (tizen-app/index.html): arranque correcto → no hacer rollback */

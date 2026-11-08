@@ -397,14 +397,40 @@ function mergeStreams(lists){
   return out;
 }
 
+/* Algunos add-ons (Comet, MediaFusion…) devuelven el error como un "stream" falso:
+ * "[❌] realdebrid DIRECT / realdebrid: Invalid API key." → no es una fuente, es un aviso. */
+var ERR_RE = /\[?❌\]?|invalid api ?key|api ?key (is )?invalid|unauthori[sz]ed|token (is )?(invalid|expired)|configuration error|not configured/i;
+function addonError(st){
+  if(st.infoHash) return "";
+  var NL = String.fromCharCode(10);
+  var txt = String(st.name || "") + NL + String(st.title || st.description || "");
+  if(!ERR_RE.test(txt)) return "";
+  var lines = txt.split(NL).map(function(l){ return l.replace(/\[?❌\]?/g, "").trim(); }).filter(Boolean);
+  var best = lines.filter(function(l){ return /invalid|error|unauthori|expired|config/i.test(l); })[0] || lines[0] || "";
+  return best.slice(0, 120);
+}
+var warnedAddons = {};
+function warnAddonErrors(warnings){
+  var fresh = (warnings || []).filter(function(w){ var k = w.addon + "|" + w.msg; if(warnedAddons[k]) return false; warnedAddons[k] = true; return true; });
+  if(!fresh.length) return;
+  var msg = fresh.map(function(w){ return w.addon + ": " + w.msg; }).join(" · ");
+  App.ui.toast(t("search.addonErr", { msg: msg }), 10000);
+  console.warn("[buscar] errores de add-on:", msg);
+}
+
 function fetchStreamsRaw(bases, type, id){
   var path = "/stream/" + type + "/" + encodeURIComponent(id).replace(/%3A/g, ":") + ".json";
   var counter = 0;
   return Promise.all(bases.map(function(base){
     return getJson(base + path, ADDON_TIMEOUT, t("search.err.addonTimeout"))
       .then(function(j){
-        var list = (j.streams || []).map(function(st){ return normStream(st, counter++); }).filter(function(x){ return x.url || x.hash; });
-        return { name: addonName(base), list: list };
+        var name = addonName(base), errs = [];
+        var list = (j.streams || []).filter(function(st){
+          var e = addonError(st || {});
+          if(e){ if(errs.indexOf(e) < 0) errs.push(e); return false; }
+          return true;
+        }).map(function(st){ return normStream(st, counter++); }).filter(function(x){ return x.url || x.hash; });
+        return { name: name, list: list, warnings: errs.map(function(e){ return { addon: name, msg: e }; }) };
       })
       .catch(function(e){ console.warn("[buscar] add-on " + addonHost(base) + ":", e && e.message); return { err: e }; });
   })).then(function(res){
@@ -414,6 +440,8 @@ function fetchStreamsRaw(bases, type, id){
       var real = res.filter(function(r){ return r.err.status !== 404; })[0];
       throw (real || res[0]).err;
     }
+    var warnings = [];
+    ok.forEach(function(r){ warnings = warnings.concat(r.warnings || []); });
     var list = mergeStreams(ok);
     // Marcar caché con TorBox para los que solo traen infoHash
     var hashes = list.filter(function(x){ return x.hash && !x.cached; }).map(function(x){ return x.hash; });
@@ -423,7 +451,7 @@ function fetchStreamsRaw(bases, type, id){
       var hide = App.caps && App.caps.hideUnsupported ? App.caps.hideUnsupported() : false;
       var visible = [], hidden = [];
       list.forEach(function(x){ (hide && x.compatible === false ? hidden : visible).push(x); });
-      return { visible: sortStreams(visible), hidden: sortStreams(hidden) };
+      return { visible: sortStreams(visible), hidden: sortStreams(hidden), warnings: warnings };
     });
   });
 }
@@ -1267,6 +1295,7 @@ function openStreams(o){
       s.streamsLoading = false;
       var onScreen = App.current() === "search" && s.level === "streams";
       if(onScreen) renderStreams();
+      if(onScreen) warnAddonErrors(r.warnings);
       if(o.autoPlay && onScreen){
         var best = bestStream(s.streams);
         if(best){

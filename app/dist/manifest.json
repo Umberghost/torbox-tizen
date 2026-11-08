@@ -1,10 +1,10 @@
 {
- "version": "3.3.0",
+ "version": "3.3.1",
  "js": 43,
  "css": 6,
  "bytes": {
-  "app.js": 1559786,
+  "app.js": 1568334,
   "app.css": 68157
  },
- "sha1": "8c394efe46dd"
+ "sha1": "2171e09f4e5a"
 }

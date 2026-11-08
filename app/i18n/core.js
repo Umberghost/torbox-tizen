@@ -521,3 +521,12 @@ A.add("fr", {
   "boot.pin.current": "Utilisée : {v}", "boot.pin.bad": "marquée comme défectueuse"
 });
 })();
+
+/* Atajos de teclado en el PC */
+window.App.i18n.add("en", {"main.pcKeys": "Keyboard: R G Y B = colour buttons · I = info · M or right-click = options · Esc = back"});
+window.App.i18n.add("es", {"main.pcKeys": "Teclado: R G Y B = botones de color · I = info · M o clic derecho = opciones · Esc = atrás"});
+window.App.i18n.add("ca", {"main.pcKeys": "Teclat: R G Y B = botons de color · I = info · M o clic dret = opcions · Esc = enrere"});
+window.App.i18n.add("gl", {"main.pcKeys": "Teclado: R G Y B = botóns de cor · I = info · M ou clic dereito = opcións · Esc = atrás"});
+window.App.i18n.add("eu", {"main.pcKeys": "Teklatua: R G Y B = kolore-botoiak · I = info · M edo eskuineko klika = aukerak · Esc = atzera"});
+window.App.i18n.add("pt", {"main.pcKeys": "Teclado: R G Y B = botões de cor · I = info · M ou clique direito = opções · Esc = voltar"});
+window.App.i18n.add("fr", {"main.pcKeys": "Clavier : R G Y B = touches de couleur (rouge, vert, jaune, bleu) · I = info · M ou clic droit = options · Échap = retour"});

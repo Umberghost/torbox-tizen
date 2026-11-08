@@ -720,6 +720,12 @@ function onEngineError(msg, code, wasPlaying){
   var buttons = [];
   if(o && o.url){ buttons.push({ label: App.t("player.retry"), value: "retry" }); }
   if(alt && o){ buttons.push({ label: altLabel, value: "alt" }); }
+  // En el PC/móvil (sin AVPlay): ofrecer el enlace para un reproductor externo como VLC
+  var pcLink = !App.isTizen() && o && o.url && !o.live;
+  if(pcLink){
+    buttons.push({ label: App.t("player.copyLink"), value: "copy" });
+    buttons.push({ label: App.t("player.openLink"), value: "open" });
+  }
   buttons.push({ label: App.t("ui.close"), value: "close" });
   closeEngine();
   clearTimers();
@@ -735,6 +741,14 @@ function onEngineError(msg, code, wasPlaying){
       if(!P.active) return;
       if(v === "retry") start(o, pos, curEngine);
       else if(v === "alt") start(o, pos, alt);
+      else if(v === "copy"){
+        var url = o.url;
+        var done = function(){ App.ui.toast(App.t("player.linkCopied"), 9000); };
+        if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function(){ window.prompt("URL", url); });
+        else window.prompt("URL", url);
+        stop();
+      }
+      else if(v === "open"){ try{ window.open(o.url, "_blank"); }catch(e){} stop(); }
       else stop();
     }
   });
