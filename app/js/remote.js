@@ -244,13 +244,7 @@ function mergeHistory(list){
   if(!App.history || !list || !list.length) return 0;
   list.forEach(function(r){
     if(!r || !r.key) return;
-    var cur = App.history.get(r.key);
-    if(cur && (cur.updated || 0) >= (r.updated || 0)) return;
-    var e = App.history.save({
-      key: r.key, pos: r.pos || 0, dur: r.dur || 0, title: r.title, subtitle: r.subtitle,
-      poster: r.poster, watched: !!r.watched, meta: r.meta
-    });
-    if(e){ e.updated = r.updated || e.updated; n++; }   // save() devuelve la entrada viva: conservar su fecha original
+    if(App.history.applyRemote(r)) n++;   // conserva su fecha original y respeta lo quitado
   });
   return n;
 }
