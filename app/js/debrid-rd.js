@@ -207,6 +207,7 @@ tb.checkCached = function(){ return hasTB() ? O.checkCached.apply(tb, arguments)
 tb.addMagnet = function(){ return addToRD() ? RD.addMagnet.apply(RD, arguments) : O.addMagnet.apply(tb, arguments); };
 /* addMagnetTo("RD"|"TB"|"", magnet, name): manda a la cuenta que indica la fuente del add-on ("[RD⬇️]"→RD);
  * si esa cuenta no está configurada (o no se sabe), a la cuenta destino de siempre. */
+tb.rdUser = function(){ return rd("/user"); };   // comprobación de la clave (checks.js)
 tb.addMagnetTo = function(svc, magnet, name){
   if(svc === "RD" && hasRDt()) return RD.addMagnet(magnet, name);
   if(svc === "TB" && hasTB()) return O.addMagnet.call(tb, magnet, name);

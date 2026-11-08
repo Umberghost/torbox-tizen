@@ -400,7 +400,7 @@ var TAB_BY_ID = {
   live: ["liveListUrl", "liveExtraLists", "liveHidden", "liveOrder"],
   appearance: ["theme", "uiScale", "screensaver", "navSounds"],
   general: ["uiLanguage", "contentLanguage", "profile"],
-  system: ["diagnostics", "sysInfo", "localStats", "statsView", "pinVer", "clearHistory", "clearMeta", "clearLive", "logout"]
+  system: ["diagnostics", "sysInfo", "speedTest", "localStats", "statsView", "pinVer", "clearHistory", "clearMeta", "clearLive", "logout"]
 };
 var TAB_BY_GROUP = {
   "settings.group.account": "integrations", "settings.group.notify": "integrations", "settings.group.trakt": "integrations",
@@ -540,7 +540,9 @@ function edit(row){
         v = String(v || "").trim();
         if(row.id === "torboxToken" && !v){ App.ui.toast(t("settings.keyEmpty")); return; }
         S.set(row.id, v); if(row.after) row.after(); render();
-        App.ui.toast(t("settings.saved"));
+        // Clave o dirección comprobable: avisa si conecta (✓) o por qué falla (✗)
+        if(v && App.checks && App.checks.has(row.id)) App.checks.run(row.id, v);
+        else App.ui.toast(t("settings.saved"));
       }
     });
     return;
