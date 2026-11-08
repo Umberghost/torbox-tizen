@@ -275,9 +275,9 @@ function normStream(st, idx){
     seeders: seedM ? Number(seedM[1]) : null,
     provider: provM ? provM[1].trim() : "",
     cached: cached,
-    // Torrentio/Comet con debrid y SIN caché: "[TB download]", "[TB⏳]"… → el enlace solo
+    // Torrentio/Comet con debrid y SIN caché: "[TB download]", "[TB⏳]", "[RD⬇️]"… → el enlace solo
     // manda a descargar y sirve un vídeo de aviso ("Torrent is being downloaded to debrid…")
-    uncachedDebrid: !cached && /\[[A-Z]{2,4}(\s*download|\s*⏳)?\]/i.test(name) && !!st.url,
+    uncachedDebrid: !cached && /\[[A-Z]{2,4}\s*(download|⏳|⬇️?)?\s*\]/i.test(name) && !!st.url,
     filename: filename,
     torrentName: torrentName,
     pack: parsePack(torrentName, filename || fileLine),
