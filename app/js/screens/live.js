@@ -20,6 +20,8 @@ var GUIDE_RANGE = 6 * 3600;           // ahora -> +6 h
 var GUIDE_ROWS = 5;                   // filas pintadas a la vez (virtualizado)
 
 App.settings.define("liveExtraLists", []);
+App.settings.define("liveCustom", []);   // canales propios: [{name, url, logo}]
+var MINE_AMBIT = "My channels";          // traducido vía live.ambit.my-channels
 
 /* Flags de TDTChannels que indican que el flujo no se puede reproducir desde un
  * navegador/AVPlay sin cabeceras especiales (Referer, User-Agent) o no navegable. */
@@ -80,8 +82,40 @@ function isHlsUrl(u){ return /\.m3u8(\?|$)/i.test(String(u || "")); }
 function hasPlaceholders(u){ return /\[[A-Z_]+\]/.test(String(u || "")); }
 /* Nombre de ámbito traducido si hay clave (live.ambit.<slug>); si no, el original de la lista */
 function ambitLabel(name){
+  name = String(name || "");
+  var cut = name.lastIndexOf(" · ");
+  if(cut >= 0) return name.slice(0, cut) + " · " + ambitLabel(name.slice(cut + 3));   // "Lista · News"
   var k = "live.ambit." + slug(name);
-  return App.i18n.has(k) ? t(k) : name;
+  if(App.i18n.has(k)) return t(k);
+  return App.i18n.has("live.iptv.cat." + slug(name)) ? t("live.iptv.cat." + slug(name)) : name;
+}
+
+/* ----- iptv-org: sublistas oficiales por país / categoría ----- */
+var IPTV_BASE = "https://iptv-org.github.io/iptv/";
+var IPTV_COUNTRIES = ["es", "ad", "pt", "fr", "it", "de", "uk", "ie", "nl", "be", "ch", "at",
+                      "mx", "ar", "co", "cl", "pe", "ve", "us", "ca", "ma"];
+var IPTV_CATS = ["news", "sports", "movies", "series", "kids", "animation", "documentary", "music",
+                 "entertainment", "comedy", "classic", "culture", "education", "science", "travel",
+                 "cooking", "outdoor", "lifestyle", "family", "auto", "business", "weather",
+                 "legislative", "religious", "relax", "shop"];
+var EXTRA_MAX = 1000;   // tope por lista: la vista de tarjetas pinta todos los canales a la vez
+function iptvInfo(u){
+  var m = String(u || "").match(/^https?:\/\/iptv-org\.github\.io\/iptv\/(countries|categories)\/([a-z_]+)\.m3u$/i);
+  return m ? { kind: m[1].toLowerCase(), code: m[2].toLowerCase() } : null;
+}
+function regionName(code){
+  var cc = code === "uk" ? "GB" : String(code).toUpperCase();
+  try{
+    if(window.Intl && Intl.DisplayNames){
+      var n = new Intl.DisplayNames([App.i18n.lang()], { type: "region" }).of(cc);
+      if(n && n !== cc) return n;
+    }
+  }catch(e){}
+  return cc;
+}
+function catLabel(id){
+  var k = "live.iptv.cat." + id;
+  return App.i18n.has(k) ? t(k) : id.charAt(0).toUpperCase() + id.slice(1);
 }
 function pad2(n){ return (n < 10 ? "0" : "") + n; }
 function hhmm(sec){ var d = new Date(sec * 1000); return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
@@ -133,13 +167,17 @@ function parseM3U(text){
       cur = {
         name: comma >= 0 ? line.slice(comma + 1).trim() : "Channel",
         logo: attr(line, "tvg-logo"),
-        ambit: attr(line, "group-title") || "Otros",
-        epg: attr(line, "tvg-id")
+        ambit: (attr(line, "group-title") || "").split(";")[0].trim() || "Otros",   // "News;Public" -> "News"
+        epg: attr(line, "tvg-id"),
+        // necesita Referer/User-Agent propios: ni <video> ni AVPlay pueden enviarlos -> se descarta
+        bad: !!(attr(line, "http-referrer") || attr(line, "http-user-agent"))
       };
+    } else if(/^#EXTVLCOPT:\s*http-(referrer|user-agent)/i.test(line)){
+      if(cur) cur.bad = true;
     } else if(line.charAt(0) === "#"){
       continue;
     } else if(cur){
-      if(isHttpUrl(line) && !hasPlaceholders(line)){
+      if(!cur.bad && isHttpUrl(line) && !hasPlaceholders(line)){
         out.push({ name: cur.name, logo: cur.logo, url: line, urls: [line],
                    ambit: cur.ambit, country: "", geo: false, epg: cur.epg });
       }
@@ -248,6 +286,8 @@ function hashStr(s){
   return h.toString(36);
 }
 function extraName(u){
+  var io = iptvInfo(u);
+  if(io) return "iptv-org · " + (io.kind === "countries" ? regionName(io.code) : catLabel(io.code));
   var p = String(u).replace(/^https?:\/\//i, "").split(/[?#]/)[0].replace(/\/+$/, "").split("/");
   var last = (p.length > 1 ? p[p.length - 1] : "").replace(/\.(m3u8?|json)$/i, "");
   return p[0] + (last ? "/" + last : "");
@@ -262,17 +302,47 @@ function fetchExtra(u){
       return r.text();
     }).then(function(text){
       var txt = text.replace(/^\uFEFF/, "").trim();
-      var list = (/\.m3u8?(\?|$)/i.test(u) || /^#EXTM3U/i.test(txt)) ? parseM3U(txt) : parseTDT(JSON.parse(txt));
+      var list;
+      // Si la "lista" es en realidad un stream HLS (playlist de segmentos o variantes), es un canal suelto
+      if(/#EXT-X-(TARGETDURATION|STREAM-INF|MEDIA-SEQUENCE)/i.test(txt)){
+        list = [{ name: extraName(u), logo: "", url: u, urls: [u], ambit: "", country: "", geo: false, epg: "" }];
+      } else {
+        list = (/\.m3u8?(\?|$)/i.test(u) || /^#EXTM3U/i.test(txt)) ? parseM3U(txt) : parseTDT(JSON.parse(txt));
+      }
       if(App.cache) App.cache.set(ckey, list, CACHE_TTL);
       return list;
     });
   }).then(function(list){
     var name = extraName(u), seen = {}, h = hashStr(u);
-    return list.map(function(ch){
+    // Secciones por categoría (group-title), salvo en las listas de iptv-org por categoría (una sola)
+    var io = iptvInfo(u), grouped = !(io && io.kind === "categories");
+    var first = {}, ng = 0;
+    list.forEach(function(c){ if(!(c.ambit in first)) first[c.ambit] = ng++; });
+    if(io){   // iptv-org: orden fijo de categorías (Generalistas, Noticias, Deportes…); sin categoría al final
+      for(var gk in first){
+        var s = slug(gk), r = s === "general" ? -1 : IPTV_CATS.indexOf(s);
+        if(s !== "general" && r < 0) r = 500 + first[gk];
+        first[gk] = /^(otros|undefined)$/i.test(gk) ? 1000 : r;
+      }
+    }
+    if(grouped && ng > 1){
+      list = list.map(function(c, i){ return { c: c, i: i }; }).sort(function(a, b){
+        return (first[a.c.ambit] - first[b.c.ambit]) || (a.i - b.i);
+      }).map(function(o){ return o.c; });
+    }
+    if(list.length > EXTRA_MAX){
+      list = list.slice(0, EXTRA_MAX);
+      App.ui.toast(t("live.extra.trimmed", {url: name, n: EXTRA_MAX}));
+    }
+    return list.map(function(src){
+      var ch = {};
+      for(var k in src) ch[k] = src[k];   // copia: la lista cacheada no se toca
       var id = "x" + h + "-" + (slug(ch.epg || ch.name) || "canal");
       if(seen[id]){ var n = 2; while(seen[id + "-" + n]) n++; id = id + "-" + n; }
       seen[id] = true;
-      ch.id = id; ch.ambit = name; ch.country = "x" + h; ch.extra = true;
+      var g = ch.ambit;
+      ch.ambit = (grouped && ng > 1 && g && !/^(otros|undefined)$/i.test(g)) ? name + " · " + g : name;
+      ch.id = id; ch.country = "x" + h; ch.extra = true;
       return ch;
     });
   }).catch(function(e){
@@ -300,7 +370,106 @@ function refreshExtras(){
 }
 App.bus.on("settings:change", function(c){
   if(!c || !c.key || c.key === "liveExtraLists") refreshExtras();
+  if((!c || !c.key || c.key === "liveCustom") && S.el && S.base.length){
+    rebuild(); render();
+    if(S.guide){ S.guide.epgT = -1; renderGuide(); }   // fuerza a rehacer las filas de la guía
+  }
 });
+
+/* ----- Mis canales: URLs/IPs añadidas a mano ----- */
+function customList(){
+  var v = App.settings.get("liveCustom");
+  return (Array.isArray(v) ? v : []).filter(function(c){ return c && isHttpUrl(c.url); });
+}
+function customChannels(){
+  var seen = {};
+  return customList().map(function(c){
+    var id = "m" + hashStr(c.url);   // id estable por URL (conserva favoritos, orden y ocultos)
+    if(seen[id]) return null;
+    seen[id] = true;
+    return { id: id, name: c.name || extraName(c.url), logo: c.logo || "", url: c.url, urls: [c.url],
+             ambit: MINE_AMBIT, country: "mine", geo: false, epg: "", custom: true };
+  }).filter(Boolean);
+}
+/* Acepta "192.168.1.50:8080/x.m3u8" (añade http://); rechaza udp/rtp (necesitan udpxy) */
+function normStreamUrl(v){
+  v = String(v || "").trim();
+  if(/^(udp|rtp|rtsp|igmp):\/\//i.test(v)) return { err: "live.mine.udp" };
+  if(!/^[a-z][a-z0-9+.\-]*:\/\//i.test(v)) v = "http://" + v;
+  return /^https?:\/\/[^\/\s?#]+/i.test(v) && !/\s/.test(v) ? { url: v } : { err: "live.extra.invalid" };
+}
+function saveCustom(list){ App.settings.set("liveCustom", list); }
+function askKb(title, value, placeholder){
+  return new Promise(function(resolve){
+    if(!(App.ui.keyboard && App.ui.keyboard.open)){ resolve(null); return; }
+    var done = false;
+    App.ui.keyboard.open({ title: title, value: value || "", placeholder: placeholder || "",
+      onDone: function(v){ done = true; resolve(String(v || "").trim()); },
+      onCancel: function(){ if(!done) resolve(null); } });
+  });
+}
+function askStreamUrl(value){
+  return askKb(t("live.mine.urlTitle"), value || "http://", "http://192.168.1.50:8080/stream.m3u8").then(function(v){
+    if(v === null) return null;
+    var r = normStreamUrl(v);
+    if(r.err){ App.ui.toast(t(r.err)); return null; }
+    return r.url;
+  });
+}
+function addCustom(){
+  return askStreamUrl().then(function(url){
+    if(!url) return;
+    var list = customList();
+    if(list.some(function(c){ return c.url === url; })){ App.ui.toast(t("live.mine.exists")); return; }
+    return askKb(t("live.mine.nameTitle"), extraName(url)).then(function(name){
+      if(name === null) return;
+      saveCustom(list.concat([{ name: name || extraName(url), url: url, logo: "" }]));
+      App.ui.toast(t("live.mine.added"));
+    });
+  });
+}
+function editCustom(url){
+  var list = customList(), idx = -1;
+  list.forEach(function(c, i){ if(c.url === url) idx = i; });
+  if(idx < 0) return Promise.resolve();
+  var c = list[idx];
+  var items = [
+    { label: t("live.mine.rename"), value: "name" },
+    { label: t("live.mine.changeUrl"), value: "url" },
+    { label: t("live.mine.logo"), value: "logo" },
+    { label: t("live.mine.remove"), value: "del" }
+  ];
+  return App.ui.menu(c.name || extraName(c.url), items).then(function(v){
+    if(v === "name") return askKb(t("live.mine.nameTitle"), c.name).then(function(n){
+      if(n === null) return;
+      list[idx] = { name: n || extraName(c.url), url: c.url, logo: c.logo || "" }; saveCustom(list);
+    });
+    if(v === "url") return askStreamUrl(c.url).then(function(u){
+      if(!u || u === c.url) return;
+      if(list.some(function(x){ return x.url === u; })){ App.ui.toast(t("live.mine.exists")); return; }
+      list[idx] = { name: c.name, url: u, logo: c.logo || "" }; saveCustom(list);
+    });
+    if(v === "logo") return askKb(t("live.mine.logoTitle"), c.logo || "https://").then(function(l){
+      if(l === null) return;
+      if(l && !isHttpUrl(l)) l = "";
+      list[idx] = { name: c.name, url: c.url, logo: l === "https://" ? "" : l }; saveCustom(list);
+    });
+    if(v === "del") return App.ui.confirm(t("live.mine.removeTitle"), c.name || extraName(c.url)).then(function(ok){
+      if(!ok) return;
+      saveCustom(list.filter(function(x){ return x.url !== c.url; }));
+      App.ui.toast(t("live.mine.removed"));
+    });
+  });
+}
+function manageCustom(){
+  var items = [{ label: "+ " + t("live.mine.add"), value: "+" }].concat(customList().map(function(c){
+    return { label: (c.name || extraName(c.url)) + "  ·  " + extraName(c.url), value: c.url };
+  }));
+  return App.ui.menu(t("live.mine.title"), items).then(function(v){
+    if(v === null || v === undefined) return;
+    return v === "+" ? addCustom() : editCustom(v);
+  });
+}
 
 /* ----- Orden propio (#64) y ocultos (#65) ----- */
 function hiddenList(){ var h = App.store.get(HIDDEN_KEY, []); return Array.isArray(h) ? h : []; }
@@ -308,7 +477,7 @@ function saveOrder(){ App.store.set(ORDER_KEY, S.allOrder.map(function(c){ retur
 
 /* Combina listas, aplica orden propio, quita ocultos y numera */
 function rebuild(){
-  var all = S.base.concat(S.extra);
+  var all = customChannels().concat(S.base, S.extra);
   var ord = App.store.get(ORDER_KEY, null);
   if(ord && ord.length){
     var pos = {};
@@ -1159,7 +1328,9 @@ function actions(){
       });
       out.push({ label: S.favs.indexOf(r.ch.id) >= 0 ? t("live.act.unfav") : t("live.act.fav"), run: function(){ toggleFavId(r.ch.id); renderGuide(); } });
       out.push({ label: t("live.act.hide"), run: function(){ hideChannel(r.ch); } });
+      if(r.ch.custom) out.push({ label: t("live.mine.edit"), run: function(){ editCustom(r.ch.url); } });
     }
+    out.push({ label: t("live.mine.add"), run: addCustom });
     out.push({ label: t("live.act.now"), run: function(){ G.ws = G.t0; G.cursor = now; if(r) G.ev = pickEv(r.evs, now); renderGuide(); } });
     out.push({ label: t(S.favOnly ? "live.v2.act.allChannels" : "live.v2.act.favOnly"), run: toggleFavOnly });
     out.push({ label: t("live.v2.act.cards"), run: closeGuide });
@@ -1176,9 +1347,11 @@ function actions(){
     out.push({ label: S.favs.indexOf(ch.id) >= 0 ? t("live.act.unfav") : t("live.act.fav"), run: function(){ toggleFavId(ch.id); render(); } });
     out.push({ label: t("live.act.hide"), run: function(){ hideChannel(ch); } });
     out.push({ label: t("live.act.move"), run: function(){ startGrab(ch); } });
+    if(ch.custom) out.push({ label: t("live.mine.edit"), run: function(){ editCustom(ch.url); } });
   } else if(el && el.dataset.kind === "app"){
     out.push({ label: t("live.act.open"), run: function(){ launchApp(el.dataset.key); } });
   }
+  out.push({ label: t("live.mine.add"), run: addCustom });
   out.push({ label: t("live.guide"), run: openGuide });
   if(S.channels.length) out.push({ label: t("live.act.goto"), run: gotoChannel });
   var nh = hiddenList().length;
@@ -1189,14 +1362,49 @@ function actions(){
 }
 
 /* ================= Ajustes (grupo "Live TV") ================= */
+/* Elige país o categoría de iptv-org; resuelve la URL de la sublista o null */
+function pickIptv(kind){
+  var urls = extraUrls();
+  var codes = kind === "countries" ? IPTV_COUNTRIES : IPTV_CATS;
+  var items = codes.map(function(c){
+    var label = kind === "countries" ? regionName(c) : catLabel(c);
+    return { label: label + (urls.indexOf(IPTV_BASE + kind + "/" + c + ".m3u") >= 0 ? "  ✓" : ""), value: c };
+  });
+  if(kind === "countries") items.push({ label: t("live.iptv.otherCountry"), value: "?" });
+  return App.ui.menu(t(kind === "countries" ? "live.iptv.countryTitle" : "live.iptv.catTitle"), items).then(function(v){
+    if(v === null || v === undefined) return null;
+    if(v !== "?") return v;
+    return askKb(t("live.iptv.codeTitle"), "", "es, fr, us…").then(function(c){
+      c = String(c || "").trim().toLowerCase();
+      if(!c) return null;
+      if(!/^[a-z]{2}$/.test(c)){ App.ui.toast(t("live.iptv.badCode")); return null; }
+      return c;
+    });
+  }).then(function(code){ return code ? IPTV_BASE + kind + "/" + code + ".m3u" : null; });
+}
+function addExtraUrl(u){
+  var urls = extraUrls();
+  if(urls.indexOf(u) >= 0){ App.ui.toast(t("live.extra.exists")); return; }
+  App.settings.set("liveExtraLists", urls.concat([u]));
+  App.ui.toast(t("live.extra.added"));
+}
+
 function manageExtra(){
   return new Promise(function(resolve){
     var urls = extraUrls();
-    var items = [{ label: "+ " + t("live.extra.add"), value: "+" }].concat(urls.map(function(u, i){
+    var items = [
+      { label: "+ " + t("live.extra.add"), value: "+" },
+      { label: "+ " + t("live.extra.addIptvCountry"), value: "+countries" },
+      { label: "+ " + t("live.extra.addIptvCat"), value: "+categories" }
+    ].concat(urls.map(function(u, i){
       return { label: extraName(u), value: i };
     }));
     App.ui.menu(t("live.extra.title"), items).then(function(v){
       if(v === null || v === undefined){ resolve(); return; }
+      if(v === "+countries" || v === "+categories"){
+        pickIptv(v.slice(1)).then(function(u){ if(u) addExtraUrl(u); resolve(); }, function(){ resolve(); });
+        return;
+      }
       if(v === "+"){
         if(!(App.ui.keyboard && App.ui.keyboard.open)){ resolve(); return; }
         App.ui.keyboard.open({
@@ -1224,6 +1432,12 @@ function manageExtra(){
   });
 }
 
+App.settingsUI.add("settings.group.live", {
+  id: "liveCustom", type: "action",
+  label: function(){ return t("live.set.mine"); },
+  desc: function(){ return t("live.set.mineDesc", {n: customList().length}); },
+  run: manageCustom
+});
 App.settingsUI.add("settings.group.live", {
   id: "liveExtraLists", type: "action",
   label: function(){ return t("live.set.extra"); },
@@ -1307,6 +1521,8 @@ App.live = {
   parseTDT: parseTDT,
   parseM3U: parseM3U,
   organize: organize,
+  fetchExtra: fetchExtra,
+  extraName: extraName,
   reload: function(){ return load(true); },
   channels: function(){ return S.channels.slice(); },
   epgFor: function(id){ return epgFor(S.byId[id]); },

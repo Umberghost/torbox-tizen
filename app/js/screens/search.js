@@ -372,7 +372,73 @@ function sortStreams(list){
   });
 }
 
-/* fetchStreams(type, id, force) → Promise<{visible:[], hidden:[]}>  (id = tt… o tt…:S:E)
+/* ======================= Fuentes de OTRO título =======================
+ * Torrentio empareja por nombre: en series homónimas (Rebelde 2004 / Rebelde 2022 de Netflix) mezcla
+ * torrents de las dos. Se apartan a un grupo "de otro título":
+ *   - automático: el torrent lleva un año que no encaja con el del título (±1);
+ *   - manual: "No es este título" (mantén OK) → se recuerda por serie/película y por "familia" de
+ *     torrent (nombre sin temporada/episodio), así que se oculta en todos los episodios.
+ * "Sí es este título" lo devuelve a la lista (y anula también la detección por año). */
+var OTHER_KEY = "notThisTitle";
+function baseId(id){ return String(id || "").split(":")[0]; }
+function releaseStem(x){
+  var n = String(x.torrentName || x.release || "");
+  return stripAccents(n).toLowerCase()
+    .replace(/\.(mkv|mp4|avi|m4v|ts|webm)$/, "")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\bs\d{1,2}([\s._-]*e\d{1,4}([\s._-]*-?[\s._-]*e?\d{1,4})?)?\b/g, " ")
+    .replace(/\b\d{1,2}x\d{2,3}\b/g, " ")
+    .replace(/\b(season|seasons|temporada|temporadas|saison|stagione|cap[ií]tulo|capitulo|cap|episodio|episode|ep|e)[\s._-]*\d{1,4}\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function otherStore(){ var o = App.store.get(OTHER_KEY, {}); return o && typeof o === "object" ? o : {}; }
+function otherEntry(id){ var e = otherStore()[baseId(id)] || {}; return { block: e.block || [], allow: e.allow || [] }; }
+function setOtherMark(id, x, isOther){
+  var all = otherStore(), k = baseId(id), e = otherEntry(id), st = releaseStem(x);
+  if(!st) return;
+  e.block = e.block.filter(function(v){ return v !== st; });
+  e.allow = e.allow.filter(function(v){ return v !== st; });
+  (isOther ? e.block : e.allow).push(st);
+  if(!e.block.length && !e.allow.length) delete all[k]; else all[k] = { block: e.block.slice(-200), allow: e.allow.slice(-200) };
+  App.store.set(OTHER_KEY, all);
+}
+/* "2004–2006" / "2022–" / "2019" → [desde, hasta] */
+function yearRange(y){
+  var m = String(y || "").match(/(19|20)\d{2}/g);
+  if(!m) return null;
+  var a = Number(m[0]), b = m.length > 1 ? Number(m[m.length - 1]) : (/[–-]\s*$/.test(String(y)) ? new Date().getFullYear() : a);
+  return [a, b];
+}
+function yearMismatch(x, meta){
+  var r = yearRange(meta && meta.year);
+  if(!r) return 0;
+  var txt = String(x.torrentName || "") + " " + String(x.release || "");
+  var own = String((meta && meta.name) || "").match(/(19|20)\d{2}/g) || [];
+  var ys = (txt.match(/(?:^|[^0-9a-z])(19\d{2}|20\d{2})(?![0-9p])/gi) || []).map(function(s){ return Number(s.replace(/\D/g, "")); })
+    .filter(function(y){ return own.indexOf(String(y)) < 0 && y <= new Date().getFullYear() + 1; });
+  if(!ys.length) return 0;
+  var fits = ys.some(function(y){ return y >= r[0] - 1 && y <= r[1] + 1; });
+  return fits ? 0 : ys[0];
+}
+/* Reparte r.visible/r.hidden → + r.other (no muta el resultado cacheado) */
+function splitOther(type, id, r){
+  var e = otherEntry(id);
+  return getMeta(type, baseId(id)).catch(function(){ return null; }).then(function(meta){
+    var other = [];
+    function keep(x){
+      var st = releaseStem(x);
+      if(st && e.allow.indexOf(st) >= 0){ x.otherWhy = ""; return true; }
+      if(st && e.block.indexOf(st) >= 0){ x.otherWhy = "user"; other.push(x); return false; }
+      var y = yearMismatch(x, meta);
+      if(y){ x.otherWhy = "year"; x.otherYear = y; x.ownYears = meta.year; other.push(x); return false; }
+      x.otherWhy = "";
+      return true;
+    }
+    return { visible: r.visible.filter(keep), hidden: r.hidden.filter(keep), other: other, warnings: r.warnings };
+  });
+}
+
+/* fetchStreams(type, id, force) → Promise<{visible:[], hidden:[], other:[]}>  (id = tt… o tt…:S:E)
  * Caché en memoria de 5 min por id (la comparten la vista previa, la lista y el siguiente episodio). */
 var streamCache = {};
 var STREAM_TTL = 5 * 60000;
@@ -381,11 +447,11 @@ function fetchStreams(type, id, force){
   if(!bases.length) return Promise.reject(new Error(t("search.noAddon.title")));
   var ck = bases.join(",") + "|" + type + "|" + id;
   var c = streamCache[ck];
-  if(c && !force && Date.now() - c.t < STREAM_TTL) return c.p;
+  if(c && !force && Date.now() - c.t < STREAM_TTL) return c.p.then(function(r){ return splitOther(type, id, r); });
   var p = fetchStreamsRaw(bases, type, id);
   streamCache[ck] = { t: Date.now(), p: p };
   p.catch(function(){ if(streamCache[ck] && streamCache[ck].p === p) delete streamCache[ck]; });
-  return p;
+  return p.then(function(r){ return splitOther(type, id, r); });
 }
 /* Fusiona listas de varios add-ons; deduplica por infoHash (o url si no hay hash) entre add-ons distintos,
  * pero solo dentro del MISMO servicio debrid: la versión RD y la TB de un torrent son filas distintas
@@ -611,13 +677,13 @@ var s = {
   meta: null,                  // meta completa (localizada)
   season: null, seasons: [],
   ep: null,                    // {season, episode, name, overview}
-  streams: null, hiddenStreams: [], rendered: [], showHidden: false,
+  streams: null, hiddenStreams: [], otherStreams: [], rendered: [], showHidden: false, showOther: false,
   streamsErr: "", streamsLoading: false,
   focusMem: {},                // índice de foco por nivel
   playing: false,
   openMode: false, openLevel: null,  // llegado desde Inicio con params.open
   didYou: "", seen: [],
-  packMode: null, packs: null, packsHidden: [], packsErr: "", packsLoading: false
+  packMode: null, packs: null, packsHidden: [], packsOther: [], packsErr: "", packsLoading: false
 };
 
 /* ======================= Estado en TorBox (biblioteca / en descarga) ======================= */
@@ -1304,7 +1370,7 @@ function titleLine(){
 function openStreams(o){
   o = o || {};
   s.level = "streams"; s.focusMem.streams = 0; setHint();
-  s.streams = null; s.hiddenStreams = []; s.showHidden = false; s.streamsErr = "";
+  s.streams = null; s.hiddenStreams = []; s.otherStreams = []; s.showHidden = false; s.showOther = false; s.streamsErr = "";
   if(!addonBase()){ renderStreams(); return; }
   s.streamsLoading = true;
   renderStreams();
@@ -1315,7 +1381,7 @@ function openStreams(o){
     .then(function(r){
       pv.res[previewKey(type, sid)] = r;
       if(id !== s.reqId) return;
-      s.streams = r.visible; s.hiddenStreams = r.hidden;
+      s.streams = r.visible; s.hiddenStreams = r.hidden; s.otherStreams = r.other || [];
       s.streamsLoading = false;
       var onScreen = App.current() === "search" && s.level === "streams";
       if(onScreen) renderStreams();
@@ -1325,7 +1391,7 @@ function openStreams(o){
         if(best){
           App.ui.toast(t("search.playingBest", { desc: describe(best) }), 5000);
           playStream(best);
-        } else if(s.streams.length || s.hiddenStreams.length){
+        } else if(s.streams.length || s.hiddenStreams.length || s.otherStreams.length){
           App.ui.toast(t("search.noInstant"), 4000);
         }
       }
@@ -1342,7 +1408,8 @@ function openStreams(o){
 function streamRow(x, i, incompatible, est){
   var badges = "";
   if(x.hash) badges += '<span class="srch-st" data-sth="' + App.esc(x.hash) + '">' + statusBadge(statusOf(x)) + '</span>';
-  if(incompatible) badges += tagHtml("bad", t("caps.unsupported"));
+  if(x.otherWhy) badges += tagHtml("bad", t("search.other.badge"));
+  else if(incompatible) badges += tagHtml("bad", t("caps.unsupported"));
   if(x.pack) badges += tagHtml("warn", t(x.pack.kind === "series" ? "search.badge.seriesPack" : "search.badge.seasonPack"));
   if(x.cached) badges += tagHtml("solid", t("search.badge.cached"));
   else if(x.uncachedDebrid) badges += tagHtml("warn", t("search.badge.download"));
@@ -1352,7 +1419,8 @@ function streamRow(x, i, incompatible, est){
   x.tags.forEach(function(tg){ badges += tagHtml("", tg); });
   if(x.addons && addonBases().length > 1) badges += tagHtml("mute", x.addons.join(" + "));
   var meta = [];
-  if(incompatible && x.capsReasons.length) meta.push('<span class="srch-why">' + App.esc(x.capsReasons.map(function(r){ return t(r); }).join(" · ")) + '</span>');
+  if(x.otherWhy) meta.push('<span class="srch-why">' + App.esc(x.otherWhy === "year" ? t("search.other.whyYear", { y: x.otherYear, own: x.ownYears }) : t("search.other.whyUser")) + '</span>');
+  else if(incompatible && x.capsReasons.length) meta.push('<span class="srch-why">' + App.esc(x.capsReasons.map(function(r){ return t(r); }).join(" · ")) + '</span>');
   if(x.seeders !== null) meta.push('<span class="srch-seed">' + App.esc(t("search.v2.seeds", { n: x.seeders })) + '</span>');
   if(x.provider) meta.push(App.esc(x.provider));
   var sizeHtml = "";
@@ -1372,10 +1440,19 @@ function streamRow(x, i, incompatible, est){
     '</div>';
 }
 
-function hiddenRowHtml(n){
-  return '<div class="srch-row srch-hidden-row focusable" data-act="showhidden">' +
-         '<div class="srch-main"><div class="srch-rel">' + App.esc(t("caps.hidden", { n: n })) + '</div>' +
+function hiddenRowHtml(n, other){
+  return '<div class="srch-row srch-hidden-row focusable" data-act="' + (other ? "showother" : "showhidden") + '">' +
+         '<div class="srch-main"><div class="srch-rel">' + App.esc(t(other ? "search.other.hidden" : "caps.hidden", { n: n })) + '</div>' +
          '<div class="srch-sub">' + App.esc(t("caps.showHidden")) + '</div></div></div>';
+}
+
+/* Grupo "de otro título" al final de la lista (fila para desplegarlo) */
+function otherRowsHtml(list, est){
+  if(!list.length) return "";
+  if(!s.showOther) return hiddenRowHtml(list.length, true);
+  var h = "";
+  list.forEach(function(x){ h += streamRow(x, s.rendered.length, true, est ? packEstimate(x) : 0); s.rendered.push(x); });
+  return h;
 }
 
 /* Cabecera compacta (episodio / packs): título grande + sinopsis */
@@ -1400,7 +1477,7 @@ function renderStreams(){
   if(!addonBase()) h += noAddonHtml();
   else if(s.streamsLoading) h += '<div class="srch-state"><div class="spinner"></div><p>' + App.esc(t("search.findingSources")) + '</p></div>';
   else if(s.streamsErr) h += stateBlock("err", t("search.err.addonTitle"), App.esc(s.streamsErr));
-  else if(s.streams && !s.streams.length && !s.hiddenStreams.length) h += stateBlock("", t("search.noSources.title"), App.esc(t("search.noSources.text")));
+  else if(s.streams && !s.streams.length && !s.hiddenStreams.length && !s.otherStreams.length) h += stateBlock("", t("search.noSources.title"), App.esc(t("search.noSources.text")));
   else if(s.streams){
     var nNow = s.streams.filter(isInstant).length;
     h += '<div class="srch-sec">' + App.esc(t("search.sources")) + ' <span>' + s.streams.length +
@@ -1413,6 +1490,7 @@ function renderStreams(){
         h += hiddenRowHtml(s.hiddenStreams.length);
       }
     }
+    h += otherRowsHtml(s.otherStreams, false);
     h += '</div>';
   }
   h += '</div></div>';
@@ -1539,8 +1617,9 @@ function sendToDebrid(x){
 }
 
 function onStreamSelect(i, el){
-  if(el.getAttribute("data-act") === "showhidden"){
-    s.showHidden = true;
+  var hact = el.getAttribute("data-act");
+  if(hact === "showhidden" || hact === "showother"){
+    if(hact === "showother") s.showOther = true; else s.showHidden = true;
     if(s.level === "packs"){ s.focusMem.packs = i; renderPacks(); } else { s.focusMem.streams = i; renderStreams(); }
     return;
   }
@@ -1610,7 +1689,7 @@ function sortPacks(list){
 
 function openPacks(mode, force){
   s.level = "packs"; s.packMode = mode; s.focusMem.packs = 0; setHint();
-  s.packs = null; s.packsHidden = []; s.packsErr = ""; s.packsLoading = true; s.showHidden = false;
+  s.packs = null; s.packsHidden = []; s.packsOther = []; s.packsErr = ""; s.packsLoading = true; s.showHidden = false; s.showOther = false;
   renderPacks();
   var id = ++s.reqId;
   var season = mode === "series" ? (s.season > 0 ? s.season : 1) : s.season;
@@ -1623,19 +1702,19 @@ function openPacks(mode, force){
     s.packsLoading = false;
     var ok = results.filter(Boolean);
     if(!ok.length){ s.packsErr = t("search.err.addon", { msg: "" }); renderPacks(); return; }
-    var seen = {}, vis = [], hid = [];
+    var seen = {}, vis = [], hid = [], oth = [];
     var hide = App.caps && App.caps.hideUnsupported ? App.caps.hideUnsupported() : false;
     ok.forEach(function(r){
-      r.visible.concat(r.hidden).forEach(function(x){
+      r.visible.concat(r.hidden, r.other || []).forEach(function(x){
         if(!x.pack) return;
         if(mode === "series" ? x.pack.kind !== "series" : !packCovers(x, season)) return;
         var k = x.hash || x.torrentName || x.release;
         if(seen[k]) return;
         seen[k] = true;
-        (hide && x.compatible === false ? hid : vis).push(x);
+        (x.otherWhy ? oth : (hide && x.compatible === false ? hid : vis)).push(x);
       });
     });
-    s.packs = sortPacks(vis); s.packsHidden = sortPacks(hid);
+    s.packs = sortPacks(vis); s.packsHidden = sortPacks(hid); s.packsOther = sortPacks(oth);
     if(App.current() === "search" && s.level === "packs") renderPacks();
   });
 }
@@ -1648,7 +1727,7 @@ function renderPacks(){
   s.rendered = [];
   if(s.packsLoading) h += '<div class="srch-state"><div class="spinner"></div><p>' + App.esc(t("search.pack.loading")) + '</p></div>';
   else if(s.packsErr) h += stateBlock("err", t("search.err.addonTitle"), App.esc(s.packsErr));
-  else if(s.packs && !s.packs.length && !s.packsHidden.length) h += stateBlock("", t("search.pack.none"), App.esc(t("search.pack.noneText")));
+  else if(s.packs && !s.packs.length && !s.packsHidden.length && !s.packsOther.length) h += stateBlock("", t("search.pack.none"), App.esc(t("search.pack.noneText")));
   else if(s.packs){
     var nC = s.packs.filter(function(x){ return x.cached; }).length;
     h += '<div class="srch-sec">' + App.esc(t("search.pack.list")) + ' <span>' + s.packs.length +
@@ -1661,6 +1740,7 @@ function renderPacks(){
         h += hiddenRowHtml(s.packsHidden.length);
       }
     }
+    h += otherRowsHtml(s.packsOther, true);
     h += '</div>';
   }
   h += '</div></div>';
@@ -1789,7 +1869,16 @@ function actions(){
       a.push({ label: t(isPacks ? "search.act.addPack" : "search.act.playAdd"), run: function(){ onStreamSelect(0, el); } });
       if(!isPacks && x.hash) a.push({ label: t("search.act.addTorbox"), run: function(){ guardPack(x, function(){ addToTorbox(x); }); } });
     }
-    if(act === "showhidden") a.push({ label: t("search.act.showHidden"), run: function(){ onStreamSelect(0, el); } });
+    if(x && s.item){
+      var mark = function(isOther){
+        setOtherMark(s.item.id, x, isOther);
+        App.ui.toast(t(isOther ? "search.other.hiddenToast" : "search.other.shownToast", { name: x.torrentName || x.release }), 4500);
+        if(isPacks) openPacks(s.packMode); else openStreams({ autoPlay: false });
+      };
+      if(x.otherWhy) a.push({ label: t("search.act.isThis"), run: function(){ mark(false); } });
+      else a.push({ label: t("search.act.notThis"), run: function(){ mark(true); } });
+    }
+    if(act === "showhidden" || act === "showother") a.push({ label: t("search.act.showHidden"), run: function(){ onStreamSelect(0, el); } });
     a.push({ label: t("search.act.reload"), run: function(){ if(isPacks) openPacks(s.packMode, true); else openStreams({ autoPlay: false, force: true }); } });
     var sr2 = curSeries();
     if(sr2 && App.follow) a.push({ label: followLabel(sr2.id), run: function(){ toggleFollow(sr2); } });

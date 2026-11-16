@@ -256,6 +256,7 @@ A.add("en", {
   "player.set.speed": "Default speed", "player.set.speed.desc": "Playback speed applied when a video starts.",
   "player.set.rewind": "Rewind 5 s on resume", "player.set.rewind.desc": "Go back 5 seconds when resuming to recover context.",
   "player.set.skipAuto": "Skip intros automatically", "player.set.skipAuto.desc": "Jump over the intro without pressing OK (needs skip data for the episode).",
+  "player.set.quality": "Stream start quality", "player.set.quality.desc": "For live TV and adaptive streams (HLS). Maximum starts at the best quality and drops only if the connection can't keep up.", "player.set.quality.max": "Maximum", "player.set.quality.auto": "Automatic (player decides)", "player.set.quality.saver": "Data saver (lowest)",
 
   "watch.notifyTitle": "Download ready", "watch.notifyBody": "{title} is ready to watch",
 
@@ -300,6 +301,7 @@ A.add("es", {
   "player.set.speed": "Velocidad predeterminada", "player.set.speed.desc": "Velocidad de reproducción al empezar un vídeo.",
   "player.set.rewind": "Retroceder 5 s al reanudar", "player.set.rewind.desc": "Vuelve 5 segundos al reanudar para recuperar el hilo.",
   "player.set.skipAuto": "Saltar intros automáticamente", "player.set.skipAuto.desc": "Salta la intro sin pulsar OK (requiere datos del episodio).",
+  "player.set.quality": "Calidad inicial de los streams", "player.set.quality.desc": "Para TV en directo y streams adaptativos (HLS). Máxima empieza en la mejor calidad y solo baja si la conexión no da.", "player.set.quality.max": "Máxima", "player.set.quality.auto": "Automática (decide el reproductor)", "player.set.quality.saver": "Ahorro de datos (mínima)",
 
   "watch.notifyTitle": "Descarga lista", "watch.notifyBody": "{title} está listo para ver",
 
@@ -865,6 +867,7 @@ A.add("ca", {
   "player.set.speed": "Velocitat per defecte", "player.set.speed.desc": "Velocitat de reproducció aplicada en començar un vídeo.",
   "player.set.rewind": "Retrocedeix 5 s en reprendre", "player.set.rewind.desc": "Torna enrere 5 segons en reprendre per recuperar el fil.",
   "player.set.skipAuto": "Salta les introduccions automàticament", "player.set.skipAuto.desc": "Se salta la introducció sense prémer OK (calen dades de salt de l'episodi).",
+  "player.set.quality": "Qualitat inicial dels streams", "player.set.quality.desc": "Per a la TV en directe i streams adaptatius (HLS). Màxima comença amb la millor qualitat i només baixa si la connexió no dona l'abast.", "player.set.quality.max": "Màxima", "player.set.quality.auto": "Automàtica (decideix el reproductor)", "player.set.quality.saver": "Estalvi de dades (mínima)",
 
   "watch.notifyTitle": "Descàrrega llesta", "watch.notifyBody": "{title} ja es pot mirar",
 
@@ -909,6 +912,7 @@ A.add("gl", {
   "player.set.speed": "Velocidade por defecto", "player.set.speed.desc": "Velocidade de reprodución aplicada ao comezar un vídeo.",
   "player.set.rewind": "Retroceder 5 s ao retomar", "player.set.rewind.desc": "Volve atrás 5 segundos ao retomar para recuperar o fío.",
   "player.set.skipAuto": "Saltar introducións automaticamente", "player.set.skipAuto.desc": "Salta a introdución sen premer OK (precisa datos de salto do episodio).",
+  "player.set.quality": "Calidade inicial dos streams", "player.set.quality.desc": "Para TV en directo e streams adaptativos (HLS). Máxima comeza na mellor calidade e só baixa se a conexión non dá.", "player.set.quality.max": "Máxima", "player.set.quality.auto": "Automática (decide o reprodutor)", "player.set.quality.saver": "Aforro de datos (mínima)",
 
   "watch.notifyTitle": "Descarga lista", "watch.notifyBody": "{title} xa se pode ver",
 
@@ -953,6 +957,7 @@ A.add("eu", {
   "player.set.speed": "Abiadura lehenetsia", "player.set.speed.desc": "Bideo bat hastean aplikatzen den erreprodukzio-abiadura.",
   "player.set.rewind": "Atzera 5 s jarraitzean", "player.set.rewind.desc": "5 segundo atzera egiten du jarraitzean, kontextua berreskuratzeko.",
   "player.set.skipAuto": "Saltatu sarrerak automatikoki", "player.set.skipAuto.desc": "Sarrera saltatzen du OK sakatu gabe (atalaren salto-datuak behar ditu).",
+  "player.set.quality": "Streamen hasierako kalitatea", "player.set.quality.desc": "Zuzeneko telebistarako eta stream moldagarrietarako (HLS). Gehienekoak kalitate onenean hasten da eta konexioak ez badu ematen bakarrik jaisten da.", "player.set.quality.max": "Gehienekoa", "player.set.quality.auto": "Automatikoa (erreproduzigailuak erabakitzen du)", "player.set.quality.saver": "Datu-aurrezpena (txikiena)",
 
   "watch.notifyTitle": "Deskarga prest", "watch.notifyBody": "{title} ikusteko prest dago",
 
@@ -997,6 +1002,7 @@ A.add("pt", {
   "player.set.speed": "Velocidade predefinida", "player.set.speed.desc": "Velocidade de reprodução aplicada quando um vídeo começa.",
   "player.set.rewind": "Recuar 5 s ao retomar", "player.set.rewind.desc": "Recua 5 segundos ao retomar para recuperar o contexto.",
   "player.set.skipAuto": "Saltar introduções automaticamente", "player.set.skipAuto.desc": "Salta a introdução sem premir OK (requer dados de salto do episódio).",
+  "player.set.quality": "Qualidade inicial dos streams", "player.set.quality.desc": "Para TV em direto e streams adaptativos (HLS). Máxima começa na melhor qualidade e só baixa se a ligação não aguentar.", "player.set.quality.max": "Máxima", "player.set.quality.auto": "Automática (o leitor decide)", "player.set.quality.saver": "Poupança de dados (mínima)",
 
   "watch.notifyTitle": "Transferência pronta", "watch.notifyBody": "{title} está pronto para ver",
 
@@ -1041,6 +1047,7 @@ A.add("fr", {
   "player.set.speed": "Vitesse par défaut", "player.set.speed.desc": "Vitesse de lecture appliquée au démarrage d'une vidéo.",
   "player.set.rewind": "Reculer de 5 s à la reprise", "player.set.rewind.desc": "Recule de 5 secondes à la reprise pour retrouver le fil.",
   "player.set.skipAuto": "Passer les intros automatiquement", "player.set.skipAuto.desc": "Saute l'intro sans appuyer sur OK (nécessite les données de saut de l'épisode).",
+  "player.set.quality": "Qualité de départ des flux", "player.set.quality.desc": "Pour la TV en direct et les flux adaptatifs (HLS). Maximale démarre à la meilleure qualité et ne baisse que si la connexion ne suit pas.", "player.set.quality.max": "Maximale", "player.set.quality.auto": "Automatique (le lecteur décide)", "player.set.quality.saver": "Économie de données (minimale)",
 
   "watch.notifyTitle": "Téléchargement prêt", "watch.notifyBody": "{title} est prêt à être regardé",
 

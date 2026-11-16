@@ -25,6 +25,7 @@ function langName(l){
 }
 
 function isHls(url){ return /\.m3u8(\?|#|$)/i.test(String(url || "")); }
+function streamQuality(){ var q = App.settings.get("streamQuality"); return q === "auto" || q === "saver" ? q : "max"; }
 
 /* ================= Parser de subtítulos SRT/VTT ================= */
 function parseTime(t){
@@ -238,6 +239,14 @@ AvplayEngine.prototype.open = function(url, startAt){
     try{
       try{ var st = av.getState(); if(st !== "NONE"){ av.stop(); av.close(); } }catch(e){}
       av.open(url);
+      // Calidad inicial en streams adaptativos (HLS/DASH): por defecto AVPlay arranca bajo (p. ej. 360p en RTVE)
+      if(isHls(url) || /\.mpd(\?|#|$)/i.test(url)){
+        var q = streamQuality();
+        if(q !== "auto"){
+          try{ av.setStreamingProperty("ADAPTIVE_INFO", q === "saver" ? "STARTBITRATE=LOWEST" : "STARTBITRATE=HIGHEST"); }
+          catch(e){ console.warn("[avplay] ADAPTIVE_INFO", e); }
+        }
+      }
       var w = window.innerWidth || 1920, hh = window.innerHeight || 1080;
       var f = 1920 / w;    // AVPlay trabaja en coordenadas de 1920x1080
       self._rh = Math.round(hh * f);
@@ -428,7 +437,17 @@ VideoEngine.prototype.open = function(url, startAt){
     self._openFail = function(msg, code){ var e4 = new Error(msg); e4.code = code; fail(e4); };
     var nativeHls = v.canPlayType("application/vnd.apple.mpegurl");
     if(isHls(url) && !nativeHls && window.Hls && window.Hls.isSupported && window.Hls.isSupported()){
-      var hls = self.hls = new window.Hls({ enableWorker: true, lowLatencyMode: false });
+      var q = streamQuality(), cfg = { enableWorker: true, lowLatencyMode: false };
+      // hls.js supone ~500 kbps al empezar y arranca en la calidad más baja; con "max" suponemos 8 Mbps
+      if(q === "max"){ cfg.abrEwmaDefaultEstimate = 8000000; cfg.testBandwidth = false; }
+      else if(q === "saver") cfg.abrEwmaDefaultEstimate = 300000;
+      var hls = self.hls = new window.Hls(cfg);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, function(evt, data){
+        var n = (data && data.levels ? data.levels.length : hls.levels.length) || 0;
+        if(n < 2 || q === "auto") return;
+        if(q === "max"){ hls.startLevel = n - 1; }        // niveles de hls.js: de menor a mayor calidad
+        else { hls.startLevel = 0; hls.autoLevelCapping = 0; }
+      });
       hls.on(window.Hls.Events.ERROR, function(evt, data){
         if(data && data.fatal){
           if(!done) fail(new Error(App.t("player.err.hls", { detail: data.details || data.type })));
@@ -1652,7 +1671,11 @@ App.player = {
 App.settings.define("playerSpeed", 1);
 App.settings.define("resumeRewind", true);
 App.settings.define("skipIntroAuto", false);
+App.settings.define("streamQuality", "max");   // calidad inicial en HLS/DASH: max | auto | saver
 if(App.settingsUI){
+  App.settingsUI.add("settings.group.player", { id: "streamQuality", type: "menu",
+    label: function(){ return App.t("player.set.quality"); }, desc: function(){ return App.t("player.set.quality.desc"); },
+    options: function(){ return ["max", "auto", "saver"].map(function(v){ return { label: App.t("player.set.quality." + v), value: v }; }); } });
   App.settingsUI.add("settings.group.player", { id: "playerSpeed", type: "menu",
     label: function(){ return App.t("player.set.speed"); }, desc: function(){ return App.t("player.set.speed.desc"); },
     options: function(){ return SPEEDS.map(function(x){ return { label: x + "×", value: x }; }); } });
